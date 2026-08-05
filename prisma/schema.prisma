@@ -1,0 +1,210 @@
+// PerumNet CRM — Phase 1 Foundation schema
+// Dev: SQLite. Production: PostgreSQL (skema dijaga portable, tanpa fitur khusus SQLite).
+// Catatan: enum tidak didukung Prisma+SQLite, sehingga nilai status/kode
+// divalidasi di service layer melalui konstanta di src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Identity & RBAC ─────────────────────────────────────────────
+
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  email              String   @unique
+  name               String
+  phone              String?
+  passwordHash       String
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  roles            UserRole[]
+  auditLogs        AuditLog[]
+  approvalRequests ApprovalRequest[] @relation("Requester")
+  approvalActions  ApprovalStep[]    @relation("Actor")
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+
+  users         UserRole[]
+  permissions   RolePermission[]
+  ruleSteps     ApprovalRuleStep[]
+  approvalSteps ApprovalStep[]
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  code        String  @unique // format: "<module>.<action>", mis. "users.view"
+  module      String
+  action      String
+  description String?
+
+  roles RolePermission[]
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  role       Role     @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+// ── Audit Log (append-only: tidak ada jalur update/delete di aplikasi) ──
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String // LOGIN, LOGIN_FAILED, USER_CREATE, APPROVAL_APPROVE, ...
+  module      String
+  entityType  String?
+  entityId    String?
+  description String
+  metadata    String? // JSON string
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([module, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+// ── Approval Engine ─────────────────────────────────────────────
+// ApprovalRule = approval matrix terkonfigurasi (PRD §48).
+// Matching: module + subtype (opsional) + rentang amount (opsional).
+
+model ApprovalRule {
+  id        String  @id @default(cuid())
+  module    String // petty_cash | network_change | deployment | ...
+  subtype   String? // mis. network_change: standard|normal|major|emergency
+  name      String
+  minAmount BigInt  @default(0) // rupiah, inklusif
+  maxAmount BigInt? // rupiah, inklusif; null = tak terbatas
+  isActive  Boolean @default(true)
+
+  steps    ApprovalRuleStep[]
+  requests ApprovalRequest[]
+
+  @@index([module, isActive])
+}
+
+model ApprovalRuleStep {
+  id        String @id @default(cuid())
+  ruleId    String
+  stepOrder Int // 1, 2, 3, ...
+  roleId    String // role yang wajib approve pada step ini
+
+  rule ApprovalRule @relation(fields: [ruleId], references: [id])
+  role Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([ruleId, stepOrder])
+}
+
+model ApprovalRequest {
+  id            String    @id @default(cuid())
+  requestNumber String    @unique // APR-YYYYMM-####
+  module        String
+  subtype       String?
+  entityType    String? // diisi modul lain (mis. "CashTransaction")
+  entityId      String?
+  title         String
+  description   String?
+  amount        BigInt?
+  status        String    @default("PENDING") // PENDING|APPROVED|REJECTED|CANCELLED
+  currentStep   Int       @default(1)
+  ruleId        String
+  requestedById String
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  rule        ApprovalRule   @relation(fields: [ruleId], references: [id])
+  requestedBy User           @relation("Requester", fields: [requestedById], references: [id])
+  steps       ApprovalStep[]
+
+  @@index([status, createdAt])
+  @@index([requestedById])
+}
+
+model ApprovalStep {
+  id        String    @id @default(cuid())
+  requestId String
+  stepOrder Int
+  roleId    String // role approver yang disyaratkan
+  status    String    @default("PENDING") // PENDING|APPROVED|REJECTED
+  actedById String?
+  note      String?
+  actedAt   DateTime?
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id])
+  role    Role            @relation(fields: [roleId], references: [id])
+  actedBy User?           @relation("Actor", fields: [actedById], references: [id])
+
+  @@unique([requestId, stepOrder])
+}
+
+// ── Master Data (soft-deactivate, tidak pernah dihapus) ─────────
+
+model CostCenter {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  type     String // EXPENSE | ITEM | TICKET | ... (Phase 1: EXPENSE)
+  code     String  @unique
+  name     String
+  isActive Boolean @default(true)
+
+  @@index([type])
+}
+
+model Area {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+}
+
+model Package {
+  id              String  @id @default(cuid())
+  code            String  @unique
+  name            String
+  downloadMbps    Int
+  uploadMbps      Int
+  monthlyPrice    BigInt // rupiah
+  installationFee BigInt  @default(0) // rupiah
+  description     String?
+  isActive        Boolean @default(true)
+}
