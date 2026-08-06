@@ -9,6 +9,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { isEligibleApprover } from "@/lib/approval";
 
 export const metadata = { title: "Approval Request" };
 
@@ -18,14 +19,12 @@ function moduleName(code: string) {
 
 export default async function ApprovalsPage() {
   const user = await requirePermission(PERMISSIONS.APPROVALS_VIEW);
-  const roleIds = user.roles.map((r) => r.id);
 
-  const [waitingForMe, mine, recent] = await Promise.all([
+  const [pending, mine, recent] = await Promise.all([
     db.approvalRequest.findMany({
       where: {
         status: APPROVAL_STATUS.PENDING,
         requestedById: { not: user.id },
-        steps: { some: { status: "PENDING", roleId: { in: roleIds } } },
       },
       include: { requestedBy: true, steps: true },
       orderBy: { createdAt: "desc" },
@@ -43,10 +42,14 @@ export default async function ApprovalsPage() {
     }),
   ]);
 
-  // "Menunggu keputusan saya" hanya bila step aktif = step milik role saya
-  const actionable = waitingForMe.filter((r) => {
+  // "Menunggu keputusan saya": step aktif dapat diputus oleh saya
+  // (role fungsional, supervisor divisi pengaju, atau owner), dan saya
+  // belum memutus step lain pada request yang sama.
+  const actionable = pending.filter((r) => {
     const current = r.steps.find((s) => s.stepOrder === r.currentStep);
-    return current && current.status === "PENDING" && roleIds.includes(current.roleId);
+    if (!current || current.status !== "PENDING") return false;
+    if (r.steps.some((s) => s.actedById === user.id)) return false;
+    return isEligibleApprover(user, current);
   });
 
   const Table = ({ rows }: { rows: typeof mine }) =>

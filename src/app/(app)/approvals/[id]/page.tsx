@@ -8,6 +8,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, BackLink } from "@/components/ui";
+import { isEligibleApprover, stepApproverLabel } from "@/lib/approval";
 import { actOnApprovalAction, cancelApprovalAction } from "../actions";
 
 export const metadata = { title: "Detail Approval" };
@@ -26,10 +27,10 @@ export default async function ApprovalDetailPage({
   const request = await db.approvalRequest.findUnique({
     where: { id },
     include: {
-      requestedBy: true,
+      requestedBy: { include: { division: true } },
       rule: true,
       steps: {
-        include: { role: true, actedBy: true },
+        include: { role: true, division: true, actedBy: true },
         orderBy: { stepOrder: "asc" },
       },
     },
@@ -39,12 +40,11 @@ export default async function ApprovalDetailPage({
   const moduleName =
     APPROVAL_MODULES.find((m) => m.code === request.module)?.name ?? request.module;
   const currentStep = request.steps.find((s) => s.stepOrder === request.currentStep);
-  const roleIds = user.roles.map((r) => r.id);
   const alreadyActed = request.steps.some((s) => s.actedById === user.id);
   const canAct =
     request.status === "PENDING" &&
     currentStep?.status === "PENDING" &&
-    roleIds.includes(currentStep.roleId) &&
+    isEligibleApprover(user, currentStep) &&
     request.requestedById !== user.id &&
     !alreadyActed &&
     user.permissions.has(PERMISSIONS.APPROVALS_ACT);
@@ -65,7 +65,12 @@ export default async function ApprovalDetailPage({
         <dl className="grid gap-4 sm:grid-cols-2">
           <div>
             <dt className="text-xs uppercase tracking-wide text-slate-400">Pengaju</dt>
-            <dd className="mt-0.5 text-sm">{request.requestedBy.name}</dd>
+            <dd className="mt-0.5 text-sm">
+              {request.requestedBy.name}
+              {request.requestedBy.division
+                ? ` — ${request.requestedBy.division.name}`
+                : ""}
+            </dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-slate-400">Tanggal</dt>
@@ -114,7 +119,7 @@ export default async function ApprovalDetailPage({
                   {step.stepOrder}
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">{step.role.name}</div>
+                  <div className="text-sm font-medium">{stepApproverLabel(step)}</div>
                   <div className="text-xs text-slate-500">
                     {step.status === "PENDING"
                       ? isCurrent

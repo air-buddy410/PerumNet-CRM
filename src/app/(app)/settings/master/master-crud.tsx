@@ -179,7 +179,7 @@ export function MasterCrud({
                   </div>
                 </>
               )}
-              {!isPackage && entity !== "categories" && (
+              {!isPackage && entity !== "categories" && entity !== "divisions" && (
                 <div>
                   <label className="label" htmlFor="description">Deskripsi</label>
                   <textarea

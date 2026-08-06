@@ -184,7 +184,7 @@ Setiap fase: schema → service (business rules) → UI → seed → verifikasi 
 
 ### Ambiguitas requirement (butuh keputusan Product Owner)
 
-1. **"Supervisor" pada approval matrix petty cash** — tidak ada role Supervisor di §6. Apakah supervisor = atasan divisi requester (butuh struktur organisasi/atasan per user)? *Sementara:* step supervisor dipetakan ke Finance/Management; matrix bisa dikonfigurasi ulang.
+1. ~~**"Supervisor" pada approval matrix petty cash**~~ — **DIPUTUSKAN (2026-08-06):** struktur organisasi `staff → supervisor → owner`; staff & supervisor melekat per divisi; owner = super admin penuh. Implementasi: entitas `Division`, field `User.level` (STAFF/SUPERVISOR/OWNER) + `User.divisionId`, dan step approval bertipe `ROLE` / `SUPERVISOR` (supervisor divisi pengaju, di-resolve saat submit) / `OWNER`. Owner dapat memutus semua jenis step, tetap terikat SoD (tidak bisa memutus request sendiri, tidak bisa memutus dua step pada satu request).
 2. **Billing & pembayaran** — PRD menyebut verifikasi pembayaran & MRR tetapi billing ada di "integrasi potensial". Apakah invoice/billing dibangun internal atau integrasi sistem eksisting?
 3. **Batas diskon per level** (§6.4 "sesuai limit") — nilai limit belum didefinisikan.
 4. **SLA konkret** (follow-up lead, incident per severity) — angka target belum ada; dibuat konfigurasi.

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { PERMISSIONS, formatDateTime } from "@/lib/constants";
+import { PERMISSIONS, formatDateTime, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, ActiveBadge } from "@/components/ui";
 import {
   updateUserAction,
@@ -23,12 +23,13 @@ export default async function UserDetailPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [user, roles] = await Promise.all([
+  const [user, roles, divisions] = await Promise.all([
     db.user.findUnique({
       where: { id },
       include: { roles: true },
     }),
     db.role.findMany({ orderBy: { name: "asc" } }),
+    db.division.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
   if (!user) notFound();
 
@@ -83,6 +84,35 @@ export default async function UserDetailPage({
               defaultValue={user.phone ?? ""}
               disabled={!canEdit}
             />
+          </div>
+          <div>
+            <label className="label" htmlFor="level">Level Organisasi</label>
+            <select
+              id="level"
+              name="level"
+              className="input"
+              defaultValue={user.level}
+              disabled={!canEdit}
+            >
+              {Object.entries(USER_LEVEL_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="divisionId">Divisi</label>
+            <select
+              id="divisionId"
+              name="divisionId"
+              className="input"
+              defaultValue={user.divisionId ?? ""}
+              disabled={!canEdit}
+            >
+              <option value="">— Tanpa divisi (khusus Owner) —</option>
+              {divisions.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 

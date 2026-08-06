@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/rbac";
+import { USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, Flash } from "@/components/ui";
 import { changePasswordAction } from "./actions";
 
@@ -36,6 +37,14 @@ export default async function ProfilePage({
             <dd className="mt-0.5 text-sm">
               {user.roles.map((r) => r.name).join(", ") || "-"}
             </dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-slate-400">Divisi</dt>
+            <dd className="mt-0.5 text-sm">{user.divisionName ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-slate-400">Level</dt>
+            <dd className="mt-0.5 text-sm">{USER_LEVEL_LABELS[user.level] ?? user.level}</dd>
           </div>
         </dl>
       </div>

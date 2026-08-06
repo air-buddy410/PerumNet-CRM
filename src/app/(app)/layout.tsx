@@ -36,6 +36,7 @@ export default async function AppLayout({
     settingItems.push({ href: "/settings/roles", label: "Roles & Permissions" });
   if (can(PERMISSIONS.MASTER_DATA_VIEW)) {
     settingItems.push(
+      { href: "/settings/master/divisions", label: "Divisi" },
       { href: "/settings/master/cost-centers", label: "Cost Centers" },
       { href: "/settings/master/categories", label: "Kategori" },
       { href: "/settings/master/areas", label: "Area" },
@@ -86,7 +87,12 @@ export default async function AppLayout({
       <div className="ml-60 flex min-h-screen flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
           <div className="text-sm text-slate-500">
-            {user.roles.map((r) => r.name).join(" · ") || "Tanpa role"}
+            {[
+              user.divisionName,
+              user.roles.map((r) => r.name).join(" · ") || "Tanpa role",
+            ]
+              .filter(Boolean)
+              .join(" — ")}
           </div>
           <div className="flex items-center gap-4">
             <Link

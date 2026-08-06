@@ -39,6 +39,27 @@ export const PERMISSIONS = {
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
+// Struktur organisasi: staff -> supervisor -> owner
+export const USER_LEVELS = {
+  STAFF: "STAFF",
+  SUPERVISOR: "SUPERVISOR",
+  OWNER: "OWNER",
+} as const;
+
+export type UserLevel = (typeof USER_LEVELS)[keyof typeof USER_LEVELS];
+
+export const USER_LEVEL_LABELS: Record<string, string> = {
+  STAFF: "Staff",
+  SUPERVISOR: "Supervisor",
+  OWNER: "Owner",
+};
+
+export const APPROVER_TYPES = {
+  ROLE: "ROLE",
+  SUPERVISOR: "SUPERVISOR",
+  OWNER: "OWNER",
+} as const;
+
 export const APPROVAL_STATUS = {
   PENDING: "PENDING",
   APPROVED: "APPROVED",

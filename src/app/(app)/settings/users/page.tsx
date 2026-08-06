@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { PERMISSIONS, formatDateTime } from "@/lib/constants";
+import { PERMISSIONS, formatDateTime, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, ActiveBadge, Flash } from "@/components/ui";
 
 export const metadata = { title: "Users" };
@@ -15,7 +15,7 @@ export default async function UsersPage({
   const sp = await searchParams;
 
   const users = await db.user.findMany({
-    include: { roles: { include: { role: true } } },
+    include: { roles: { include: { role: true } }, division: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -41,6 +41,8 @@ export default async function UsersPage({
               <th className="th">Nama</th>
               <th className="th">Username</th>
               <th className="th">Email</th>
+              <th className="th">Divisi</th>
+              <th className="th">Level</th>
               <th className="th">Role</th>
               <th className="th">Status</th>
               <th className="th">Dibuat</th>
@@ -59,6 +61,12 @@ export default async function UsersPage({
                 </td>
                 <td className="td">{u.username}</td>
                 <td className="td">{u.email}</td>
+                <td className="td">{u.division?.name ?? "—"}</td>
+                <td className="td">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                    {USER_LEVEL_LABELS[u.level] ?? u.level}
+                  </span>
+                </td>
                 <td className="td">
                   <div className="flex flex-wrap gap-1">
                     {u.roles.map((r) => (

@@ -1,14 +1,22 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
-import { APPROVAL_STATUS, AUDIT_ACTIONS } from "@/lib/constants";
+import {
+  APPROVAL_STATUS,
+  APPROVER_TYPES,
+  AUDIT_ACTIONS,
+  USER_LEVELS,
+} from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Approval Engine ─────────────────────────────────────────────
 // Aturan yang ditegakkan di sini (PRD §7.3, §48, §53):
 //  - Rule dicocokkan berdasarkan module + subtype + rentang amount.
+//  - Step approver bisa berupa: ROLE (role fungsional), SUPERVISOR
+//    (supervisor divisi pengaju, di-resolve saat submit), atau OWNER.
+//  - Owner dapat memutus semua jenis step ("owner membuka semua"),
+//    tetap terikat aturan di bawah.
 //  - Pembuat request TIDAK PERNAH bisa approve/reject request-nya sendiri.
-//  - Satu user tidak bisa approve dua step pada request yang sama.
-//  - Approver harus memiliki role yang disyaratkan step aktif.
+//  - Satu user tidak bisa memutus dua step pada request yang sama.
 //  - Request yang sudah selesai (approved/rejected/cancelled) immutable.
 
 export async function findMatchingRule(
@@ -29,6 +37,26 @@ export async function findMatchingRule(
     return true;
   });
   return candidates[0] ?? null;
+}
+
+export interface StepLike {
+  approverType: string;
+  roleId: string | null;
+  divisionId: string | null;
+}
+
+// Siapa yang boleh memutus sebuah step.
+export function isEligibleApprover(user: CurrentUser, step: StepLike): boolean {
+  if (user.level === USER_LEVELS.OWNER) return true;
+  if (step.approverType === APPROVER_TYPES.OWNER) return false; // hanya owner
+  if (step.approverType === APPROVER_TYPES.SUPERVISOR) {
+    return (
+      user.level === USER_LEVELS.SUPERVISOR &&
+      user.divisionId !== null &&
+      user.divisionId === step.divisionId
+    );
+  }
+  return step.roleId !== null && user.roles.some((r) => r.id === step.roleId);
 }
 
 async function nextRequestNumber(): Promise<string> {
@@ -62,6 +90,18 @@ export async function submitApprovalRequest(input: {
     };
   }
 
+  // Step SUPERVISOR membutuhkan divisi pengaju.
+  const needsSupervisor = rule.steps.some(
+    (s) => s.approverType === APPROVER_TYPES.SUPERVISOR
+  );
+  if (needsSupervisor && !input.user.divisionId) {
+    return {
+      ok: false,
+      error:
+        "Rule ini memerlukan persetujuan supervisor divisi, tetapi akun Anda belum memiliki divisi. Hubungi Super Admin.",
+    };
+  }
+
   const requestNumber = await nextRequestNumber();
   const request = await db.approvalRequest.create({
     data: {
@@ -78,7 +118,12 @@ export async function submitApprovalRequest(input: {
       steps: {
         create: rule.steps.map((s) => ({
           stepOrder: s.stepOrder,
-          roleId: s.roleId,
+          approverType: s.approverType,
+          roleId: s.approverType === APPROVER_TYPES.ROLE ? s.roleId : null,
+          divisionId:
+            s.approverType === APPROVER_TYPES.SUPERVISOR
+              ? input.user.divisionId
+              : null,
         })),
       },
     },
@@ -105,7 +150,12 @@ export async function actOnApproval(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const request = await db.approvalRequest.findUnique({
     where: { id: input.requestId },
-    include: { steps: { orderBy: { stepOrder: "asc" }, include: { role: true } } },
+    include: {
+      steps: {
+        orderBy: { stepOrder: "asc" },
+        include: { role: true, division: true },
+      },
+    },
   });
   if (!request) return { ok: false, error: "Request tidak ditemukan." };
 
@@ -126,12 +176,14 @@ export async function actOnApproval(input: {
     return { ok: false, error: "Tidak ada step aktif pada request ini." };
   }
 
-  const hasRole = input.user.roles.some((r) => r.id === step.roleId);
-  if (!hasRole) {
-    return {
-      ok: false,
-      error: `Step ini memerlukan role "${step.role.name}".`,
-    };
+  if (!isEligibleApprover(input.user, step)) {
+    const need =
+      step.approverType === APPROVER_TYPES.OWNER
+        ? "Owner"
+        : step.approverType === APPROVER_TYPES.SUPERVISOR
+          ? `Supervisor divisi ${step.division?.name ?? "-"}`
+          : `role "${step.role?.name ?? "-"}"`;
+    return { ok: false, error: `Step ini memerlukan ${need}.` };
   }
 
   const alreadyActed = request.steps.some((s) => s.actedById === input.user.id);
@@ -228,4 +280,16 @@ export async function cancelApproval(input: {
     description: `Membatalkan ${request.requestNumber}`,
   });
   return { ok: true };
+}
+
+// Label approver sebuah step untuk ditampilkan di UI.
+export function stepApproverLabel(step: {
+  approverType: string;
+  role?: { name: string } | null;
+  division?: { name: string } | null;
+}): string {
+  if (step.approverType === APPROVER_TYPES.OWNER) return "Owner";
+  if (step.approverType === APPROVER_TYPES.SUPERVISOR)
+    return `Supervisor — ${step.division?.name ?? "Divisi pengaju"}`;
+  return step.role?.name ?? "-";
 }

@@ -11,13 +11,19 @@ import { PERMISSIONS, AUDIT_ACTIONS } from "@/lib/constants";
 // Master data tidak pernah dihapus — hanya dinonaktifkan — karena akan
 // direferensikan transaksi (immutability & traceability).
 
-export type MasterEntity = "cost-centers" | "categories" | "areas" | "packages";
+export type MasterEntity =
+  | "cost-centers"
+  | "categories"
+  | "areas"
+  | "packages"
+  | "divisions";
 
 const ENTITY_LABEL: Record<MasterEntity, string> = {
   "cost-centers": "Cost Center",
   categories: "Kategori",
   areas: "Area",
   packages: "Paket",
+  divisions: "Divisi",
 };
 
 const baseSchema = z.object({
@@ -77,7 +83,9 @@ export async function saveMasterAction(formData: FormData): Promise<void> {
         ? await db.category.findFirst({ where: dupWhere })
         : entity === "areas"
           ? await db.area.findFirst({ where: dupWhere })
-          : await db.package.findFirst({ where: dupWhere });
+          : entity === "divisions"
+            ? await db.division.findFirst({ where: dupWhere })
+            : await db.package.findFirst({ where: dupWhere });
   if (dup) back(entity, { error: `Kode "${code}" sudah digunakan.` });
 
   let entityId = id;
@@ -96,6 +104,11 @@ export async function saveMasterAction(formData: FormData): Promise<void> {
     entityId = id
       ? (await db.area.update({ where: { id }, data: payload })).id
       : (await db.area.create({ data: payload })).id;
+  } else if (entity === "divisions") {
+    const payload = { code, name: data.name };
+    entityId = id
+      ? (await db.division.update({ where: { id }, data: payload })).id
+      : (await db.division.create({ data: payload })).id;
   } else {
     const p = parsed.data as z.infer<typeof packageSchema>;
     const payload = {
@@ -137,13 +150,16 @@ export async function toggleMasterAction(formData: FormData): Promise<void> {
         ? await db.category.findUnique({ where: { id } })
         : entity === "areas"
           ? await db.area.findUnique({ where: { id } })
-          : await db.package.findUnique({ where: { id } });
+          : entity === "divisions"
+            ? await db.division.findUnique({ where: { id } })
+            : await db.package.findUnique({ where: { id } });
   if (!record) back(entity, { error: "Data tidak ditemukan." });
 
   const data = { isActive: !record.isActive };
   if (entity === "cost-centers") await db.costCenter.update({ where: { id }, data });
   else if (entity === "categories") await db.category.update({ where: { id }, data });
   else if (entity === "areas") await db.area.update({ where: { id }, data });
+  else if (entity === "divisions") await db.division.update({ where: { id }, data });
   else await db.package.update({ where: { id }, data });
 
   await logAudit({

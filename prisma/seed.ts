@@ -63,6 +63,20 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   it_support: BASE,
 };
 
+// Struktur organisasi: staff -> supervisor -> owner; staff & supervisor per divisi.
+const DIVISIONS: [string, string][] = [
+  ["MGT", "Management"],
+  ["MKT", "Marketing"],
+  ["SLS", "Sales"],
+  ["CS", "Customer Service"],
+  ["FIN", "Finance"],
+  ["WH", "Warehouse"],
+  ["OPS", "Operational"],
+  ["PRJ", "Project"],
+  ["NOC", "NOC"],
+  ["IT", "IT/DevOps"],
+];
+
 const COST_CENTERS: [string, string][] = [
   ["GA", "General and Administration"],
   ["OPS", "Operational"],
@@ -110,23 +124,33 @@ const PACKAGES: {
   { code: "BIZ-100", name: "Business 100 Mbps", down: 100, up: 50, price: 1_000_000, install: 500_000 },
 ];
 
-// Approval matrix (PRD §48). Catatan: step "Supervisor" pada PRD dipetakan
-// sementara ke role yang tersedia — lihat docs/TECHNICAL-PLAN.md §9.
+// Approval matrix (PRD §48) dengan struktur organisasi staff -> supervisor -> owner:
+// SUPERVISOR = supervisor divisi pengaju (dinamis), OWNER = pemilik,
+// ROLE:<code> = role fungsional tertentu.
+type SeedStep =
+  | { type: "SUPERVISOR" }
+  | { type: "OWNER" }
+  | { type: "ROLE"; role: string };
+
+const SUP: SeedStep = { type: "SUPERVISOR" };
+const OWN: SeedStep = { type: "OWNER" };
+const R = (role: string): SeedStep => ({ type: "ROLE", role });
+
 const APPROVAL_RULES: {
   module: string; subtype: string | null; name: string;
-  min: number; max: number | null; steps: string[];
+  min: number; max: number | null; steps: SeedStep[];
 }[] = [
-  { module: "petty_cash", subtype: null, name: "Petty Cash ≤ Rp500.000", min: 0, max: 500_000, steps: ["finance"] },
-  { module: "petty_cash", subtype: null, name: "Petty Cash Rp500.001–Rp2.000.000", min: 500_001, max: 2_000_000, steps: ["finance", "management"] },
-  { module: "petty_cash", subtype: null, name: "Petty Cash > Rp2.000.000", min: 2_000_001, max: null, steps: ["finance", "management"] },
-  { module: "network_change", subtype: "standard", name: "Standard Change", min: 0, max: null, steps: ["noc_manager"] },
-  { module: "network_change", subtype: "normal", name: "Normal Change", min: 0, max: null, steps: ["noc_manager", "management"] },
-  { module: "network_change", subtype: "major", name: "Major Change", min: 0, max: null, steps: ["noc_manager", "it_manager", "management"] },
-  { module: "network_change", subtype: "emergency", name: "Emergency Change (post-review wajib)", min: 0, max: null, steps: ["noc_manager"] },
-  { module: "deployment", subtype: "staging", name: "Deployment Staging", min: 0, max: null, steps: ["it_manager"] },
-  { module: "deployment", subtype: "production_minor", name: "Production Minor", min: 0, max: null, steps: ["it_manager"] },
-  { module: "deployment", subtype: "production_major", name: "Production Major", min: 0, max: null, steps: ["it_manager", "management"] },
-  { module: "general", subtype: null, name: "Pengajuan Umum", min: 0, max: null, steps: ["management"] },
+  { module: "petty_cash", subtype: null, name: "Petty Cash ≤ Rp500.000", min: 0, max: 500_000, steps: [SUP] },
+  { module: "petty_cash", subtype: null, name: "Petty Cash Rp500.001–Rp2.000.000", min: 500_001, max: 2_000_000, steps: [SUP, R("finance")] },
+  { module: "petty_cash", subtype: null, name: "Petty Cash > Rp2.000.000", min: 2_000_001, max: null, steps: [SUP, R("finance"), OWN] },
+  { module: "network_change", subtype: "standard", name: "Standard Change", min: 0, max: null, steps: [R("noc_manager")] },
+  { module: "network_change", subtype: "normal", name: "Normal Change", min: 0, max: null, steps: [R("noc_manager"), OWN] },
+  { module: "network_change", subtype: "major", name: "Major Change", min: 0, max: null, steps: [R("noc_manager"), R("it_manager"), OWN] },
+  { module: "network_change", subtype: "emergency", name: "Emergency Change (post-review wajib)", min: 0, max: null, steps: [R("noc_manager")] },
+  { module: "deployment", subtype: "staging", name: "Deployment Staging", min: 0, max: null, steps: [R("it_manager")] },
+  { module: "deployment", subtype: "production_minor", name: "Production Minor", min: 0, max: null, steps: [R("it_manager")] },
+  { module: "deployment", subtype: "production_major", name: "Production Major", min: 0, max: null, steps: [R("it_manager"), OWN] },
+  { module: "general", subtype: null, name: "Pengajuan Umum", min: 0, max: null, steps: [SUP, OWN] },
 ];
 
 async function main() {
@@ -167,17 +191,27 @@ async function main() {
     }
   }
 
-  console.log("Seeding admin user...");
+  console.log("Seeding divisions...");
+  for (const [code, name] of DIVISIONS) {
+    await db.division.upsert({ where: { code }, update: { name }, create: { code, name } });
+  }
+  const divisionMap = new Map(
+    (await db.division.findMany()).map((d) => [d.code, d.id])
+  );
+
+  console.log("Seeding admin user (owner)...");
   const adminHash = await bcrypt.hash("Admin#12345", 12);
   const admin = await db.user.upsert({
     where: { username: "admin" },
-    update: {},
+    update: { level: "OWNER", divisionId: divisionMap.get("MGT") },
     create: {
       username: "admin",
       email: "admin@perumnet.id",
-      name: "Super Admin",
+      name: "Owner PerumNet",
       passwordHash: adminHash,
       mustChangePassword: true,
+      level: "OWNER",
+      divisionId: divisionMap.get("MGT"),
     },
   });
   await db.userRole.upsert({
@@ -217,10 +251,25 @@ async function main() {
 
   console.log("Seeding approval matrix...");
   for (const rule of APPROVAL_RULES) {
+    const stepsData = rule.steps.map((s, i) => ({
+      stepOrder: i + 1,
+      approverType: s.type,
+      roleId: s.type === "ROLE" ? roleMap.get(s.role)! : null,
+    }));
+
     const existing = await db.approvalRule.findFirst({
       where: { module: rule.module, subtype: rule.subtype, name: rule.name },
     });
-    if (existing) continue;
+    if (existing) {
+      // Sinkronkan definisi step rule (request lama tidak terpengaruh —
+      // step request di-snapshot saat submit).
+      await db.approvalRuleStep.deleteMany({ where: { ruleId: existing.id } });
+      await db.approvalRule.update({
+        where: { id: existing.id },
+        data: { steps: { create: stepsData } },
+      });
+      continue;
+    }
     await db.approvalRule.create({
       data: {
         module: rule.module,
@@ -228,12 +277,7 @@ async function main() {
         name: rule.name,
         minAmount: BigInt(rule.min),
         maxAmount: rule.max === null ? null : BigInt(rule.max),
-        steps: {
-          create: rule.steps.map((roleCode, i) => ({
-            stepOrder: i + 1,
-            roleId: roleMap.get(roleCode)!,
-          })),
-        },
+        steps: { create: stepsData },
       },
     });
   }

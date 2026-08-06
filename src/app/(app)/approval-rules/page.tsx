@@ -6,6 +6,7 @@ import {
   formatRupiah,
 } from "@/lib/constants";
 import { PageHeader, ActiveBadge, Flash } from "@/components/ui";
+import { stepApproverLabel } from "@/lib/approval";
 import { toggleRuleAction } from "./actions";
 
 export const metadata = { title: "Approval Matrix" };
@@ -72,7 +73,7 @@ export default async function ApprovalRulesPage({
                             <span key={s.id} className="inline-flex items-center gap-1">
                               {i > 0 && <span className="text-slate-300">→</span>}
                               <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
-                                {s.role.name}
+                                {stepApproverLabel(s)}
                               </span>
                             </span>
                           ))}

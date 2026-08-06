@@ -12,9 +12,11 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Authentication (session JWT httpOnly, bcrypt, wajib ganti password awal)
 - User management (tanpa hard-delete — nonaktifkan saja)
 - 17 role standar + permission granular (RBAC)
-- Approval engine + approval matrix terkonfigurasi (PRD §48), segregation of duties
+- Struktur organisasi: **staff → supervisor → owner**, staff/supervisor per divisi
+- Approval engine + approval matrix terkonfigurasi (PRD §48) dengan step dinamis
+  (Supervisor divisi pengaju / Owner / role fungsional), segregation of duties
 - Audit log append-only (PRD §51)
-- Master data: cost center, kategori pengeluaran, area, paket internet
+- Master data: divisi, cost center, kategori pengeluaran, area, paket internet
 - App shell + dashboard
 
 ## Stack

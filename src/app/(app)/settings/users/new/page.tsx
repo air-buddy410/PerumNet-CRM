@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { PERMISSIONS } from "@/lib/constants";
+import { PERMISSIONS, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, Flash, BackLink } from "@/components/ui";
 import { createUserAction } from "../actions";
 
@@ -13,7 +13,10 @@ export default async function NewUserPage({
 }) {
   await requirePermission(PERMISSIONS.USERS_CREATE);
   const sp = await searchParams;
-  const roles = await db.role.findMany({ orderBy: { name: "asc" } });
+  const [roles, divisions] = await Promise.all([
+    db.role.findMany({ orderBy: { name: "asc" } }),
+    db.division.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+  ]);
 
   return (
     <div className="max-w-2xl">
@@ -38,6 +41,26 @@ export default async function NewUserPage({
           <div>
             <label className="label" htmlFor="phone">Telepon</label>
             <input id="phone" name="phone" className="input" />
+          </div>
+          <div>
+            <label className="label" htmlFor="level">Level Organisasi</label>
+            <select id="level" name="level" className="input" defaultValue="STAFF">
+              {Object.entries(USER_LEVEL_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Supervisor menyetujui pengajuan staff divisinya. Owner dapat menyetujui semua.
+            </p>
+          </div>
+          <div>
+            <label className="label" htmlFor="divisionId">Divisi</label>
+            <select id="divisionId" name="divisionId" className="input" defaultValue="">
+              <option value="">— Tanpa divisi (khusus Owner) —</option>
+              {divisions.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
           </div>
           <div className="sm:col-span-2">
             <label className="label" htmlFor="password">Password Awal</label>

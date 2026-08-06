@@ -21,15 +21,31 @@ model User {
   name               String
   phone              String?
   passwordHash       String
+  // Struktur organisasi: staff -> supervisor -> owner.
+  // Level menentukan siapa yang dapat mengisi step approval dinamis
+  // (SUPERVISOR = supervisor divisi pengaju, OWNER = pemilik).
+  level              String   @default("STAFF") // STAFF | SUPERVISOR | OWNER
+  divisionId         String?
   isActive           Boolean  @default(true)
   mustChangePassword Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  division         Division?         @relation(fields: [divisionId], references: [id])
   roles            UserRole[]
   auditLogs        AuditLog[]
   approvalRequests ApprovalRequest[] @relation("Requester")
   approvalActions  ApprovalStep[]    @relation("Actor")
+}
+
+model Division {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  isActive Boolean @default(true)
+
+  users         User[]
+  approvalSteps ApprovalStep[]
 }
 
 model Role {
@@ -116,13 +132,17 @@ model ApprovalRule {
 }
 
 model ApprovalRuleStep {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   ruleId    String
   stepOrder Int // 1, 2, 3, ...
-  roleId    String // role yang wajib approve pada step ini
+  // ROLE       = role fungsional tertentu (roleId wajib)
+  // SUPERVISOR = supervisor divisi pengaju (dinamis, di-resolve saat submit)
+  // OWNER      = user level owner
+  approverType String  @default("ROLE")
+  roleId       String?
 
   rule ApprovalRule @relation(fields: [ruleId], references: [id])
-  role Role         @relation(fields: [roleId], references: [id])
+  role Role?        @relation(fields: [roleId], references: [id])
 
   @@unique([ruleId, stepOrder])
 }
@@ -153,18 +173,21 @@ model ApprovalRequest {
 }
 
 model ApprovalStep {
-  id        String    @id @default(cuid())
-  requestId String
-  stepOrder Int
-  roleId    String // role approver yang disyaratkan
-  status    String    @default("PENDING") // PENDING|APPROVED|REJECTED
-  actedById String?
-  note      String?
-  actedAt   DateTime?
+  id           String    @id @default(cuid())
+  requestId    String
+  stepOrder    Int
+  approverType String    @default("ROLE") // ROLE | SUPERVISOR | OWNER
+  roleId       String? // untuk approverType ROLE
+  divisionId   String? // untuk approverType SUPERVISOR (divisi pengaju saat submit)
+  status       String    @default("PENDING") // PENDING|APPROVED|REJECTED
+  actedById    String?
+  note         String?
+  actedAt      DateTime?
 
-  request ApprovalRequest @relation(fields: [requestId], references: [id])
-  role    Role            @relation(fields: [roleId], references: [id])
-  actedBy User?           @relation("Actor", fields: [actedById], references: [id])
+  request  ApprovalRequest @relation(fields: [requestId], references: [id])
+  role     Role?           @relation(fields: [roleId], references: [id])
+  division Division?       @relation(fields: [divisionId], references: [id])
+  actedBy  User?           @relation("Actor", fields: [actedById], references: [id])
 
   @@unique([requestId, stepOrder])
 }

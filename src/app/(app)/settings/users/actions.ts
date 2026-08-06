@@ -7,9 +7,14 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { hashPassword } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { PERMISSIONS, AUDIT_ACTIONS } from "@/lib/constants";
+import { PERMISSIONS, AUDIT_ACTIONS, USER_LEVELS } from "@/lib/constants";
 
-const createSchema = z.object({
+const orgSchema = z.object({
+  level: z.enum([USER_LEVELS.STAFF, USER_LEVELS.SUPERVISOR, USER_LEVELS.OWNER]),
+  divisionId: z.string().optional(),
+});
+
+const createSchema = orgSchema.extend({
   name: z.string().min(2, "Nama minimal 2 karakter"),
   username: z
     .string()
@@ -29,11 +34,19 @@ export async function createUserAction(formData: FormData): Promise<void> {
     email: formData.get("email"),
     phone: formData.get("phone") || undefined,
     password: formData.get("password"),
+    level: formData.get("level"),
+    divisionId: formData.get("divisionId") || undefined,
   });
   if (!parsed.success) {
     redirect(
       "/settings/users/new?error=" +
         encodeURIComponent(parsed.error.issues[0]?.message ?? "Input tidak valid")
+    );
+  }
+  if (parsed.data.level !== USER_LEVELS.OWNER && !parsed.data.divisionId) {
+    redirect(
+      "/settings/users/new?error=" +
+        encodeURIComponent("Staff dan Supervisor wajib memiliki divisi.")
     );
   }
   const roleIds = formData.getAll("roleIds").map(String).filter(Boolean);
@@ -61,6 +74,8 @@ export async function createUserAction(formData: FormData): Promise<void> {
       username: parsed.data.username,
       email: parsed.data.email,
       phone: parsed.data.phone,
+      level: parsed.data.level,
+      divisionId: parsed.data.divisionId ?? null,
       passwordHash: await hashPassword(parsed.data.password),
       mustChangePassword: true,
       roles: { create: roleIds.map((roleId) => ({ roleId })) },
@@ -81,7 +96,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
   );
 }
 
-const updateSchema = z.object({
+const updateSchema = orgSchema.extend({
   userId: z.string().min(1),
   name: z.string().min(2, "Nama minimal 2 karakter"),
   email: z.string().email("Email tidak valid"),
@@ -95,6 +110,8 @@ export async function updateUserAction(formData: FormData): Promise<void> {
     name: formData.get("name"),
     email: formData.get("email"),
     phone: formData.get("phone") || undefined,
+    level: formData.get("level"),
+    divisionId: formData.get("divisionId") || undefined,
   });
   if (!parsed.success) {
     redirect(
@@ -102,7 +119,13 @@ export async function updateUserAction(formData: FormData): Promise<void> {
         encodeURIComponent(parsed.error.issues[0]?.message ?? "Input tidak valid")
     );
   }
-  const { userId, ...data } = parsed.data;
+  const { userId, divisionId, ...data } = parsed.data;
+  if (parsed.data.level !== USER_LEVELS.OWNER && !divisionId) {
+    redirect(
+      `/settings/users/${userId}?error=` +
+        encodeURIComponent("Staff dan Supervisor wajib memiliki divisi.")
+    );
+  }
   const roleIds = formData.getAll("roleIds").map(String).filter(Boolean);
   if (roleIds.length === 0) {
     redirect(
@@ -130,7 +153,10 @@ export async function updateUserAction(formData: FormData): Promise<void> {
 
   const beforeRoleIds = before.roles.map((r) => r.roleId).sort();
   await db.$transaction([
-    db.user.update({ where: { id: userId }, data }),
+    db.user.update({
+      where: { id: userId },
+      data: { ...data, divisionId: divisionId ?? null },
+    }),
     db.userRole.deleteMany({ where: { userId } }),
     db.userRole.createMany({
       data: roleIds.map((roleId) => ({ userId, roleId })),

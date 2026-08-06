@@ -9,6 +9,9 @@ export interface CurrentUser {
   username: string;
   email: string;
   name: string;
+  level: string; // STAFF | SUPERVISOR | OWNER
+  divisionId: string | null;
+  divisionName: string | null;
   mustChangePassword: boolean;
   roles: { id: string; code: string; name: string }[];
   permissions: Set<string>;
@@ -23,6 +26,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const user = await db.user.findUnique({
     where: { id: session.userId },
     include: {
+      division: true,
       roles: {
         include: {
           role: {
@@ -44,6 +48,9 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     username: user.username,
     email: user.email,
     name: user.name,
+    level: user.level,
+    divisionId: user.divisionId,
+    divisionName: user.division?.name ?? null,
     mustChangePassword: user.mustChangePassword,
     roles: user.roles.map((ur) => ({
       id: ur.role.id,

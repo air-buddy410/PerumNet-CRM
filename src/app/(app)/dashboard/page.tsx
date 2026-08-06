@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, APPROVAL_STATUS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { isEligibleApprover } from "@/lib/approval";
 
 export const metadata = { title: "Dashboard" };
 
@@ -12,8 +13,7 @@ export default async function DashboardPage() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const roleIds = user.roles.map((r) => r.id);
-  const [activeUsers, roleCount, pendingApprovals, auditToday, myPending, recentRequests] =
+  const [activeUsers, roleCount, pendingApprovals, auditToday, pendingAll, recentRequests] =
     await Promise.all([
       db.user.count({ where: { isActive: true } }),
       db.role.count(),
@@ -23,12 +23,9 @@ export default async function DashboardPage() {
         where: {
           status: APPROVAL_STATUS.PENDING,
           requestedById: { not: user.id },
-          steps: {
-            some: { status: "PENDING", roleId: { in: roleIds } },
-          },
         },
+        include: { steps: true },
         orderBy: { createdAt: "desc" },
-        take: 5,
       }),
       db.approvalRequest.findMany({
         where: { requestedById: user.id },
@@ -36,6 +33,15 @@ export default async function DashboardPage() {
         take: 5,
       }),
     ]);
+
+  const myPending = pendingAll
+    .filter((r) => {
+      const current = r.steps.find((s) => s.stepOrder === r.currentStep);
+      if (!current || current.status !== "PENDING") return false;
+      if (r.steps.some((s) => s.actedById === user.id)) return false;
+      return isEligibleApprover(user, current);
+    })
+    .slice(0, 5);
 
   const stats = [
     { label: "User Aktif", value: activeUsers, href: "/settings/users" },
