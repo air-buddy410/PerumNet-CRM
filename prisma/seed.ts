@@ -38,25 +38,62 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "approvals.act", module: "approvals", action: "act", description: "Menyetujui / menolak approval request" },
   { code: "approvals.configure", module: "approvals", action: "configure", description: "Mengelola approval matrix" },
   { code: "audit_log.view", module: "audit_log", action: "view", description: "Melihat audit log" },
+  // Phase 2 — Sales & CRM
+  { code: "campaigns.view", module: "campaigns", action: "view", description: "Melihat campaign" },
+  { code: "campaigns.manage", module: "campaigns", action: "manage", description: "Mengelola campaign" },
+  { code: "leads.view", module: "leads", action: "view", description: "Melihat lead" },
+  { code: "leads.create", module: "leads", action: "create", description: "Membuat lead" },
+  { code: "leads.edit", module: "leads", action: "edit", description: "Mengubah lead, status, dan aktivitas" },
+  { code: "leads.assign", module: "leads", action: "assign", description: "Meng-assign Sales owner" },
+  { code: "opportunities.view", module: "opportunities", action: "view", description: "Melihat pipeline" },
+  { code: "opportunities.manage", module: "opportunities", action: "manage", description: "Mengelola opportunity & stage" },
+  { code: "surveys.view", module: "surveys", action: "view", description: "Melihat survey" },
+  { code: "surveys.create", module: "surveys", action: "create", description: "Mengajukan survey" },
+  { code: "surveys.manage", module: "surveys", action: "manage", description: "Menjadwalkan & menugaskan survey" },
+  { code: "surveys.execute", module: "surveys", action: "execute", description: "Mengisi hasil survey" },
+  { code: "quotations.view", module: "quotations", action: "view", description: "Melihat quotation" },
+  { code: "quotations.create", module: "quotations", action: "create", description: "Membuat quotation" },
+  { code: "quotations.manage", module: "quotations", action: "manage", description: "Kirim/terima/tolak/revisi quotation" },
+  { code: "customers.view", module: "customers", action: "view", description: "Melihat customer" },
+  { code: "customers.create", module: "customers", action: "create", description: "Membuat customer / konversi lead" },
+  { code: "customers.edit", module: "customers", action: "edit", description: "Mengubah data customer" },
+  { code: "subscriptions.view", module: "subscriptions", action: "view", description: "Melihat subscription" },
+  { code: "subscriptions.create", module: "subscriptions", action: "create", description: "Membuat subscription" },
+  { code: "subscriptions.edit", module: "subscriptions", action: "edit", description: "Mengubah data teknis & status subscription" },
+  { code: "subscriptions.activate", module: "subscriptions", action: "activate", description: "Mengaktifkan layanan (bukan Sales — rule 17)" },
 ];
 
-// Pemetaan permission per role (Phase 1).
+// Pemetaan permission per role.
 const ALL = PERMISSIONS.map((p) => p.code);
 const BASE = ["dashboard.view", "approvals.view", "approvals.create"];
+const CRM_VIEW = [
+  "campaigns.view", "leads.view", "opportunities.view", "surveys.view",
+  "quotations.view", "customers.view", "subscriptions.view",
+];
+const SALES_CORE = [
+  ...CRM_VIEW,
+  "leads.create", "leads.edit",
+  "opportunities.manage",
+  "surveys.create",
+  "quotations.create", "quotations.manage",
+  "customers.create", "customers.edit",
+  "subscriptions.create",
+  // sengaja TANPA subscriptions.activate (rule 17) & leads.assign
+];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view"],
-  finance: [...BASE, "approvals.act", "master_data.view"],
-  sales_manager: [...BASE, "approvals.act"],
-  noc_manager: [...BASE, "approvals.act"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW],
+  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW],
+  sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
+  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW],
   it_manager: [...BASE, "approvals.act"],
-  operational_coordinator: [...BASE, "approvals.act"],
+  operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate"],
   project_manager: [...BASE, "approvals.act"],
-  marketing: BASE,
-  sales: BASE,
-  customer_service: BASE,
+  marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
+  sales: [...BASE, ...SALES_CORE],
+  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create"],
   warehouse: BASE,
-  technician: BASE,
+  technician: [...BASE, "surveys.view", "surveys.execute"],
   noc_engineer: BASE,
   developer: BASE,
   devops_engineer: BASE,
@@ -151,6 +188,8 @@ const APPROVAL_RULES: {
   { module: "deployment", subtype: "production_minor", name: "Production Minor", min: 0, max: null, steps: [R("it_manager")] },
   { module: "deployment", subtype: "production_major", name: "Production Major", min: 0, max: null, steps: [R("it_manager"), OWN] },
   { module: "general", subtype: null, name: "Pengajuan Umum", min: 0, max: null, steps: [SUP, OWN] },
+  { module: "quotation_discount", subtype: null, name: "Diskon Quotation ≤ Rp500.000", min: 0, max: 500_000, steps: [R("sales_manager")] },
+  { module: "quotation_discount", subtype: null, name: "Diskon Quotation > Rp500.000", min: 500_001, max: null, steps: [R("sales_manager"), OWN] },
 ];
 
 async function main() {

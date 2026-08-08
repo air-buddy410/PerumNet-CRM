@@ -36,6 +36,19 @@ model User {
   auditLogs        AuditLog[]
   approvalRequests ApprovalRequest[] @relation("Requester")
   approvalActions  ApprovalStep[]    @relation("Actor")
+
+  campaignsPic     Campaign[]     @relation("CampaignPic")
+  ownedLeads       Lead[]         @relation("LeadOwner")
+  createdLeads     Lead[]         @relation("LeadCreator")
+  leadActivities   LeadActivity[] @relation("ActivityUser")
+  opportunities    Opportunity[]  @relation("OppCreator")
+  surveysAssigned  Survey[]       @relation("SurveyTechnician")
+  surveysCreated   Survey[]       @relation("SurveyCreator")
+  quotations       Quotation[]    @relation("QuotationCreator")
+  ownedCustomers   Customer[]     @relation("CustomerOwner")
+  createdCustomers Customer[]     @relation("CustomerCreator")
+  subscriptions    Subscription[] @relation("SubscriptionCreator")
+  attachments      Attachment[]   @relation("AttachmentUploader")
 }
 
 model Division {
@@ -218,6 +231,9 @@ model Area {
   name        String
   description String?
   isActive    Boolean @default(true)
+
+  campaigns Campaign[]
+  customers Customer[]
 }
 
 model Package {
@@ -230,4 +246,246 @@ model Package {
   installationFee BigInt  @default(0) // rupiah
   description     String?
   isActive        Boolean @default(true)
+
+  interestedLeads Lead[]
+  surveys         Survey[]
+  quotations      Quotation[]
+  subscriptions   Subscription[]
+}
+
+// ── Phase 2: Sales & CRM ────────────────────────────────────────
+
+model Campaign {
+  id             String    @id @default(cuid())
+  campaignNumber String    @unique // CMP-####
+  name           String
+  channel        String
+  startDate      DateTime?
+  endDate        DateTime?
+  budget         BigInt    @default(0)
+  targetAudience String?
+  areaId         String?
+  picId          String?
+  targetLeads    Int       @default(0)
+  status         String    @default("DRAFT") // DRAFT|ACTIVE|COMPLETED|CANCELLED
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  area  Area?  @relation(fields: [areaId], references: [id])
+  pic   User?  @relation("CampaignPic", fields: [picId], references: [id])
+  leads Lead[]
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  leadNumber        String    @unique // LD-YYYYMM-####
+  name              String
+  company           String?
+  phone             String
+  email             String?
+  address           String?
+  latitude          Float?
+  longitude         Float?
+  customerType      String    @default("RESIDENTIAL")
+  source            String    @default("OTHER")
+  campaignId        String?
+  interestPackageId String?
+  estBandwidthMbps  Int?
+  salesOwnerId      String?
+  nextFollowUpAt    DateTime?
+  status            String    @default("NEW")
+  notes             String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  campaign        Campaign?      @relation(fields: [campaignId], references: [id])
+  interestPackage Package?       @relation(fields: [interestPackageId], references: [id])
+  salesOwner      User?          @relation("LeadOwner", fields: [salesOwnerId], references: [id])
+  createdBy       User           @relation("LeadCreator", fields: [createdById], references: [id])
+  activities      LeadActivity[]
+  opportunity     Opportunity?
+  surveys         Survey[]
+  quotations      Quotation[]
+  customer        Customer?
+
+  @@index([status])
+  @@index([salesOwnerId])
+}
+
+model LeadActivity {
+  id             String    @id @default(cuid())
+  leadId         String
+  type           String // PHONE_CALL|WHATSAPP|EMAIL|MEETING|SITE_VISIT|PRESENTATION|SURVEY_REQUEST|QUOTATION_SENT|NEGOTIATION|CONTRACT_SIGNING
+  note           String
+  activityAt     DateTime  @default(now())
+  nextFollowUpAt DateTime?
+  doneById       String
+
+  lead   Lead @relation(fields: [leadId], references: [id])
+  doneBy User @relation("ActivityUser", fields: [doneById], references: [id])
+
+  @@index([leadId, activityAt])
+}
+
+model Opportunity {
+  id              String    @id @default(cuid())
+  oppNumber       String    @unique // OPP-YYYYMM-####
+  leadId          String    @unique
+  stage           String    @default("NEW_LEAD")
+  estMonthlyValue BigInt?
+  lostReason      String?
+  notes           String?
+  wonAt           DateTime?
+  lostAt          DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lead      Lead @relation(fields: [leadId], references: [id])
+  createdBy User @relation("OppCreator", fields: [createdById], references: [id])
+
+  @@index([stage])
+}
+
+model Survey {
+  id             String    @id @default(cuid())
+  surveyNumber   String    @unique // SVY-YYYYMM-####
+  leadId         String?
+  customerId     String?
+  address        String
+  latitude       Float?
+  longitude      Float?
+  contactName    String?
+  contactPhone   String?
+  packageId      String?
+  bandwidthMbps  Int?
+  scheduledAt    DateTime?
+  technicianId   String?
+  nearestNode    String?
+  estCableMeters Int?
+  estMaterials   String?
+  estCost        BigInt?
+  signalLevel    String?
+  opticalPower   String?
+  feasibility    String? // FEASIBLE|FEASIBLE_WITH_COST|NOT_FEASIBLE
+  resultNotes    String?
+  status         String    @default("SUBMITTED") // SUBMITTED|SCHEDULED|IN_PROGRESS|COMPLETED|CANCELLED
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lead       Lead?     @relation(fields: [leadId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  package    Package?  @relation(fields: [packageId], references: [id])
+  technician User?     @relation("SurveyTechnician", fields: [technicianId], references: [id])
+  createdBy  User      @relation("SurveyCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+model Quotation {
+  id              String    @id @default(cuid())
+  quotationNumber String // QUO-YYYYMM-#### (sama untuk semua versi)
+  version         Int       @default(1)
+  leadId          String
+  packageId       String
+  monthlyPrice    BigInt
+  installationFee BigInt    @default(0)
+  deviceFee       BigInt    @default(0)
+  networkBuildFee BigInt    @default(0)
+  discount        BigInt    @default(0) // potongan biaya one-time; >0 wajib approval
+  taxPercent      Float     @default(11)
+  contractMonths  Int       @default(12)
+  validUntil      DateTime?
+  notes           String?
+  status          String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|SENT|ACCEPTED|REJECTED|EXPIRED|SUPERSEDED
+  acceptedAt      DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lead      Lead    @relation(fields: [leadId], references: [id])
+  package   Package @relation(fields: [packageId], references: [id])
+  createdBy User    @relation("QuotationCreator", fields: [createdById], references: [id])
+
+  @@unique([quotationNumber, version])
+  @@index([status])
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  customerNumber String   @unique // CST-#####
+  name           String
+  company        String?
+  phone          String
+  email          String?
+  address        String
+  latitude       Float?
+  longitude      Float?
+  customerType   String   @default("RESIDENTIAL")
+  areaId         String?
+  salesOwnerId   String?
+  source         String?
+  leadId         String?  @unique
+  status         String   @default("ACTIVE") // ACTIVE|INACTIVE
+  notes          String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  area          Area?          @relation(fields: [areaId], references: [id])
+  salesOwner    User?          @relation("CustomerOwner", fields: [salesOwnerId], references: [id])
+  lead          Lead?          @relation(fields: [leadId], references: [id])
+  createdBy     User           @relation("CustomerCreator", fields: [createdById], references: [id])
+  subscriptions Subscription[]
+  surveys       Survey[]
+}
+
+model Subscription {
+  id             String    @id @default(cuid())
+  serviceNumber  String    @unique // SVC-#####
+  customerId     String
+  packageId      String
+  monthlyPrice   BigInt
+  downloadMbps   Int
+  uploadMbps     Int
+  billingCycleDay Int      @default(1)
+  popNode        String?
+  vlan           String?
+  pppoeUsername  String?
+  ipAddress      String?
+  contractMonths Int?
+  quotationId    String?
+  activatedAt    DateTime?
+  terminatedAt   DateTime?
+  status         String    @default("DRAFT") // DRAFT|WAITING_INSTALLATION|ACTIVE|ISOLATED|SUSPENDED|TERMINATED
+  notes          String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer  Customer @relation(fields: [customerId], references: [id])
+  package   Package  @relation(fields: [packageId], references: [id])
+  createdBy User     @relation("SubscriptionCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+// Bukti/lampiran generik (foto survey, nota, dsb.)
+model Attachment {
+  id           String   @id @default(cuid())
+  entityType   String // "Survey" | "Lead" | ...
+  entityId     String
+  filename     String // nama asli
+  storedName   String   @unique // nama file di disk
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([entityType, entityId])
 }

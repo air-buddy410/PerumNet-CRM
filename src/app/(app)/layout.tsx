@@ -21,6 +21,20 @@ export default async function AppLayout({
     });
   }
 
+  if (can(PERMISSIONS.CAMPAIGNS_VIEW)) {
+    groups.push({
+      title: "Marketing",
+      items: [{ href: "/marketing/campaigns", label: "Campaigns" }],
+    });
+  }
+
+  if (can(PERMISSIONS.LEADS_VIEW)) {
+    groups.push({
+      title: "Sales",
+      items: [{ href: "/sales/leads", label: "Leads" }],
+    });
+  }
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });
@@ -74,7 +88,8 @@ export default async function AppLayout({
               Fase Berikutnya
             </div>
             <ul className="space-y-1 text-xs text-slate-500">
-              <li>Sales &amp; CRM</li>
+              <li>Pipeline, Survey &amp; Quotation</li>
+              <li>Customer &amp; Subscription</li>
               <li>Inventory &amp; Operational</li>
               <li>Finance &amp; Project</li>
               <li>NOC</li>

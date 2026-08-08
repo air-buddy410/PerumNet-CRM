@@ -19,6 +19,16 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Master data: divisi, cost center, kategori pengeluaran, area, paket internet
 - App shell + dashboard
 
+**Phase 2 — Sales & CRM** 🚧 sedang berjalan
+
+- Schema lengkap: campaign, lead, aktivitas, opportunity, survey, quotation
+  (versioned), customer, subscription, attachment
+- Service layer `src/lib/crm.ts` dengan business rules PRD (owner wajib,
+  alasan Lost, quotation accepted immutable, approval diskon, aktivasi bukan Sales)
+- UI selesai: Marketing Campaign, Lead (daftar, buat, detail: assign, status,
+  aktivitas, opportunity, konversi)
+- UI menyusul: Pipeline board, Survey, Quotation, Customer, Subscription
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs
