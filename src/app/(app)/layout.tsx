@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Logo } from "@/components/logo";
 import { SidebarNav, type NavGroup } from "@/components/nav";
+import CrmAppShell from "@/components/app-shell";
 import { requireUser } from "@/lib/rbac";
 import { logout } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/constants";
@@ -28,12 +27,23 @@ export default async function AppLayout({
     });
   }
 
-  if (can(PERMISSIONS.LEADS_VIEW)) {
-    groups.push({
-      title: "Sales",
-      items: [{ href: "/sales/leads", label: "Leads" }],
-    });
-  }
+  const salesItems = [];
+  if (can(PERMISSIONS.LEADS_VIEW))
+    salesItems.push({ href: "/sales/leads", label: "Leads" });
+  if (can(PERMISSIONS.OPPORTUNITIES_VIEW))
+    salesItems.push({ href: "/sales/pipeline", label: "Pipeline" });
+  if (can(PERMISSIONS.SURVEYS_VIEW))
+    salesItems.push({ href: "/sales/surveys", label: "Surveys" });
+  if (can(PERMISSIONS.QUOTATIONS_VIEW))
+    salesItems.push({ href: "/sales/quotations", label: "Quotations" });
+  if (salesItems.length) groups.push({ title: "Sales", items: salesItems });
+
+  const crmItems = [];
+  if (can(PERMISSIONS.CUSTOMERS_VIEW))
+    crmItems.push({ href: "/crm/customers", label: "Customers" });
+  if (can(PERMISSIONS.SUBSCRIPTIONS_VIEW))
+    crmItems.push({ href: "/crm/subscriptions", label: "Subscriptions" });
+  if (crmItems.length) groups.push({ title: "CRM", items: crmItems });
 
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
@@ -74,68 +84,18 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-60 flex-col bg-slate-900">
-        <div className="flex h-16 items-center border-b border-white/10 px-4">
-          <Link href="/dashboard">
-            <Logo markClassName="h-8 w-8" textClassName="text-base" />
-          </Link>
-        </div>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <SidebarNav groups={groups} />
-          <div className="mt-8 px-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Fase Berikutnya
-            </div>
-            <ul className="space-y-1 text-xs text-slate-500">
-              <li>Pipeline, Survey &amp; Quotation</li>
-              <li>Customer &amp; Subscription</li>
-              <li>Inventory &amp; Operational</li>
-              <li>Finance &amp; Project</li>
-              <li>NOC</li>
-              <li>IT/DevOps</li>
-            </ul>
-          </div>
-        </div>
-      </aside>
-
-      <div className="ml-60 flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
-          <div className="text-sm text-slate-500">
-            {[
-              user.divisionName,
-              user.roles.map((r) => r.name).join(" · ") || "Tanpa role",
-            ]
-              .filter(Boolean)
-              .join(" — ")}
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/profile"
-              className="text-sm font-medium text-slate-700 hover:text-brand-600"
-            >
-              {user.name}
-            </Link>
-            <form action={logoutAction}>
-              <button type="submit" className="btn-secondary px-3 py-1.5 text-xs">
-                Keluar
-              </button>
-            </form>
-          </div>
-        </header>
-
-        {user.mustChangePassword && (
-          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-800">
-            Anda masih menggunakan password awal.{" "}
-            <Link href="/profile" className="font-medium underline">
-              Ganti password sekarang
-            </Link>
-            .
-          </div>
-        )}
-
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-    </div>
+    <CrmAppShell
+      groups={groups}
+      navigation={<SidebarNav groups={groups} />}
+      user={{ name: user.name, email: user.email }}
+      mustChangePassword={user.mustChangePassword}
+      footerAction={
+        <form action={logoutAction}>
+          <button type="submit" className="crm-signout-button">Keluar</button>
+        </form>
+      }
+    >
+      {children}
+    </CrmAppShell>
   );
 }

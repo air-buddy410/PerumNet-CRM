@@ -19,15 +19,17 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Master data: divisi, cost center, kategori pengeluaran, area, paket internet
 - App shell + dashboard
 
-**Phase 2 — Sales & CRM** 🚧 sedang berjalan
+**Phase 2 — Sales & CRM** ✅
 
-- Schema lengkap: campaign, lead, aktivitas, opportunity, survey, quotation
-  (versioned), customer, subscription, attachment
-- Service layer `src/lib/crm.ts` dengan business rules PRD (owner wajib,
-  alasan Lost, quotation accepted immutable, approval diskon, aktivasi bukan Sales)
-- UI selesai: Marketing Campaign, Lead (daftar, buat, detail: assign, status,
-  aktivitas, opportunity, konversi)
-- UI menyusul: Pipeline board, Survey, Quotation, Customer, Subscription
+- Marketing Campaign (cost per lead), Lead (assign, status, aktivitas,
+  follow-up overdue), Pipeline board per stage
+- Survey: pengajuan → penjadwalan teknisi → hasil feasibility + foto bukti
+- Quotation versioned (accepted = immutable, revisi = versi baru) dengan
+  approval diskon otomatis via approval engine
+- Konversi lead → customer + subscription draft (wajib quotation Accepted)
+- Subscription lifecycle: Draft → Menunggu Instalasi → Aktif → Isolir/Suspend/
+  Terminasi; aktivasi butuh izin khusus (bukan Sales — rule 17)
+- Service layer `src/lib/crm.ts` menegakkan seluruh business rules di server
 
 ## Stack
 

@@ -7,6 +7,10 @@ export const metadata: Metadata = {
     template: "%s · PerumNet CRM",
   },
   description: "CRM & Operations Management System — PerumNet ISP",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

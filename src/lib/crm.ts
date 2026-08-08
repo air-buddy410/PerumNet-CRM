@@ -399,6 +399,37 @@ export async function completeSurvey(
   return { ok: true, id: surveyId };
 }
 
+export async function cancelSurvey(
+  user: CurrentUser,
+  surveyId: string,
+  reason?: string
+): Promise<Result> {
+  const survey = await db.survey.findUnique({ where: { id: surveyId } });
+  if (!survey) return { ok: false, error: "Survey tidak ditemukan." };
+  if (["COMPLETED", "CANCELLED"].includes(survey.status)) {
+    return { ok: false, error: "Survey sudah selesai/batal." };
+  }
+  await db.survey.update({
+    where: { id: surveyId },
+    data: {
+      status: "CANCELLED",
+      resultNotes: reason
+        ? `${survey.resultNotes ? survey.resultNotes + "\n" : ""}[Dibatalkan] ${reason}`
+        : survey.resultNotes,
+    },
+  });
+  await logAudit({
+    userId: user.id,
+    action: "SURVEY_CANCEL",
+    module: "surveys",
+    entityType: "Survey",
+    entityId: surveyId,
+    description: `Membatalkan survey ${survey.surveyNumber}`,
+    metadata: { reason },
+  });
+  return { ok: true, id: surveyId };
+}
+
 // ── Quotation (versioned; accepted = immutable) ─────────────────
 
 const QUOTATION_EDITABLE = ["DRAFT"];

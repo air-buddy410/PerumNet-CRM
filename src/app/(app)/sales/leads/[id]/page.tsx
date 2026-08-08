@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
@@ -289,12 +290,59 @@ export default async function LeadDetailPage({
           </div>
 
           <div className="card p-5">
-            <h2 className="mb-3 text-sm font-medium">Terkait</h2>
-            <p className="text-sm text-slate-600">{lead.surveys.length} survey</p>
-            <p className="text-sm text-slate-600">{lead.quotations.length} quotation</p>
-            <p className="mt-2 text-xs text-slate-400">
-              Modul Survey &amp; Quotation menyusul di iterasi Phase 2 berikutnya.
-            </p>
+            <h2 className="mb-3 text-sm font-medium">Survey ({lead.surveys.length})</h2>
+            {lead.surveys.length > 0 && (
+              <ul className="mb-3 space-y-1">
+                {lead.surveys.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-2 text-sm">
+                    <Link
+                      href={`/sales/surveys/${s.id}`}
+                      className="text-brand-600 hover:underline"
+                    >
+                      {s.surveyNumber}
+                    </Link>
+                    <Badge value={s.status} label={statusLabel(s.status)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canEdit && !isFinal && (
+              <Link
+                href={`/sales/surveys/new?leadId=${lead.id}`}
+                className="btn-secondary w-full justify-center"
+              >
+                Ajukan Survey
+              </Link>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="mb-3 text-sm font-medium">
+              Quotation ({lead.quotations.length})
+            </h2>
+            {lead.quotations.length > 0 && (
+              <ul className="mb-3 space-y-1">
+                {lead.quotations.map((q) => (
+                  <li key={q.id} className="flex items-center justify-between gap-2 text-sm">
+                    <Link
+                      href={`/sales/quotations/${q.id}`}
+                      className="text-brand-600 hover:underline"
+                    >
+                      {q.quotationNumber} v{q.version}
+                    </Link>
+                    <Badge value={q.status} label={statusLabel(q.status)} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {canEdit && !isFinal && (
+              <Link
+                href={`/sales/quotations/new?leadId=${lead.id}`}
+                className="btn-secondary w-full justify-center"
+              >
+                Buat Quotation
+              </Link>
+            )}
           </div>
         </div>
       </div>

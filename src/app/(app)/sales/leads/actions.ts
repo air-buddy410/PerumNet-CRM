@@ -127,13 +127,11 @@ export async function convertLeadAction(formData: FormData): Promise<void> {
   const leadId = String(formData.get("leadId") ?? "");
   const result = await convertLead(user, leadId);
   revalidatePath("/sales/leads");
+  if (!result.ok) {
+    redirect(`/sales/leads/${leadId}?error=` + encodeURIComponent(result.error));
+  }
   redirect(
-    `/sales/leads/${leadId}?` +
-      (result.ok
-        ? "ok=" +
-          encodeURIComponent(
-            "Lead terkonversi menjadi customer + subscription draft. Halaman customer menyusul di iterasi berikutnya."
-          )
-        : "error=" + encodeURIComponent(result.error))
+    `/crm/customers/${result.id}?ok=` +
+      encodeURIComponent("Lead terkonversi menjadi customer + subscription draft.")
   );
 }

@@ -1,4 +1,5 @@
 import { Logo } from "@/components/logo";
+import { LogIn } from "lucide-react";
 import { loginAction } from "./actions";
 
 export const metadata = { title: "Login" };
@@ -11,24 +12,26 @@ export default async function LoginPage({
   const sp = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-brand-50 p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex justify-center">
+    <main className="crm-login-page">
+      <div className="crm-login-wrap">
+        <div className="crm-login-brand">
           <Logo markClassName="h-14 w-14" textClassName="text-2xl" />
+          <span>CRM &amp; OPERATIONS</span>
         </div>
-        <div className="card p-6">
-          <h1 className="mb-1 text-lg font-semibold">Masuk ke PerumNet CRM</h1>
-          <p className="mb-5 text-sm text-slate-500">
+        <div className="crm-login-card">
+          <div className="crm-login-icon"><LogIn aria-hidden="true" /></div>
+          <h1>Masuk ke PerumNet CRM</h1>
+          <p>
             CRM &amp; Operations Management System
           </p>
 
           {sp.error && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="crm-flash is-error">
               {sp.error}
             </div>
           )}
 
-          <form action={loginAction} className="space-y-4">
+          <form action={loginAction} className="crm-login-form">
             {sp.next && <input type="hidden" name="next" value={sp.next} />}
             <div>
               <label className="label" htmlFor="identifier">
@@ -61,7 +64,7 @@ export default async function LoginPage({
             </button>
           </form>
         </div>
-        <p className="mt-6 text-center text-xs text-slate-400">
+        <p className="crm-login-footer">
           © {new Date().getFullYear()} PerumNet — Internet Service Provider
         </p>
       </div>

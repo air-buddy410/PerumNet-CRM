@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Activity, ClipboardCheck, Contact, LayoutDashboard, Megaphone, Settings, UsersRound } from "lucide-react";
+import { useCrmMenu } from "@/components/app-shell";
 
 export interface NavItem {
   href: string;
@@ -14,28 +16,37 @@ export interface NavGroup {
 
 export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   const pathname = usePathname();
+  const closeMenu = useCrmMenu();
+  const iconFor = (group: string) => {
+    if (group === "Utama") return LayoutDashboard;
+    if (group === "Marketing") return Megaphone;
+    if (group === "Sales") return UsersRound;
+    if (group === "CRM") return Contact;
+    if (group === "Approval") return ClipboardCheck;
+    if (group === "Pengawasan") return Activity;
+    return Settings;
+  };
 
   return (
-    <nav className="space-y-6">
+    <nav className="crm-navigation" aria-label="Navigasi utama">
       {groups.map((group) => (
         <div key={group.title}>
-          <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="crm-nav-group-title">
             {group.title}
           </div>
-          <ul className="space-y-0.5">
+          <ul className="crm-nav-list">
             {group.items.map((item) => {
               const active =
                 pathname === item.href || pathname.startsWith(item.href + "/");
+              const Icon = iconFor(group.title);
               return (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className={`block rounded-lg px-3 py-2 text-sm transition ${
-                      active
-                        ? "bg-brand-600/20 font-medium text-brand-300"
-                        : "text-slate-300 hover:bg-white/5 hover:text-white"
-                    }`}
+                    className={`crm-nav-link ${active ? "is-active" : ""}`}
+                    onClick={closeMenu}
                   >
+                    <Icon aria-hidden="true" />
                     {item.label}
                   </Link>
                 </li>
