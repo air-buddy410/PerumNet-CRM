@@ -27,3 +27,6 @@ prisma/*.db-journal
 
 # typescript
 *.tsbuildinfo
+
+# uploads (bukti/lampiran — di luar git)
+/uploads/

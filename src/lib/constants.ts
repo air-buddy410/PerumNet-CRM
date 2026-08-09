@@ -20,7 +20,7 @@ export const ROLES = {
   IT_SUPPORT: "it_support",
 } as const;
 
-// Permission Phase 1 — format "<module>.<action>".
+// Permission — format "<module>.<action>".
 export const PERMISSIONS = {
   DASHBOARD_VIEW: "dashboard.view",
   USERS_VIEW: "users.view",
@@ -35,6 +35,79 @@ export const PERMISSIONS = {
   APPROVALS_ACT: "approvals.act",
   APPROVALS_CONFIGURE: "approvals.configure",
   AUDIT_LOG_VIEW: "audit_log.view",
+  // Phase 2 — Sales & CRM
+  CAMPAIGNS_VIEW: "campaigns.view",
+  CAMPAIGNS_MANAGE: "campaigns.manage",
+  LEADS_VIEW: "leads.view",
+  LEADS_CREATE: "leads.create",
+  LEADS_EDIT: "leads.edit",
+  LEADS_ASSIGN: "leads.assign",
+  OPPORTUNITIES_VIEW: "opportunities.view",
+  OPPORTUNITIES_MANAGE: "opportunities.manage",
+  SURVEYS_VIEW: "surveys.view",
+  SURVEYS_CREATE: "surveys.create",
+  SURVEYS_MANAGE: "surveys.manage", // jadwalkan & tugaskan teknisi
+  SURVEYS_EXECUTE: "surveys.execute", // isi hasil survey
+  QUOTATIONS_VIEW: "quotations.view",
+  QUOTATIONS_CREATE: "quotations.create",
+  QUOTATIONS_MANAGE: "quotations.manage", // kirim/terima/tolak/revisi
+  CUSTOMERS_VIEW: "customers.view",
+  CUSTOMERS_CREATE: "customers.create",
+  CUSTOMERS_EDIT: "customers.edit",
+  SUBSCRIPTIONS_VIEW: "subscriptions.view",
+  SUBSCRIPTIONS_CREATE: "subscriptions.create",
+  SUBSCRIPTIONS_EDIT: "subscriptions.edit",
+  SUBSCRIPTIONS_ACTIVATE: "subscriptions.activate", // TIDAK untuk Sales (rule 17)
+  // Phase 3 — Inventory & Operational
+  INVENTORY_VIEW: "inventory.view",
+  ITEMS_MANAGE: "items.manage", // item & warehouse master
+  STOCK_CREATE: "stock.create", // buat draft transaksi
+  STOCK_POST: "stock.post", // posting transaksi (mengubah saldo)
+  STOCK_REVERSE: "stock.reverse",
+  DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
+  CUSTODY_VIEW: "custody.view",
+  WORK_ORDERS_VIEW: "work_orders.view",
+  WORK_ORDERS_CREATE: "work_orders.create",
+  WORK_ORDERS_ASSIGN: "work_orders.assign",
+  WORK_ORDERS_EXECUTE: "work_orders.execute", // teknisi
+  WORK_ORDERS_CLOSE: "work_orders.close", // koordinator
+  OPNAME_MANAGE: "opname.manage",
+  // Phase 4 — Finance & Project
+  FINANCE_VIEW: "finance.view",
+  CASH_CREATE: "cash.create", // buat draft pengajuan kas (semua divisi)
+  CASH_POST: "cash.post", // posting (mengubah saldo) — Finance
+  CASH_REVERSE: "cash.reverse",
+  CASH_MANAGE: "cash.manage", // top-up, transfer, master cashbook
+  CLOSINGS_MANAGE: "closings.manage",
+  PROJECTS_VIEW: "projects.view",
+  PROJECTS_MANAGE: "projects.manage",
+  PROJECTS_CLOSE: "projects.close",
+  // Phase 5 — NOC
+  NOC_VIEW: "noc.view",
+  NET_INVENTORY_MANAGE: "net_inventory.manage", // site, device, link
+  IPAM_MANAGE: "ipam.manage",
+  ALARMS_MANAGE: "alarms.manage",
+  INCIDENTS_CREATE: "incidents.create",
+  INCIDENTS_MANAGE: "incidents.manage", // update/ack/resolve + tutup P3/P4
+  INCIDENTS_CLOSE: "incidents.close", // tutup incident besar P1/P2 (NOC Manager)
+  MAINTENANCE_MANAGE: "maintenance.manage",
+  CHANGES_CREATE: "changes.create",
+  CHANGES_IMPLEMENT: "changes.implement", // eksekusi change yang disetujui
+  CHANGES_REVIEW: "changes.review", // post-review emergency (NOC Manager)
+  // Phase 6 — IT/DevOps
+  IT_VIEW: "it.view",
+  IT_INVENTORY_MANAGE: "it_inventory.manage", // server & application inventory
+  IT_TICKETS_CREATE: "it_tickets.create", // semua staff boleh buat tiket
+  IT_TICKETS_MANAGE: "it_tickets.manage", // assign, status, resolve, close
+  ACCESS_REQUEST: "access.request", // semua staff boleh minta akses
+  ACCESS_MANAGE: "access.manage", // grant, revoke, offboarding
+  DEPLOYMENTS_CREATE: "deployments.create",
+  DEPLOYMENTS_EXECUTE: "deployments.execute",
+  BACKUPS_MANAGE: "backups.manage",
+  IT_ASSETS_MANAGE: "it_assets.manage", // domain, SSL, license, subscription
+  // Phase 7 — Integrasi
+  INTEGRATIONS_MANAGE: "integrations.manage", // registry integrasi & webhook
+  OUTAGES_VIEW: "outages.view", // status gangguan yang disetujui (§33)
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -67,8 +140,13 @@ export const APPROVAL_STATUS = {
   CANCELLED: "CANCELLED",
 } as const;
 
-export const APPROVAL_MODULES = [
-  { code: "petty_cash", name: "Petty Cash", subtypes: [] as string[] },
+export const APPROVAL_MODULES: {
+  code: string;
+  name: string;
+  subtypes: string[];
+  manual?: boolean; // false = hanya dibuat otomatis oleh sistem
+}[] = [
+  { code: "petty_cash", name: "Petty Cash", subtypes: [] },
   {
     code: "network_change",
     name: "Network Change",
@@ -79,7 +157,37 @@ export const APPROVAL_MODULES = [
     name: "Deployment",
     subtypes: ["staging", "production_minor", "production_major"],
   },
-  { code: "general", name: "Umum / Lainnya", subtypes: [] as string[] },
+  {
+    code: "quotation_discount",
+    name: "Diskon Quotation",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "stock_opname",
+    name: "Adjustment Stock Opname",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "device_writeoff",
+    name: "Write-off Perangkat",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "network_maintenance",
+    name: "Network Maintenance",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "access_request",
+    name: "Access Request Production",
+    subtypes: ["production"],
+    manual: false,
+  },
+  { code: "general", name: "Umum / Lainnya", subtypes: [] },
 ];
 
 export const CATEGORY_TYPES = ["EXPENSE"] as const;
@@ -104,6 +212,552 @@ export const AUDIT_ACTIONS = {
   APPROVAL_REJECT: "APPROVAL_REJECT",
   APPROVAL_CANCEL: "APPROVAL_CANCEL",
 } as const;
+
+// ── Phase 2: Sales & CRM ────────────────────────────────────────
+
+export const CUSTOMER_TYPES = [
+  ["RESIDENTIAL", "Residential"],
+  ["BUSINESS", "Business"],
+  ["HOTEL", "Hotel"],
+  ["VILLA", "Villa"],
+  ["CORPORATE", "Corporate"],
+  ["RESELLER", "Reseller"],
+  ["GOVERNMENT", "Government"],
+  ["INTERNAL", "Internal"],
+] as const;
+
+export const LEAD_SOURCES = [
+  ["CAMPAIGN", "Campaign"],
+  ["REFERRAL", "Referral"],
+  ["WALK_IN", "Walk-in"],
+  ["WEBSITE", "Website"],
+  ["SOCIAL_MEDIA", "Social Media"],
+  ["WHATSAPP", "WhatsApp"],
+  ["PHONE", "Telepon"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const CAMPAIGN_CHANNELS = [
+  "Online",
+  "Social Media",
+  "Offline / Brosur",
+  "Door-to-door",
+  "Event",
+  "Referral",
+  "Lainnya",
+] as const;
+
+export const CAMPAIGN_STATUSES = ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] as const;
+
+export const LEAD_STATUSES = [
+  "NEW",
+  "ASSIGNED",
+  "CONTACTED",
+  "FOLLOW_UP",
+  "INTERESTED",
+  "SURVEY_REQUIRED",
+  "QUOTATION_REQUIRED",
+  "UNREACHABLE",
+  "NOT_INTERESTED",
+  "CONVERTED",
+  "LOST",
+] as const;
+
+// Status yang membutuhkan alasan (business rule 15)
+export const LEAD_STATUSES_NEED_REASON = ["NOT_INTERESTED", "LOST"] as const;
+
+export const ACTIVITY_TYPES = [
+  ["PHONE_CALL", "Telepon"],
+  ["WHATSAPP", "WhatsApp"],
+  ["EMAIL", "Email"],
+  ["MEETING", "Meeting"],
+  ["SITE_VISIT", "Kunjungan"],
+  ["PRESENTATION", "Presentasi"],
+  ["SURVEY_REQUEST", "Pengajuan Survey"],
+  ["QUOTATION_SENT", "Quotation Terkirim"],
+  ["NEGOTIATION", "Negosiasi"],
+  ["CONTRACT_SIGNING", "Tanda Tangan Kontrak"],
+] as const;
+
+export const OPP_STAGES = [
+  "NEW_LEAD",
+  "INITIAL_CONTACT",
+  "QUALIFIED",
+  "SURVEY_SCHEDULED",
+  "SURVEY_COMPLETED",
+  "QUOTATION",
+  "NEGOTIATION",
+  "WAITING_DECISION",
+  "WON",
+  "LOST",
+  "INSTALLATION_PROCESS",
+  "ACTIVATED",
+] as const;
+
+export const SURVEY_STATUSES = [
+  "SUBMITTED",
+  "SCHEDULED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+
+export const FEASIBILITY = [
+  ["FEASIBLE", "Feasible"],
+  ["FEASIBLE_WITH_COST", "Feasible dengan Biaya Tambahan"],
+  ["NOT_FEASIBLE", "Not Feasible"],
+] as const;
+
+export const QUOTATION_STATUSES = [
+  "DRAFT",
+  "WAITING_APPROVAL",
+  "SENT",
+  "ACCEPTED",
+  "REJECTED",
+  "EXPIRED",
+  "SUPERSEDED",
+] as const;
+
+export const SUBSCRIPTION_STATUSES = [
+  "DRAFT",
+  "WAITING_INSTALLATION",
+  "ACTIVE",
+  "ISOLATED",
+  "SUSPENDED",
+  "TERMINATED",
+] as const;
+
+// Transisi status subscription yang diizinkan
+export const SUBSCRIPTION_TRANSITIONS: Record<string, string[]> = {
+  DRAFT: ["WAITING_INSTALLATION", "TERMINATED"],
+  WAITING_INSTALLATION: ["ACTIVE", "TERMINATED"],
+  ACTIVE: ["ISOLATED", "SUSPENDED", "TERMINATED"],
+  ISOLATED: ["ACTIVE", "SUSPENDED", "TERMINATED"],
+  SUSPENDED: ["ACTIVE", "TERMINATED"],
+  TERMINATED: [],
+};
+
+// ── Phase 3: Inventory & Operational ────────────────────────────
+
+export const TRACKING_TYPES = [
+  ["SERIALIZED", "Serialized (per unit, wajib SN)"],
+  ["BULK", "Bulk (kuantitas)"],
+] as const;
+
+export const ITEM_UNITS = ["pcs", "meter", "roll", "box", "set"] as const;
+
+export const TX_TYPES = {
+  GOODS_RECEIPT: "GOODS_RECEIPT",
+  STOCK_ISSUE: "STOCK_ISSUE",
+  STOCK_RETURN: "STOCK_RETURN",
+  STOCK_TRANSFER: "STOCK_TRANSFER",
+  STOCK_ADJUSTMENT: "STOCK_ADJUSTMENT",
+} as const;
+
+export const TX_TYPE_LABELS: Record<string, string> = {
+  GOODS_RECEIPT: "Penerimaan Barang",
+  STOCK_ISSUE: "Pengeluaran ke Teknisi",
+  STOCK_RETURN: "Pengembalian Barang",
+  STOCK_TRANSFER: "Transfer Antar Gudang",
+  STOCK_ADJUSTMENT: "Penyesuaian (Opname)",
+};
+
+export const TX_PREFIX: Record<string, string> = {
+  GOODS_RECEIPT: "GR",
+  STOCK_ISSUE: "ISS",
+  STOCK_RETURN: "RET",
+  STOCK_TRANSFER: "TRF",
+  STOCK_ADJUSTMENT: "ADJ",
+};
+
+export const DEVICE_STATUSES = [
+  "AVAILABLE",
+  "IN_CUSTODY",
+  "INSTALLED",
+  "UNDER_INSPECTION",
+  "DAMAGED",
+  "LOST",
+  "SCRAPPED",
+] as const;
+
+export const WO_TYPES = [
+  ["NEW_INSTALLATION", "Instalasi Baru"],
+  ["TROUBLESHOOTING", "Troubleshooting"],
+  ["DEVICE_REPLACEMENT", "Penggantian Perangkat"],
+  ["DEVICE_RETRIEVAL", "Penarikan Perangkat"],
+  ["MAINTENANCE", "Maintenance"],
+] as const;
+
+export const WO_STATUSES = [
+  "OPEN",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CLOSED",
+  "CANCELLED",
+] as const;
+
+// Custody dianggap overdue setelah N hari (PRD §17) — konfigurasi awal.
+export const CUSTODY_OVERDUE_DAYS = 7;
+
+// ── Phase 4: Finance & Project ──────────────────────────────────
+
+export const CASH_TX_TYPES = {
+  TOP_UP: "TOP_UP",
+  EXPENSE: "EXPENSE",
+  REIMBURSEMENT: "REIMBURSEMENT",
+  CASH_ADVANCE: "CASH_ADVANCE",
+  ADVANCE_SETTLEMENT: "ADVANCE_SETTLEMENT",
+  CASH_TRANSFER: "CASH_TRANSFER",
+} as const;
+
+export const CASH_TX_LABELS: Record<string, string> = {
+  TOP_UP: "Top-up Kas",
+  EXPENSE: "Pengeluaran Langsung",
+  REIMBURSEMENT: "Reimbursement",
+  CASH_ADVANCE: "Cash Advance",
+  ADVANCE_SETTLEMENT: "Settlement Advance",
+  CASH_TRANSFER: "Transfer Antar Kas",
+};
+
+export const CASH_TX_PREFIX: Record<string, string> = {
+  TOP_UP: "CSH",
+  EXPENSE: "EXP",
+  REIMBURSEMENT: "RBM",
+  CASH_ADVANCE: "ADV",
+  ADVANCE_SETTLEMENT: "STL",
+  CASH_TRANSFER: "CTF",
+};
+
+// Tipe yang wajib melewati approval matrix petty_cash sebelum posting.
+export const CASH_TYPES_NEED_APPROVAL = [
+  "EXPENSE",
+  "REIMBURSEMENT",
+  "CASH_ADVANCE",
+] as const;
+
+// Tipe yang wajib memiliki bukti (attachment) sebelum diajukan/diposting.
+export const CASH_TYPES_NEED_EVIDENCE = ["EXPENSE", "REIMBURSEMENT"] as const;
+
+export const PROJECT_STATUSES = ["OPEN", "CLOSED", "CANCELLED"] as const;
+
+// ── Phase 5: NOC ────────────────────────────────────────────────
+
+export const SITE_TYPES = [
+  ["HEAD_OFFICE", "Head Office"],
+  ["DATA_CENTER", "Data Center"],
+  ["POP", "POP"],
+  ["MINI_POP", "Mini POP"],
+  ["TOWER", "Tower"],
+  ["ODC", "ODC"],
+  ["ODP", "ODP"],
+  ["RELAY", "Relay Site"],
+  ["COLOCATION", "Colocation"],
+] as const;
+
+export const NET_DEVICE_TYPES = [
+  ["ROUTER", "Router"],
+  ["CORE_ROUTER", "Core Router"],
+  ["DIST_SWITCH", "Distribution Switch"],
+  ["ACCESS_SWITCH", "Access Switch"],
+  ["OLT", "OLT"],
+  ["ONT", "ONU / ONT"],
+  ["WIRELESS_BACKHAUL", "Wireless Backhaul"],
+  ["ACCESS_POINT", "Access Point"],
+  ["FIREWALL", "Firewall"],
+  ["SERVER", "Server"],
+  ["UPS", "UPS"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const LINK_MEDIA = ["FIBER", "WIRELESS", "LEASED_LINE", "VPN"] as const;
+export const CRITICALITY = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+
+export const ALARM_SEVERITIES = [
+  "INFORMATIONAL",
+  "WARNING",
+  "MINOR",
+  "MAJOR",
+  "CRITICAL",
+] as const;
+
+export const INCIDENT_TYPES = [
+  ["DEVICE_DOWN", "Device Down"],
+  ["LINK_DOWN", "Link Down"],
+  ["HIGH_LATENCY", "High Latency"],
+  ["PACKET_LOSS", "Packet Loss"],
+  ["POWER_OUTAGE", "Power Outage"],
+  ["FIBER_CUT", "Fiber Cut"],
+  ["WIRELESS_INTERFERENCE", "Wireless Interference"],
+  ["UPSTREAM_OUTAGE", "Upstream Provider Outage"],
+  ["CORE_ISSUE", "Core Network Issue"],
+  ["AUTH_FAILURE", "Authentication Failure"],
+  ["DNS_ISSUE", "DNS Issue"],
+  ["SECURITY", "DDoS / Security"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const INCIDENT_SEVERITIES = ["P1", "P2", "P3", "P4"] as const;
+// Incident besar — wajib root cause review & hanya ditutup NOC Manager.
+export const MAJOR_INCIDENT_SEVERITIES = ["P1", "P2"] as const;
+
+export const INCIDENT_STATUSES = [
+  "DETECTED",
+  "ACKNOWLEDGED",
+  "INVESTIGATING",
+  "MITIGATING",
+  "RESOLVED",
+  "CLOSED",
+] as const;
+
+export const MAINTENANCE_TYPES = [
+  ["PREVENTIVE", "Preventive"],
+  ["CORRECTIVE", "Corrective"],
+  ["EMERGENCY", "Emergency"],
+  ["FIRMWARE_UPGRADE", "Firmware Upgrade"],
+  ["FIBER", "Fiber Maintenance"],
+  ["POWER", "Power Maintenance"],
+  ["TOWER", "Tower Maintenance"],
+  ["CAPACITY", "Capacity Upgrade"],
+  ["SECURITY", "Security Hardening"],
+] as const;
+
+export const CHANGE_TYPES = ["STANDARD", "NORMAL", "MAJOR", "EMERGENCY"] as const;
+
+// ── Phase 6: IT/DevOps ──────────────────────────────────────────
+
+export const ENVIRONMENTS = [
+  "DEVELOPMENT",
+  "TESTING",
+  "STAGING",
+  "PRODUCTION",
+  "DR",
+] as const;
+
+// Environment yang boleh menjadi target deployment (DR tidak di-deploy langsung)
+export const DEPLOY_ENVIRONMENTS = [
+  "DEVELOPMENT",
+  "TESTING",
+  "STAGING",
+  "PRODUCTION",
+] as const;
+
+// Deployment ke env ini wajib melalui approval matrix (§48)
+export const DEPLOY_ENVS_NEED_APPROVAL = ["STAGING", "PRODUCTION"] as const;
+
+export const IT_TICKET_TYPES = [
+  ["LAPTOP_ISSUE", "Laptop Issue"],
+  ["ACCOUNT_REQUEST", "Account Request"],
+  ["PASSWORD_RESET", "Password Reset"],
+  ["EMAIL_ISSUE", "Email Issue"],
+  ["PRINTER_ISSUE", "Printer Issue"],
+  ["SOFTWARE_INSTALL", "Software Installation"],
+  ["ACCESS_REQUEST", "Access Request"],
+  ["VPN_ISSUE", "VPN Issue"],
+  ["APP_BUG", "Application Bug"],
+  ["SERVER_ISSUE", "Server Issue"],
+  ["SECURITY_INCIDENT", "Security Incident"],
+  ["ONBOARDING", "New Employee Onboarding"],
+  ["OFFBOARDING", "Employee Offboarding"],
+] as const;
+
+export const IT_TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+
+export const IT_TICKET_STATUSES = [
+  "NEW",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "WAITING_USER",
+  "WAITING_VENDOR",
+  "RESOLVED",
+  "CLOSED",
+] as const;
+
+export const ACCESS_TYPES = [
+  ["SERVER", "Server"],
+  ["DATABASE", "Database"],
+  ["REPOSITORY", "Repository"],
+  ["CLOUD", "Cloud"],
+  ["NETWORK_DEVICE", "Network Device"],
+  ["CRM", "CRM"],
+  ["MONITORING", "Monitoring"],
+  ["EMAIL", "Email"],
+  ["VPN", "VPN"],
+  ["DOMAIN", "Domain"],
+  ["BILLING", "Billing"],
+] as const;
+
+export const BACKUP_TYPES = [
+  ["DATABASE", "Database Backup"],
+  ["FILE", "File Backup"],
+  ["CONFIGURATION", "Configuration Backup"],
+  ["VM_SNAPSHOT", "VM Snapshot"],
+  ["NETWORK_CONFIG", "Network Configuration Backup"],
+  ["OFFSITE", "Offsite Backup"],
+] as const;
+
+export const IT_ASSET_TYPES = [
+  ["DOMAIN", "Domain"],
+  ["SSL_CERT", "SSL Certificate"],
+  ["CLOUD_SUBSCRIPTION", "Cloud Subscription"],
+  ["VPS", "VPS"],
+  ["SOFTWARE_LICENSE", "Software License"],
+  ["MONITORING_LICENSE", "Monitoring License"],
+  ["EMAIL_SERVICE", "Email Service"],
+  ["API_SUBSCRIPTION", "API Subscription"],
+] as const;
+
+// ── Phase 7: Integrasi ──────────────────────────────────────────
+
+export const INTEGRATION_CATEGORIES = [
+  ["NETWORK", "Jaringan & Monitoring"],
+  ["CRM_CUSTOMER", "CRM & Pelanggan"],
+  ["ITOPS", "IT/DevOps"],
+  ["FINANCE", "Finance"],
+] as const;
+
+export const INTEGRATION_PROVIDERS = [
+  ["MIKROTIK", "MikroTik"],
+  ["RADIUS", "RADIUS"],
+  ["RUIJIE", "Ruijie"],
+  ["UNIFI", "UniFi"],
+  ["ZABBIX", "Zabbix"],
+  ["LIBRENMS", "LibreNMS"],
+  ["THE_DUDE", "The Dude"],
+  ["PROMETHEUS", "Prometheus"],
+  ["GRAFANA", "Grafana"],
+  ["BILLING", "Billing"],
+  ["PAYMENT_GATEWAY", "Payment Gateway"],
+  ["WHATSAPP", "WhatsApp Gateway"],
+  ["EMAIL", "Email/SMTP"],
+  ["GITHUB", "GitHub"],
+  ["GITLAB", "GitLab"],
+  ["SENTRY", "Sentry"],
+  ["UPTIME", "Uptime Monitoring"],
+  ["ACCOUNTING", "Accounting"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const INTEGRATION_AUTH_TYPES = ["NONE", "API_KEY", "BASIC", "TOKEN"] as const;
+
+// Label ringkas untuk badge/status (fallback: kode apa adanya)
+export const STATUS_LABELS: Record<string, string> = {
+  NEW: "Baru",
+  ASSIGNED: "Ter-assign",
+  CONTACTED: "Terkontak",
+  FOLLOW_UP: "Follow-up",
+  INTERESTED: "Tertarik",
+  SURVEY_REQUIRED: "Perlu Survey",
+  QUOTATION_REQUIRED: "Perlu Quotation",
+  UNREACHABLE: "Tidak Terhubungi",
+  NOT_INTERESTED: "Tidak Tertarik",
+  CONVERTED: "Terkonversi",
+  LOST: "Lost",
+  NEW_LEAD: "Lead Baru",
+  INITIAL_CONTACT: "Kontak Awal",
+  QUALIFIED: "Qualified",
+  SURVEY_SCHEDULED: "Survey Terjadwal",
+  SURVEY_COMPLETED: "Survey Selesai",
+  QUOTATION: "Quotation",
+  NEGOTIATION: "Negosiasi",
+  WAITING_DECISION: "Menunggu Keputusan",
+  WON: "Won",
+  INSTALLATION_PROCESS: "Proses Instalasi",
+  ACTIVATED: "Aktif",
+  SUBMITTED: "Diajukan",
+  SCHEDULED: "Terjadwal",
+  IN_PROGRESS: "Berjalan",
+  COMPLETED: "Selesai",
+  FEASIBLE: "Feasible",
+  FEASIBLE_WITH_COST: "Feasible + Biaya",
+  NOT_FEASIBLE: "Not Feasible",
+  DRAFT: "Draft",
+  WAITING_APPROVAL: "Menunggu Approval",
+  SENT: "Terkirim",
+  ACCEPTED: "Diterima",
+  EXPIRED: "Kedaluwarsa",
+  SUPERSEDED: "Direvisi",
+  WAITING_INSTALLATION: "Menunggu Instalasi",
+  ACTIVE: "Aktif",
+  ISOLATED: "Isolir",
+  SUSPENDED: "Suspend",
+  TERMINATED: "Terminasi",
+  INACTIVE: "Nonaktif",
+  CANCELLED: "Dibatalkan",
+  REJECTED: "Ditolak",
+  // Phase 3
+  POSTED: "Posted",
+  REVERSED: "Di-reverse",
+  AVAILABLE: "Tersedia",
+  IN_CUSTODY: "Dibawa Teknisi",
+  INSTALLED: "Terpasang",
+  UNDER_INSPECTION: "Inspeksi Write-off",
+  DAMAGED: "Rusak",
+  SCRAPPED: "Scrap",
+  OPEN: "Terbuka",
+  CLOSED: "Ditutup",
+  SERIALIZED: "Serialized",
+  BULK: "Bulk",
+  NEW_INSTALLATION: "Instalasi Baru",
+  TROUBLESHOOTING: "Troubleshooting",
+  DEVICE_REPLACEMENT: "Penggantian Perangkat",
+  DEVICE_RETRIEVAL: "Penarikan Perangkat",
+  MAINTENANCE: "Maintenance",
+  // Phase 4
+  SETTLED: "Selesai Dipertanggungjawabkan",
+  OUTSTANDING: "Belum Selesai",
+  OVERDUE: "Jatuh Tempo",
+  DAILY: "Harian",
+  MONTHLY: "Bulanan",
+  // Phase 5
+  PLANNED: "Direncanakan",
+  DEGRADED: "Menurun",
+  DOWN: "Down",
+  ALLOCATED: "Teralokasi",
+  RELEASED: "Dilepas",
+  INFORMATIONAL: "Informational",
+  WARNING: "Warning",
+  MINOR: "Minor",
+  MAJOR: "Major",
+  CRITICAL: "Critical",
+  DETECTED: "Terdeteksi",
+  ACKNOWLEDGED: "Di-acknowledge",
+  INVESTIGATING: "Investigasi",
+  MITIGATING: "Mitigasi",
+  RESOLVED: "Pulih",
+  PENDING_REVIEW: "Menunggu Post-Review",
+  FAILED: "Gagal",
+  STANDARD: "Standard",
+  NORMAL: "Normal",
+  EMERGENCY: "Emergency",
+  P1: "P1 — Critical",
+  P2: "P2 — Major",
+  P3: "P3 — Minor",
+  P4: "P4 — Informational",
+  // Phase 6 — IT/DevOps
+  DEVELOPMENT: "Development",
+  TESTING: "Testing",
+  STAGING: "Staging",
+  PRODUCTION: "Production",
+  DR: "Disaster Recovery",
+  DECOMMISSIONED: "Decommissioned",
+  DEPRECATED: "Deprecated",
+  MONITORED: "Termonitor",
+  UNMONITORED: "Tidak Termonitor",
+  URGENT: "Urgent",
+  WAITING_USER: "Menunggu User",
+  WAITING_VENDOR: "Menunggu Vendor",
+  GRANTED: "Diberikan",
+  REVOKED: "Dicabut",
+  READY: "Siap Dieksekusi",
+  ROLLED_BACK: "Di-rollback",
+  SUCCESS: "Sukses",
+};
+
+export function statusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return STATUS_LABELS[code] ?? code;
+}
 
 export function formatRupiah(amount: bigint | number | null | undefined): string {
   if (amount === null || amount === undefined) return "-";

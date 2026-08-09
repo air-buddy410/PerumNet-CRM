@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Logo } from "@/components/logo";
 import { SidebarNav, type NavGroup } from "@/components/nav";
+import CrmAppShell from "@/components/app-shell";
+import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { logout } from "@/lib/auth";
+import { unreadCount } from "@/lib/notify";
 import { PERMISSIONS } from "@/lib/constants";
 
 export default async function AppLayout({
@@ -11,14 +12,125 @@ export default async function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   const can = (p: string) => user.permissions.has(p);
+  const unread = await unreadCount(user.id);
 
   const groups: NavGroup[] = [];
 
-  if (can(PERMISSIONS.DASHBOARD_VIEW)) {
+  const utamaItems = [];
+  if (can(PERMISSIONS.DASHBOARD_VIEW))
+    utamaItems.push({ href: "/dashboard", label: "Dashboard" });
+  utamaItems.push({
+    href: "/notifications",
+    label: unread > 0 ? `Notifikasi (${unread > 9 ? "9+" : unread})` : "Notifikasi",
+  });
+  if (can(PERMISSIONS.OUTAGES_VIEW))
+    utamaItems.push({ href: "/outages", label: "Status Gangguan" });
+  groups.push({ title: "Utama", items: utamaItems });
+
+  if (can(PERMISSIONS.CAMPAIGNS_VIEW)) {
     groups.push({
-      title: "Utama",
-      items: [{ href: "/dashboard", label: "Dashboard" }],
+      title: "Marketing",
+      items: [{ href: "/marketing/campaigns", label: "Campaigns" }],
     });
+  }
+
+  const salesItems = [];
+  if (can(PERMISSIONS.LEADS_VIEW))
+    salesItems.push({ href: "/sales/leads", label: "Leads" });
+  if (can(PERMISSIONS.OPPORTUNITIES_VIEW))
+    salesItems.push({ href: "/sales/pipeline", label: "Pipeline" });
+  if (can(PERMISSIONS.SURVEYS_VIEW))
+    salesItems.push({ href: "/sales/surveys", label: "Surveys" });
+  if (can(PERMISSIONS.QUOTATIONS_VIEW))
+    salesItems.push({ href: "/sales/quotations", label: "Quotations" });
+  if (salesItems.length) groups.push({ title: "Sales", items: salesItems });
+
+  const crmItems = [];
+  if (can(PERMISSIONS.CUSTOMERS_VIEW))
+    crmItems.push({ href: "/crm/customers", label: "Customers" });
+  if (can(PERMISSIONS.SUBSCRIPTIONS_VIEW))
+    crmItems.push({ href: "/crm/subscriptions", label: "Subscriptions" });
+  if (crmItems.length) groups.push({ title: "CRM", items: crmItems });
+
+  const inventoryItems = [];
+  if (can(PERMISSIONS.INVENTORY_VIEW)) {
+    inventoryItems.push(
+      { href: "/inventory/stock", label: "Posisi Stock" },
+      { href: "/inventory/transactions", label: "Transaksi Stock" },
+      { href: "/inventory/devices", label: "Perangkat" },
+      { href: "/inventory/items", label: "Item Master" },
+      { href: "/inventory/warehouses", label: "Gudang" },
+      { href: "/inventory/opname", label: "Stock Opname" }
+    );
+  }
+  if (can(PERMISSIONS.CUSTODY_VIEW))
+    inventoryItems.push({ href: "/inventory/custody", label: "Custody Teknisi" });
+  if (inventoryItems.length)
+    groups.push({ title: "Inventory", items: inventoryItems });
+
+  if (can(PERMISSIONS.WORK_ORDERS_VIEW)) {
+    groups.push({
+      title: "Operasional",
+      items: [{ href: "/operations/work-orders", label: "Work Orders" }],
+    });
+  }
+
+  const financeItems = [];
+  if (can(PERMISSIONS.CASH_CREATE) || can(PERMISSIONS.FINANCE_VIEW))
+    financeItems.push({ href: "/finance/transactions", label: "Transaksi Kas" });
+  if (can(PERMISSIONS.FINANCE_VIEW)) {
+    financeItems.push(
+      { href: "/finance/cashbooks", label: "Cashbooks" },
+      { href: "/finance/closings", label: "Closing Kas" }
+    );
+  }
+  if (financeItems.length) groups.push({ title: "Finance", items: financeItems });
+
+  if (can(PERMISSIONS.PROJECTS_VIEW)) {
+    groups.push({
+      title: "Projects",
+      items: [{ href: "/projects", label: "Daftar Proyek" }],
+    });
+  }
+
+  if (can(PERMISSIONS.NOC_VIEW)) {
+    groups.push({
+      title: "NOC",
+      items: [
+        { href: "/noc/incidents", label: "Incidents" },
+        { href: "/noc/alarms", label: "Alarms" },
+        { href: "/noc/maintenance", label: "Maintenance" },
+        { href: "/noc/changes", label: "Changes" },
+        { href: "/noc/sites", label: "Sites" },
+        { href: "/noc/devices", label: "Perangkat Jaringan" },
+        { href: "/noc/links", label: "Links" },
+        { href: "/noc/ipam", label: "IPAM" },
+      ],
+    });
+  }
+
+  if (can(PERMISSIONS.IT_VIEW)) {
+    groups.push({
+      title: "IT/DevOps",
+      items: [
+        { href: "/it/tickets", label: "IT Tickets" },
+        { href: "/it/access", label: "Access" },
+        { href: "/it/deployments", label: "Deployments" },
+        { href: "/it/backups", label: "Backup & DR" },
+        { href: "/it/servers", label: "Servers" },
+        { href: "/it/applications", label: "Applications" },
+        { href: "/it/assets", label: "Domain & License" },
+      ],
+    });
+  } else {
+    // Service desk terbuka untuk seluruh staff (PRD §39–40).
+    const supportItems = [];
+    if (can(PERMISSIONS.IT_TICKETS_CREATE))
+      supportItems.push({ href: "/it/tickets", label: "IT Tickets" });
+    if (can(PERMISSIONS.ACCESS_REQUEST))
+      supportItems.push({ href: "/it/access", label: "Akses Sistem" });
+    if (supportItems.length)
+      groups.push({ title: "IT Support", items: supportItems });
   }
 
   const approvalItems = [];
@@ -43,6 +155,8 @@ export default async function AppLayout({
       { href: "/settings/master/packages", label: "Paket Internet" }
     );
   }
+  if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
+    settingItems.push({ href: "/settings/integrations", label: "Integrasi" });
   if (settingItems.length)
     groups.push({ title: "Pengaturan", items: settingItems });
 
@@ -60,67 +174,21 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-20 flex w-60 flex-col bg-slate-900">
-        <div className="flex h-16 items-center border-b border-white/10 px-4">
-          <Link href="/dashboard">
-            <Logo markClassName="h-8 w-8" textClassName="text-base" />
-          </Link>
-        </div>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <SidebarNav groups={groups} />
-          <div className="mt-8 px-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Fase Berikutnya
-            </div>
-            <ul className="space-y-1 text-xs text-slate-500">
-              <li>Sales &amp; CRM</li>
-              <li>Inventory &amp; Operational</li>
-              <li>Finance &amp; Project</li>
-              <li>NOC</li>
-              <li>IT/DevOps</li>
-            </ul>
-          </div>
-        </div>
-      </aside>
-
-      <div className="ml-60 flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur">
-          <div className="text-sm text-slate-500">
-            {[
-              user.divisionName,
-              user.roles.map((r) => r.name).join(" · ") || "Tanpa role",
-            ]
-              .filter(Boolean)
-              .join(" — ")}
-          </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/profile"
-              className="text-sm font-medium text-slate-700 hover:text-brand-600"
-            >
-              {user.name}
-            </Link>
-            <form action={logoutAction}>
-              <button type="submit" className="btn-secondary px-3 py-1.5 text-xs">
-                Keluar
-              </button>
-            </form>
-          </div>
-        </header>
-
-        {user.mustChangePassword && (
-          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-800">
-            Anda masih menggunakan password awal.{" "}
-            <Link href="/profile" className="font-medium underline">
-              Ganti password sekarang
-            </Link>
-            .
-          </div>
-        )}
-
-        <main className="flex-1 p-6">{children}</main>
-      </div>
-    </div>
+    <CrmAppShell
+      groups={groups}
+      navigation={<SidebarNav groups={groups} />}
+      user={{ name: user.name, email: user.email }}
+      mustChangePassword={user.mustChangePassword}
+      profileMenuAction={
+        <form action={logoutAction}>
+          <button type="submit" role="menuitem" className="crm-signout-button">
+            <LogOut aria-hidden="true" />
+            Keluar
+          </button>
+        </form>
+      }
+    >
+      {children}
+    </CrmAppShell>
   );
 }

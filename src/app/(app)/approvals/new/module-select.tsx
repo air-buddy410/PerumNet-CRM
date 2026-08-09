@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { APPROVAL_MODULES } from "@/lib/constants";
 
+const MANUAL_MODULES = APPROVAL_MODULES.filter((m) => m.manual !== false);
+
 export function ModuleSelect() {
-  const [moduleCode, setModuleCode] = useState(APPROVAL_MODULES[0].code);
+  const [moduleCode, setModuleCode] = useState(MANUAL_MODULES[0].code);
   const subtypes =
-    APPROVAL_MODULES.find((m) => m.code === moduleCode)?.subtypes ?? [];
+    MANUAL_MODULES.find((m) => m.code === moduleCode)?.subtypes ?? [];
 
   return (
     <>
@@ -21,7 +23,7 @@ export function ModuleSelect() {
           value={moduleCode}
           onChange={(e) => setModuleCode(e.target.value)}
         >
-          {APPROVAL_MODULES.map((m) => (
+          {MANUAL_MODULES.map((m) => (
             <option key={m.code} value={m.code}>
               {m.name}
             </option>

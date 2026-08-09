@@ -36,6 +36,73 @@ model User {
   auditLogs        AuditLog[]
   approvalRequests ApprovalRequest[] @relation("Requester")
   approvalActions  ApprovalStep[]    @relation("Actor")
+
+  campaignsPic     Campaign[]     @relation("CampaignPic")
+  ownedLeads       Lead[]         @relation("LeadOwner")
+  createdLeads     Lead[]         @relation("LeadCreator")
+  leadActivities   LeadActivity[] @relation("ActivityUser")
+  opportunities    Opportunity[]  @relation("OppCreator")
+  surveysAssigned  Survey[]       @relation("SurveyTechnician")
+  surveysCreated   Survey[]       @relation("SurveyCreator")
+  quotations       Quotation[]    @relation("QuotationCreator")
+  ownedCustomers   Customer[]     @relation("CustomerOwner")
+  createdCustomers Customer[]     @relation("CustomerCreator")
+  subscriptions    Subscription[] @relation("SubscriptionCreator")
+  attachments      Attachment[]   @relation("AttachmentUploader")
+
+  custodyLevels    CustodyLevel[]     @relation("CustodyLevels")
+  txAsCustodian    StockTransaction[] @relation("TxCustodian")
+  txCreated        StockTransaction[] @relation("TxCreator")
+  txPosted         StockTransaction[] @relation("TxPoster")
+  devicesInCustody SerializedDevice[] @relation("DeviceCustodian")
+  deviceMovements  DeviceMovement[]   @relation("DeviceMover")
+  woAsTechnician   WorkOrder[]        @relation("WoTechnician")
+  woCreated        WorkOrder[]        @relation("WoCreator")
+  woClosed         WorkOrder[]        @relation("WoCloser")
+  materialUsages   MaterialUsage[]    @relation("MaterialUser")
+  opnamesCreated   OpnameSession[]    @relation("OpnameCreator")
+
+  cashClaims      CashTransaction[] @relation("CashClaimant")
+  cashCreated     CashTransaction[] @relation("CashCreator")
+  cashPosted      CashTransaction[] @relation("CashPoster")
+  closingsCreated CashClosing[]     @relation("ClosingCreator")
+  projectsManaged Project[]         @relation("ProjectManager")
+  projectsClosed  Project[]         @relation("ProjectCloser")
+  projectsCreated Project[]         @relation("ProjectCreator")
+
+  sitesAsPic       NetworkSite[]        @relation("SitePic")
+  netDevicesOwned  NetworkDevice[]      @relation("NetDeviceOwner")
+  subnetsOwned     Subnet[]             @relation("SubnetOwner")
+  ipsCreated       IPAddress[]          @relation("IpCreator")
+  alarmsAcked      NetworkAlarm[]       @relation("AlarmAck")
+  alarmsCreated    NetworkAlarm[]       @relation("AlarmCreator")
+  incidentsAsPic   Incident[]           @relation("IncidentPic")
+  incidentsCreated Incident[]           @relation("IncidentCreator")
+  incidentUpdates  IncidentUpdate[]     @relation("IncidentUpdater")
+  maintAsPic       NetworkMaintenance[] @relation("MaintPic")
+  maintCreated     NetworkMaintenance[] @relation("MaintCreator")
+  changesAsPic     ChangeRequest[]      @relation("ChangePic")
+  changesExecuted  ChangeRequest[]      @relation("ChangeExecutor")
+  changesReviewed  ChangeRequest[]      @relation("ChangeReviewer")
+  changesCreated   ChangeRequest[]      @relation("ChangeCreator")
+
+  serversOwned     Server[]        @relation("ServerOwner")
+  appsOwned        Application[]   @relation("AppOwner")
+  appsBusinessOwn  Application[]   @relation("AppBusinessOwner")
+  ticketsRequested ItTicket[]      @relation("TicketRequester")
+  ticketsAssigned  ItTicket[]      @relation("TicketAssignee")
+  ticketsCreated   ItTicket[]      @relation("TicketCreator")
+  accessAsTarget   AccessRequest[] @relation("AccessTarget")
+  accessGranted    AccessRequest[] @relation("AccessGrantor")
+  accessRevoked    AccessRequest[] @relation("AccessRevoker")
+  accessCreated    AccessRequest[] @relation("AccessCreator")
+  deploysExecuted  Deployment[]    @relation("DeployExecutor")
+  deploysCreated   Deployment[]    @relation("DeployCreator")
+  backupsVerified  BackupRecord[]  @relation("BackupVerifier")
+  backupsCreated   BackupRecord[]  @relation("BackupCreator")
+  itAssetsOwned    ItAsset[]       @relation("ItAssetOwner")
+
+  notifications Notification[]
 }
 
 model Division {
@@ -200,6 +267,8 @@ model CostCenter {
   name        String
   description String?
   isActive    Boolean @default(true)
+
+  cashTransactions CashTransaction[]
 }
 
 model Category {
@@ -208,6 +277,9 @@ model Category {
   code     String  @unique
   name     String
   isActive Boolean @default(true)
+
+  items            Item[]
+  cashTransactions CashTransaction[]
 
   @@index([type])
 }
@@ -218,6 +290,12 @@ model Area {
   name        String
   description String?
   isActive    Boolean @default(true)
+
+  campaigns    Campaign[]
+  customers    Customer[]
+  projects     Project[]
+  networkSites NetworkSite[]
+  incidents    Incident[]
 }
 
 model Package {
@@ -230,4 +308,1181 @@ model Package {
   installationFee BigInt  @default(0) // rupiah
   description     String?
   isActive        Boolean @default(true)
+
+  interestedLeads Lead[]
+  surveys         Survey[]
+  quotations      Quotation[]
+  subscriptions   Subscription[]
+}
+
+// ── Phase 2: Sales & CRM ────────────────────────────────────────
+
+model Campaign {
+  id             String    @id @default(cuid())
+  campaignNumber String    @unique // CMP-####
+  name           String
+  channel        String
+  startDate      DateTime?
+  endDate        DateTime?
+  budget         BigInt    @default(0)
+  targetAudience String?
+  areaId         String?
+  picId          String?
+  targetLeads    Int       @default(0)
+  status         String    @default("DRAFT") // DRAFT|ACTIVE|COMPLETED|CANCELLED
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  area  Area?  @relation(fields: [areaId], references: [id])
+  pic   User?  @relation("CampaignPic", fields: [picId], references: [id])
+  leads Lead[]
+}
+
+model Lead {
+  id                String    @id @default(cuid())
+  leadNumber        String    @unique // LD-YYYYMM-####
+  name              String
+  company           String?
+  phone             String
+  email             String?
+  address           String?
+  latitude          Float?
+  longitude         Float?
+  customerType      String    @default("RESIDENTIAL")
+  source            String    @default("OTHER")
+  campaignId        String?
+  interestPackageId String?
+  estBandwidthMbps  Int?
+  salesOwnerId      String?
+  nextFollowUpAt    DateTime?
+  status            String    @default("NEW")
+  notes             String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  campaign        Campaign?      @relation(fields: [campaignId], references: [id])
+  interestPackage Package?       @relation(fields: [interestPackageId], references: [id])
+  salesOwner      User?          @relation("LeadOwner", fields: [salesOwnerId], references: [id])
+  createdBy       User           @relation("LeadCreator", fields: [createdById], references: [id])
+  activities      LeadActivity[]
+  opportunity     Opportunity?
+  surveys         Survey[]
+  quotations      Quotation[]
+  customer        Customer?
+
+  @@index([status])
+  @@index([salesOwnerId])
+}
+
+model LeadActivity {
+  id             String    @id @default(cuid())
+  leadId         String
+  type           String // PHONE_CALL|WHATSAPP|EMAIL|MEETING|SITE_VISIT|PRESENTATION|SURVEY_REQUEST|QUOTATION_SENT|NEGOTIATION|CONTRACT_SIGNING
+  note           String
+  activityAt     DateTime  @default(now())
+  nextFollowUpAt DateTime?
+  doneById       String
+
+  lead   Lead @relation(fields: [leadId], references: [id])
+  doneBy User @relation("ActivityUser", fields: [doneById], references: [id])
+
+  @@index([leadId, activityAt])
+}
+
+model Opportunity {
+  id              String    @id @default(cuid())
+  oppNumber       String    @unique // OPP-YYYYMM-####
+  leadId          String    @unique
+  stage           String    @default("NEW_LEAD")
+  estMonthlyValue BigInt?
+  lostReason      String?
+  notes           String?
+  wonAt           DateTime?
+  lostAt          DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lead      Lead @relation(fields: [leadId], references: [id])
+  createdBy User @relation("OppCreator", fields: [createdById], references: [id])
+
+  @@index([stage])
+}
+
+model Survey {
+  id             String    @id @default(cuid())
+  surveyNumber   String    @unique // SVY-YYYYMM-####
+  leadId         String?
+  customerId     String?
+  address        String
+  latitude       Float?
+  longitude      Float?
+  contactName    String?
+  contactPhone   String?
+  packageId      String?
+  bandwidthMbps  Int?
+  scheduledAt    DateTime?
+  technicianId   String?
+  nearestNode    String?
+  estCableMeters Int?
+  estMaterials   String?
+  estCost        BigInt?
+  signalLevel    String?
+  opticalPower   String?
+  feasibility    String? // FEASIBLE|FEASIBLE_WITH_COST|NOT_FEASIBLE
+  resultNotes    String?
+  status         String    @default("SUBMITTED") // SUBMITTED|SCHEDULED|IN_PROGRESS|COMPLETED|CANCELLED
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  lead       Lead?     @relation(fields: [leadId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  package    Package?  @relation(fields: [packageId], references: [id])
+  technician User?     @relation("SurveyTechnician", fields: [technicianId], references: [id])
+  createdBy  User      @relation("SurveyCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+model Quotation {
+  id              String    @id @default(cuid())
+  quotationNumber String // QUO-YYYYMM-#### (sama untuk semua versi)
+  version         Int       @default(1)
+  leadId          String
+  packageId       String
+  monthlyPrice    BigInt
+  installationFee BigInt    @default(0)
+  deviceFee       BigInt    @default(0)
+  networkBuildFee BigInt    @default(0)
+  discount        BigInt    @default(0) // potongan biaya one-time; >0 wajib approval
+  taxPercent      Float     @default(11)
+  contractMonths  Int       @default(12)
+  validUntil      DateTime?
+  notes           String?
+  status          String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|SENT|ACCEPTED|REJECTED|EXPIRED|SUPERSEDED
+  acceptedAt      DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  lead      Lead    @relation(fields: [leadId], references: [id])
+  package   Package @relation(fields: [packageId], references: [id])
+  createdBy User    @relation("QuotationCreator", fields: [createdById], references: [id])
+
+  @@unique([quotationNumber, version])
+  @@index([status])
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  customerNumber String   @unique // CST-#####
+  name           String
+  company        String?
+  phone          String
+  email          String?
+  address        String
+  latitude       Float?
+  longitude      Float?
+  customerType   String   @default("RESIDENTIAL")
+  areaId         String?
+  salesOwnerId   String?
+  source         String?
+  leadId         String?  @unique
+  status         String   @default("ACTIVE") // ACTIVE|INACTIVE
+  notes          String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  area          Area?          @relation(fields: [areaId], references: [id])
+  salesOwner    User?          @relation("CustomerOwner", fields: [salesOwnerId], references: [id])
+  lead          Lead?          @relation(fields: [leadId], references: [id])
+  createdBy     User           @relation("CustomerCreator", fields: [createdById], references: [id])
+  subscriptions Subscription[]
+  surveys       Survey[]
+  devices       SerializedDevice[]
+  workOrders    WorkOrder[]
+  projects      Project[]
+}
+
+model Subscription {
+  id             String    @id @default(cuid())
+  serviceNumber  String    @unique // SVC-#####
+  customerId     String
+  packageId      String
+  monthlyPrice   BigInt
+  downloadMbps   Int
+  uploadMbps     Int
+  billingCycleDay Int      @default(1)
+  popNode        String?
+  vlan           String?
+  pppoeUsername  String?
+  ipAddress      String?
+  contractMonths Int?
+  quotationId    String?
+  activatedAt    DateTime?
+  terminatedAt   DateTime?
+  status         String    @default("DRAFT") // DRAFT|WAITING_INSTALLATION|ACTIVE|ISOLATED|SUSPENDED|TERMINATED
+  notes          String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer  Customer @relation(fields: [customerId], references: [id])
+  package   Package  @relation(fields: [packageId], references: [id])
+  createdBy User     @relation("SubscriptionCreator", fields: [createdById], references: [id])
+  devices         SerializedDevice[]
+  workOrders      WorkOrder[]
+  ips             IPAddress[]
+  incidentImpacts IncidentSubscription[]
+
+  @@index([status])
+}
+
+// Bukti/lampiran generik (foto survey, nota, dsb.)
+model Attachment {
+  id           String   @id @default(cuid())
+  entityType   String // "Survey" | "Lead" | ...
+  entityId     String
+  filename     String // nama asli
+  storedName   String   @unique // nama file di disk
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([entityType, entityId])
+}
+
+// ── Phase 3: Inventory & Operational ────────────────────────────
+// Prinsip (PRD §7, §15–18, §21, §53):
+//  - Stock HANYA berubah lewat StockTransaction berstatus POSTED.
+//  - Transaksi POSTED immutable; koreksi = transaksi reversal baru.
+//  - Stock tidak boleh negatif; serial number unik.
+//  - Perangkat serialized punya tepat satu lokasi & satu custodian aktif.
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  address  String?
+  isActive Boolean @default(true)
+
+  stockLevels StockLevel[]
+  devices     SerializedDevice[]
+  txFrom      StockTransaction[] @relation("TxFrom")
+  txTo        StockTransaction[] @relation("TxTo")
+  opnames     OpnameSession[]
+}
+
+model Item {
+  id           String  @id @default(cuid())
+  code         String  @unique
+  name         String
+  categoryId   String?
+  brand        String?
+  model        String?
+  unit         String  @default("pcs") // pcs | meter | roll | box
+  trackingType String  @default("BULK") // SERIALIZED | BULK
+  minStock     Int     @default(0)
+  isActive     Boolean @default(true)
+
+  category    Category?              @relation(fields: [categoryId], references: [id])
+  stockLevels StockLevel[]
+  devices     SerializedDevice[]
+  txLines     StockTransactionLine[]
+  opnameLines OpnameLine[]
+  custodyLevels CustodyLevel[]
+  bomLines      ProjectBomLine[]
+}
+
+// Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
+model StockLevel {
+  id          String @id @default(cuid())
+  itemId      String
+  warehouseId String
+  qty         Int    @default(0)
+
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([itemId, warehouseId])
+}
+
+// Saldo material bulk yang dibawa teknisi (virtual inventory custody).
+model CustodyLevel {
+  id          String @id @default(cuid())
+  custodianId String
+  itemId      String
+  qty         Int    @default(0)
+
+  custodian User @relation("CustodyLevels", fields: [custodianId], references: [id])
+  item      Item @relation(fields: [itemId], references: [id])
+
+  @@unique([custodianId, itemId])
+}
+
+model StockTransaction {
+  id              String    @id @default(cuid())
+  txNumber        String    @unique // GR-/ISS-/RET-/TRF-/ADJ-YYYYMM-####
+  type            String // GOODS_RECEIPT|STOCK_ISSUE|STOCK_RETURN|STOCK_TRANSFER|STOCK_ADJUSTMENT
+  status          String    @default("DRAFT") // DRAFT | POSTED
+  warehouseFromId String?
+  warehouseToId   String?
+  custodianId     String? // teknisi penerima (issue) / pengembali (return)
+  workOrderId     String?
+  projectId       String? // material proyek (PRD §19)
+  referenceNote   String? // PO, proyek, dsb.
+  purpose         String // tujuan wajib (PRD §16.2)
+  notes           String?
+  createdById     String
+  postedById      String?
+  postedAt        DateTime?
+  reversalOfId    String?   @unique // transaksi ini adalah reversal dari ...
+  reversedById    String?   @unique // transaksi ini telah di-reverse oleh ...
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  warehouseFrom Warehouse?             @relation("TxFrom", fields: [warehouseFromId], references: [id])
+  warehouseTo   Warehouse?             @relation("TxTo", fields: [warehouseToId], references: [id])
+  custodian     User?                  @relation("TxCustodian", fields: [custodianId], references: [id])
+  workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  project       Project?               @relation(fields: [projectId], references: [id])
+  createdBy     User                   @relation("TxCreator", fields: [createdById], references: [id])
+  postedBy      User?                  @relation("TxPoster", fields: [postedById], references: [id])
+  reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
+  reversedBy    StockTransaction?      @relation("TxReversal")
+  lines         StockTransactionLine[]
+
+  @@index([type, status])
+}
+
+model StockTransactionLine {
+  id       String  @id @default(cuid())
+  txId     String
+  itemId   String
+  qty      Int
+  deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
+  snInput  String? // SN yang akan dibuat saat posting goods receipt
+
+  tx     StockTransaction  @relation(fields: [txId], references: [id])
+  item   Item              @relation(fields: [itemId], references: [id])
+  device SerializedDevice? @relation(fields: [deviceId], references: [id])
+
+  @@index([txId])
+}
+
+model SerializedDevice {
+  id              String    @id @default(cuid())
+  serialNumber    String    @unique
+  macAddress      String?
+  itemId          String
+  condition       String    @default("GOOD") // GOOD | DAMAGED
+  status          String    @default("AVAILABLE") // AVAILABLE|IN_CUSTODY|INSTALLED|UNDER_INSPECTION|DAMAGED|LOST|SCRAPPED
+  warehouseId     String? // terisi saat berada di gudang
+  custodianId     String? // terisi saat dibawa teknisi
+  subscriptionId  String? // terisi saat terpasang di pelanggan
+  customerId      String?
+  acquisitionCost BigInt?
+  warrantyUntil   DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  item         Item              @relation(fields: [itemId], references: [id])
+  warehouse    Warehouse?        @relation(fields: [warehouseId], references: [id])
+  custodian    User?             @relation("DeviceCustodian", fields: [custodianId], references: [id])
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  customer     Customer?         @relation(fields: [customerId], references: [id])
+  txLines      StockTransactionLine[]
+  movements    DeviceMovement[]
+
+  @@index([status])
+  @@index([custodianId])
+}
+
+// Riwayat perangkat — append-only.
+model DeviceMovement {
+  id          String   @id @default(cuid())
+  deviceId    String
+  action      String // RECEIVED|ISSUED|RETURNED|TRANSFERRED|INSTALLED|WRITEOFF_REQUESTED|WRITTEN_OFF|REVERSED
+  fromNote    String?
+  toNote      String?
+  txId        String?
+  workOrderId String?
+  byUserId    String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  device    SerializedDevice @relation(fields: [deviceId], references: [id])
+  byUser    User             @relation("DeviceMover", fields: [byUserId], references: [id])
+  workOrder WorkOrder?       @relation(fields: [workOrderId], references: [id])
+
+  @@index([deviceId, createdAt])
+}
+
+model WorkOrder {
+  id                   String    @id @default(cuid())
+  woNumber             String    @unique // WO-YYYYMM-####
+  type                 String // NEW_INSTALLATION|TROUBLESHOOTING|DEVICE_REPLACEMENT|DEVICE_RETRIEVAL|MAINTENANCE
+  status               String    @default("OPEN") // OPEN|ASSIGNED|IN_PROGRESS|COMPLETED|CLOSED|CANCELLED
+  customerId           String?
+  subscriptionId       String?
+  address              String
+  description          String
+  scheduledAt          DateTime?
+  technicianId         String?
+  resultNotes          String?
+  customerConfirmation String? // nama pelanggan yang mengonfirmasi (PRD §18)
+  createdById          String
+  closedById           String?
+  closedAt             DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  customer     Customer?          @relation(fields: [customerId], references: [id])
+  subscription Subscription?      @relation(fields: [subscriptionId], references: [id])
+  technician   User?              @relation("WoTechnician", fields: [technicianId], references: [id])
+  createdBy    User               @relation("WoCreator", fields: [createdById], references: [id])
+  closedBy     User?              @relation("WoCloser", fields: [closedById], references: [id])
+  transactions StockTransaction[]
+  movements    DeviceMovement[]
+  materialUsages MaterialUsage[]
+  cashTransactions CashTransaction[]
+  incidents        Incident[]
+
+  @@index([status])
+  @@index([technicianId])
+}
+
+// Pemakaian material bulk pada WO — mengurangi custody teknisi.
+model MaterialUsage {
+  id          String   @id @default(cuid())
+  workOrderId String
+  itemId      String
+  qty         Int
+  note        String?
+  byUserId    String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+  byUser    User      @relation("MaterialUser", fields: [byUserId], references: [id])
+}
+
+model OpnameSession {
+  id                String    @id @default(cuid())
+  opnameNumber      String    @unique // OPN-YYYYMM-####
+  warehouseId       String
+  status            String    @default("OPEN") // OPEN|WAITING_APPROVAL|POSTED|CANCELLED
+  notes             String?
+  createdById       String
+  approvalRequestId String?
+  adjustmentTxId    String?
+  postedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  warehouse Warehouse    @relation(fields: [warehouseId], references: [id])
+  createdBy User         @relation("OpnameCreator", fields: [createdById], references: [id])
+  lines     OpnameLine[]
+}
+
+model OpnameLine {
+  id         String  @id @default(cuid())
+  sessionId  String
+  itemId     String
+  systemQty  Int // snapshot saat sesi dibuat (cut-off)
+  countedQty Int?
+  reason     String? // wajib bila variance != 0
+
+  session OpnameSession @relation(fields: [sessionId], references: [id])
+  item    Item          @relation(fields: [itemId], references: [id])
+
+  @@unique([sessionId, itemId])
+}
+
+// ── Phase 4: Finance & Project ──────────────────────────────────
+// Prinsip (PRD §22–27, §19, §53):
+//  - Saldo cashbook HANYA berubah lewat posting CashTransaction.
+//  - Transaksi posted immutable; koreksi = reversal.
+//  - Saldo tidak boleh negatif; expense wajib kategori + cost center + bukti.
+//  - Cash advance wajib due date; overdue memblokir pengajuan baru.
+//  - Monthly closing mengunci periode (reversal periode terkunci ditolak).
+
+model Cashbook {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  balance     BigInt    @default(0) // HANYA diubah engine posting
+  lockedUntil DateTime? // monthly closing lock
+  isActive    Boolean   @default(true)
+
+  transactions CashTransaction[] @relation("CashbookMain")
+  transfersIn  CashTransaction[] @relation("CashbookTo")
+  closings     CashClosing[]
+}
+
+model CashTransaction {
+  id               String    @id @default(cuid())
+  txNumber         String    @unique // CSH-/EXP-/RBM-/ADV-/STL-/CTF-YYYYMM-####
+  type             String // TOP_UP|EXPENSE|REIMBURSEMENT|CASH_ADVANCE|ADVANCE_SETTLEMENT|CASH_TRANSFER
+  status           String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|POSTED|REJECTED|CANCELLED
+  cashbookId       String
+  cashbookToId     String? // transfer
+  amount           BigInt // nominal utama (settlement: porsi expense)
+  cashReturnAmount BigInt    @default(0) // settlement: kas dikembalikan
+  categoryId       String?
+  costCenterId     String?
+  recipient        String? // penerima dana (wajib expense)
+  purpose          String // tujuan wajib (PRD §23)
+  receiptRef       String? // no. nota — deteksi duplikasi (PRD §24)
+  referenceNote    String?
+  workOrderId      String?
+  projectId        String?
+  advanceId        String? // settlement → advance induk
+  dueDate          DateTime? // cash advance
+  settledAmount    BigInt    @default(0) // advance: akumulasi pertanggungjawaban
+  settledAt        DateTime?
+  claimantId       String? // reimbursement
+  approvalRequestId String?
+  createdById      String
+  postedById       String?
+  postedAt         DateTime?
+  reversalOfId     String?   @unique
+  reversedById     String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cashbook    Cashbook          @relation("CashbookMain", fields: [cashbookId], references: [id])
+  cashbookTo  Cashbook?         @relation("CashbookTo", fields: [cashbookToId], references: [id])
+  category    Category?         @relation(fields: [categoryId], references: [id])
+  costCenter  CostCenter?       @relation(fields: [costCenterId], references: [id])
+  workOrder   WorkOrder?        @relation(fields: [workOrderId], references: [id])
+  project     Project?          @relation(fields: [projectId], references: [id])
+  advance     CashTransaction?  @relation("AdvanceSettlements", fields: [advanceId], references: [id])
+  settlements CashTransaction[] @relation("AdvanceSettlements")
+  claimant    User?             @relation("CashClaimant", fields: [claimantId], references: [id])
+  createdBy   User              @relation("CashCreator", fields: [createdById], references: [id])
+  postedBy    User?             @relation("CashPoster", fields: [postedById], references: [id])
+  reversalOf  CashTransaction?  @relation("CashReversal", fields: [reversalOfId], references: [id])
+  reversedBy  CashTransaction?  @relation("CashReversal")
+
+  @@index([type, status])
+  @@index([cashbookId, postedAt])
+  @@index([createdById])
+}
+
+model CashClosing {
+  id              String   @id @default(cuid())
+  closingNumber   String   @unique // CLS-YYYYMM-####
+  cashbookId      String
+  type            String // DAILY | MONTHLY
+  closingDate     DateTime
+  systemBalance   BigInt
+  physicalBalance BigInt
+  variance        BigInt // physical - system (PRD §27)
+  reason          String? // wajib bila variance != 0
+  lockedUntil     DateTime? // monthly: batas periode terkunci
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  cashbook  Cashbook @relation(fields: [cashbookId], references: [id])
+  createdBy User     @relation("ClosingCreator", fields: [createdById], references: [id])
+
+  @@index([cashbookId, closingDate])
+}
+
+model Project {
+  id            String    @id @default(cuid())
+  projectNumber String    @unique // PRJ-YYYY-####
+  name          String
+  customerId    String?
+  areaId        String?
+  managerId     String
+  budget        BigInt    @default(0)
+  status        String    @default("OPEN") // OPEN|CLOSED|CANCELLED
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  closedById    String?
+  closedAt      DateTime?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer          Customer?          @relation(fields: [customerId], references: [id])
+  area              Area?              @relation(fields: [areaId], references: [id])
+  manager           User               @relation("ProjectManager", fields: [managerId], references: [id])
+  closedBy          User?              @relation("ProjectCloser", fields: [closedById], references: [id])
+  createdBy         User               @relation("ProjectCreator", fields: [createdById], references: [id])
+  bomLines          ProjectBomLine[]
+  cashTransactions  CashTransaction[]
+  stockTransactions StockTransaction[]
+
+  @@index([status])
+}
+
+model ProjectBomLine {
+  id         String @id @default(cuid())
+  projectId  String
+  itemId     String
+  plannedQty Int
+
+  project Project @relation(fields: [projectId], references: [id])
+  item    Item    @relation(fields: [itemId], references: [id])
+
+  @@unique([projectId, itemId])
+}
+
+// ── Phase 5: NOC ────────────────────────────────────────────────
+// Prinsip (PRD §28–35, §53):
+//  - IP address tidak boleh duplikat dan wajib tertaut perangkat/layanan.
+//  - Incident wajib severity + PIC; timeline append-only; incident besar
+//    wajib root cause review dan hanya ditutup NOC Manager.
+//  - Change wajib rollback plan, tidak dieksekusi tanpa approval,
+//    emergency wajib post-review.
+
+model NetworkSite {
+  id               String  @id @default(cuid())
+  siteCode         String  @unique
+  name             String
+  type             String // HEAD_OFFICE|DATA_CENTER|POP|MINI_POP|TOWER|ODC|ODP|RELAY|COLOCATION
+  address          String?
+  latitude         Float?
+  longitude        Float?
+  areaId           String?
+  picId            String?
+  status           String  @default("ACTIVE") // ACTIVE|INACTIVE|PLANNED
+  powerSource      String?
+  backupPower      String?
+  upstreamProvider String?
+  capacityNote     String?
+  notes            String?
+
+  area        Area?                @relation(fields: [areaId], references: [id])
+  pic         User?                @relation("SitePic", fields: [picId], references: [id])
+  devices     NetworkDevice[]
+  linksA      NetworkLink[]        @relation("LinkSiteA")
+  linksB      NetworkLink[]        @relation("LinkSiteB")
+  subnets     Subnet[]
+  alarms      NetworkAlarm[]
+  incidents   Incident[]
+  maintenance NetworkMaintenance[]
+}
+
+model NetworkDevice {
+  id           String  @id @default(cuid())
+  hostname     String  @unique
+  deviceType   String // ROUTER|CORE_ROUTER|DIST_SWITCH|ACCESS_SWITCH|OLT|ONT|WIRELESS_BACKHAUL|ACCESS_POINT|FIREWALL|SERVER|UPS|OTHER
+  vendor       String?
+  model        String?
+  serialNumber String?
+  macAddress   String?
+  managementIp String?
+  siteId       String
+  rack         String?
+  uPosition    String?
+  firmware     String?
+  criticality  String  @default("MEDIUM") // LOW|MEDIUM|HIGH|CRITICAL
+  status       String  @default("ACTIVE") // ACTIVE|INACTIVE|MAINTENANCE|DOWN
+  ownerId      String?
+  notes        String?
+
+  site        NetworkSite          @relation(fields: [siteId], references: [id])
+  owner       User?                @relation("NetDeviceOwner", fields: [ownerId], references: [id])
+  ips         IPAddress[]
+  alarms      NetworkAlarm[]
+  incidents   Incident[]
+  maintenance NetworkMaintenance[]
+}
+
+model NetworkLink {
+  id        String  @id @default(cuid())
+  linkCode  String  @unique
+  name      String?
+  siteAId   String
+  siteBId   String
+  media     String // FIBER|WIRELESS|LEASED_LINE|VPN
+  capacity  String?
+  provider  String?
+  circuitId String?
+  isPrimary Boolean @default(true)
+  status    String  @default("ACTIVE") // ACTIVE|DEGRADED|DOWN|INACTIVE
+  notes     String?
+
+  siteA     NetworkSite @relation("LinkSiteA", fields: [siteAId], references: [id])
+  siteB     NetworkSite @relation("LinkSiteB", fields: [siteBId], references: [id])
+  incidents Incident[]
+}
+
+model Subnet {
+  id      String  @id @default(cuid())
+  cidr    String  @unique // mis. 10.10.0.0/24
+  name    String
+  vlan    String?
+  gateway String?
+  purpose String // subnet wajib punya tujuan (PRD §29)
+  ownerId String?
+  siteId  String?
+  notes   String?
+
+  owner User?        @relation("SubnetOwner", fields: [ownerId], references: [id])
+  site  NetworkSite? @relation(fields: [siteId], references: [id])
+  ips   IPAddress[]
+}
+
+model IPAddress {
+  id             String    @id @default(cuid())
+  subnetId       String
+  address        String    @unique // rule 18: tidak boleh duplikat
+  status         String    @default("ALLOCATED") // ALLOCATED|RESERVED|RELEASED
+  assignedType   String? // DEVICE|SUBSCRIPTION|OTHER
+  deviceId       String?
+  subscriptionId String?
+  description    String?
+  assignedAt     DateTime  @default(now())
+  releasedAt     DateTime?
+  createdById    String
+
+  subnet       Subnet         @relation(fields: [subnetId], references: [id])
+  device       NetworkDevice? @relation(fields: [deviceId], references: [id])
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+  createdBy    User           @relation("IpCreator", fields: [createdById], references: [id])
+
+  @@index([subnetId, status])
+}
+
+model NetworkAlarm {
+  id               String    @id @default(cuid())
+  alarmNumber      String    @unique // ALM-YYYYMM-####
+  severity         String // INFORMATIONAL|WARNING|MINOR|MAJOR|CRITICAL
+  source           String    @default("MANUAL") // MANUAL | kode integrasi (webhook §30)
+  deviceId         String?
+  siteId           String?
+  message          String
+  // Anti alarm-flooding (§31): alarm duplikat dikelompokkan, bukan baris baru.
+  dedupKey         String?
+  count            Int       @default(1)
+  lastSeenAt       DateTime?
+  occurredAt       DateTime  @default(now())
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  incidentId       String?
+  clearedAt        DateTime?
+  createdById      String? // null = alarm otomatis dari integrasi monitoring
+  createdAt        DateTime  @default(now())
+
+  device         NetworkDevice? @relation(fields: [deviceId], references: [id])
+  site           NetworkSite?   @relation(fields: [siteId], references: [id])
+  acknowledgedBy User?          @relation("AlarmAck", fields: [acknowledgedById], references: [id])
+  incident       Incident?      @relation(fields: [incidentId], references: [id])
+  createdBy      User?          @relation("AlarmCreator", fields: [createdById], references: [id])
+
+  @@index([severity, clearedAt])
+  @@index([dedupKey, clearedAt])
+}
+
+model Incident {
+  id               String    @id @default(cuid())
+  incidentNumber   String    @unique // INC-YYYYMM-####
+  title            String
+  type             String // DEVICE_DOWN|LINK_DOWN|HIGH_LATENCY|PACKET_LOSS|POWER_OUTAGE|FIBER_CUT|WIRELESS_INTERFERENCE|UPSTREAM_OUTAGE|CORE_ISSUE|AUTH_FAILURE|DNS_ISSUE|SECURITY|OTHER
+  severity         String // P1|P2|P3|P4 — wajib (rule 19)
+  status           String    @default("DETECTED") // DETECTED|ACKNOWLEDGED|INVESTIGATING|MITIGATING|RESOLVED|CLOSED
+  isOutage         Boolean   @default(false)
+  picId            String?
+  deviceId         String?
+  linkId           String?
+  siteId           String?
+  areaId           String?
+  detectedAt       DateTime  @default(now())
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  rootCause        String?
+  resolution       String?
+  preventiveAction String?
+  recoveryNote     String? // verifikasi pemulihan (PRD §32.4)
+  // Outage communication (§33): hanya info yang disetujui NOC yang tampil
+  // untuk Customer Service / Sales / Management di halaman /outages.
+  isPublic         Boolean   @default(false)
+  publicNote       String?
+  publicEta        DateTime?
+  publicUpdatedAt  DateTime?
+  relatedChangeId  String?
+  workOrderId      String?
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  pic           User?                  @relation("IncidentPic", fields: [picId], references: [id])
+  device        NetworkDevice?         @relation(fields: [deviceId], references: [id])
+  link          NetworkLink?           @relation(fields: [linkId], references: [id])
+  site          NetworkSite?           @relation(fields: [siteId], references: [id])
+  area          Area?                  @relation(fields: [areaId], references: [id])
+  relatedChange ChangeRequest?         @relation(fields: [relatedChangeId], references: [id])
+  workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  createdBy     User                   @relation("IncidentCreator", fields: [createdById], references: [id])
+  updates       IncidentUpdate[]
+  alarms        NetworkAlarm[]
+  impacted      IncidentSubscription[]
+
+  @@index([status, severity])
+}
+
+// Timeline incident — append-only.
+model IncidentUpdate {
+  id         String   @id @default(cuid())
+  incidentId String
+  note       String
+  status     String? // status saat update (jejak transisi)
+  byUserId   String
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  byUser   User     @relation("IncidentUpdater", fields: [byUserId], references: [id])
+
+  @@index([incidentId, createdAt])
+}
+
+model IncidentSubscription {
+  id             String @id @default(cuid())
+  incidentId     String
+  subscriptionId String
+
+  incident     Incident     @relation(fields: [incidentId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([incidentId, subscriptionId])
+}
+
+model NetworkMaintenance {
+  id                String    @id @default(cuid())
+  maintNumber       String    @unique // MNT-YYYYMM-####
+  title             String
+  type              String // PREVENTIVE|CORRECTIVE|EMERGENCY|FIRMWARE_UPGRADE|FIBER|POWER|TOWER|CAPACITY|SECURITY
+  siteId            String?
+  deviceId          String?
+  purpose           String
+  risk              String
+  scheduledStart    DateTime
+  scheduledEnd      DateTime
+  estDowntimeMin    Int?
+  picId             String
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|IN_PROGRESS|COMPLETED|CANCELLED
+  approvalRequestId String?
+  result            String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  site      NetworkSite?   @relation(fields: [siteId], references: [id])
+  device    NetworkDevice? @relation(fields: [deviceId], references: [id])
+  pic       User           @relation("MaintPic", fields: [picId], references: [id])
+  createdBy User           @relation("MaintCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+model ChangeRequest {
+  id                String    @id @default(cuid())
+  changeNumber      String    @unique // CHG-YYYYMM-####
+  title             String
+  changeType        String // STANDARD|NORMAL|MAJOR|EMERGENCY
+  reason            String
+  impactedDevices   String?
+  impactedServices  String?
+  risk              String
+  implementationPlan String
+  testPlan          String?
+  rollbackPlan      String? // wajib kecuali STANDARD (rule 21, §35)
+  windowStart       DateTime?
+  windowEnd         DateTime?
+  picId             String
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|COMPLETED|PENDING_REVIEW|FAILED|CANCELLED
+  approvalRequestId String?
+  result            String?
+  implementedAt     DateTime?
+  executedById      String?
+  postReviewNote    String? // emergency wajib post-review (rule 23)
+  postReviewedById  String?
+  postReviewedAt    DateTime?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  pic            User       @relation("ChangePic", fields: [picId], references: [id])
+  executedBy     User?      @relation("ChangeExecutor", fields: [executedById], references: [id])
+  postReviewedBy User?      @relation("ChangeReviewer", fields: [postReviewedById], references: [id])
+  createdBy      User       @relation("ChangeCreator", fields: [createdById], references: [id])
+  incidents      Incident[]
+
+  @@index([status, changeType])
+}
+
+// ═══════════════ Phase 6: IT/DevOps (PRD §38–45) ═══════════════
+
+model Server {
+  id               String    @id @default(cuid())
+  hostname         String    @unique
+  environment      String // DEVELOPMENT|TESTING|STAGING|PRODUCTION|DR
+  os               String?
+  ipAddress        String?
+  provider         String?
+  region           String?
+  cpu              String?
+  ram              String?
+  storage          String?
+  ownerId          String?
+  purpose          String // setiap server wajib punya tujuan (traceability)
+  backupPolicy     String?
+  monitoringStatus String? // MONITORED|UNMONITORED
+  criticality      String    @default("MEDIUM") // LOW|MEDIUM|HIGH|CRITICAL
+  expiryDate       DateTime? // sewa/kontrak VPS
+  status           String    @default("ACTIVE") // ACTIVE|INACTIVE|DECOMMISSIONED
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  owner   User?          @relation("ServerOwner", fields: [ownerId], references: [id])
+  apps    Application[]
+  backups BackupRecord[]
+
+  @@index([environment, status])
+}
+
+model Application {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  repository       String?
+  ownerId          String? // technical owner
+  businessOwnerId  String?
+  environment      String // env utama aplikasi: DEVELOPMENT|TESTING|STAGING|PRODUCTION
+  domain           String?
+  techStack        String?
+  databaseInfo     String?
+  dependencyNote   String?
+  deploymentMethod String?
+  sla              String?
+  backupNote       String?
+  monitoringNote   String?
+  status           String   @default("ACTIVE") // ACTIVE|INACTIVE|DEPRECATED
+  serverId         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  owner         User?          @relation("AppOwner", fields: [ownerId], references: [id])
+  businessOwner User?          @relation("AppBusinessOwner", fields: [businessOwnerId], references: [id])
+  server        Server?        @relation(fields: [serverId], references: [id])
+  deployments   Deployment[]
+  backups       BackupRecord[]
+}
+
+model ItTicket {
+  id           String    @id @default(cuid())
+  ticketNumber String    @unique // TIK-YYYYMM-####
+  title        String
+  type         String // LAPTOP_ISSUE|ACCOUNT_REQUEST|...(§39)
+  priority     String    @default("MEDIUM") // LOW|MEDIUM|HIGH|URGENT
+  description  String
+  requesterId  String
+  assigneeId   String?
+  status       String    @default("NEW") // NEW|ASSIGNED|IN_PROGRESS|WAITING_USER|WAITING_VENDOR|RESOLVED|CLOSED
+  resolution   String?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  requester User  @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignee  User? @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  createdBy User  @relation("TicketCreator", fields: [createdById], references: [id])
+
+  @@index([status, assigneeId])
+}
+
+model AccessRequest {
+  id                String    @id @default(cuid())
+  requestNumber     String    @unique // ACC-YYYYMM-####
+  targetUserId      String // user penerima akses
+  accessType        String // SERVER|DATABASE|REPOSITORY|CLOUD|NETWORK_DEVICE|CRM|MONITORING|EMAIL|VPN|DOMAIN|BILLING
+  systemName        String // sistem spesifik yang diminta
+  roleRequested     String // role/level akses
+  reason            String
+  isProduction      Boolean   @default(false) // rule 28: wajib approval
+  isTemporary       Boolean   @default(false) // rule 29: wajib expiry
+  expiryDate        DateTime?
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|GRANTED|REVOKED|REJECTED
+  approvalRequestId String?
+  grantedById       String?
+  grantedAt         DateTime?
+  revokedById       String?
+  revokedAt         DateTime?
+  revokeReason      String?
+  createdById       String // requester
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  targetUser User  @relation("AccessTarget", fields: [targetUserId], references: [id])
+  grantedBy  User? @relation("AccessGrantor", fields: [grantedById], references: [id])
+  revokedBy  User? @relation("AccessRevoker", fields: [revokedById], references: [id])
+  createdBy  User  @relation("AccessCreator", fields: [createdById], references: [id])
+
+  @@index([targetUserId, status])
+}
+
+model Deployment {
+  id                String    @id @default(cuid())
+  deployNumber      String    @unique // DEP-YYYYMM-####
+  applicationId     String
+  version           String
+  environment       String // DEVELOPMENT|TESTING|STAGING|PRODUCTION
+  isMajor           Boolean   @default(false) // production: minor vs major (matrix §48)
+  changeRecord      String? // rule 24: production wajib change record
+  releaseNote       String?
+  commitRef         String?
+  hasMigration      Boolean   @default(false)
+  migrationNote     String?
+  deploymentPlan    String
+  testingResult     String? // production: wajib terisi sebelum submit (§42)
+  rollbackPlan      String? // rule 25: production wajib
+  backupId          String? // §42: production wajib backup tersedia (SUCCESS + terverifikasi)
+  windowStart       DateTime?
+  windowEnd         DateTime?
+  approvalRequestId String?
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|READY|IN_PROGRESS|COMPLETED|FAILED|ROLLED_BACK|CANCELLED
+  executedById      String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  result            String?
+  rollbackNote      String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  application Application   @relation(fields: [applicationId], references: [id])
+  backup      BackupRecord? @relation(fields: [backupId], references: [id])
+  executedBy  User?         @relation("DeployExecutor", fields: [executedById], references: [id])
+  createdBy   User          @relation("DeployCreator", fields: [createdById], references: [id])
+
+  @@index([status, environment])
+}
+
+model BackupRecord {
+  id                 String    @id @default(cuid())
+  backupNumber       String    @unique // BCK-YYYYMM-####
+  serverId           String?
+  applicationId      String?
+  backupType         String // DATABASE|FILE|CONFIGURATION|VM_SNAPSHOT|NETWORK_CONFIG|OFFSITE
+  schedule           String?
+  location           String
+  retention          String // §44: backup wajib punya retention
+  isEncrypted        Boolean   @default(false) // §44: backup production wajib terenkripsi
+  isCritical         Boolean   @default(false) // rule 27: wajib diverifikasi
+  status             String // SUCCESS|FAILED
+  failureNote        String?
+  verificationResult String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  restoreTestAt      DateTime?
+  restoreTestResult  String?
+  executedAt         DateTime
+  createdById        String
+  createdAt          DateTime  @default(now())
+
+  server      Server?      @relation(fields: [serverId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  verifiedBy  User?        @relation("BackupVerifier", fields: [verifiedById], references: [id])
+  createdBy   User         @relation("BackupCreator", fields: [createdById], references: [id])
+  deployments Deployment[]
+
+  @@index([status, executedAt])
+}
+
+model ItAsset {
+  id            String    @id @default(cuid())
+  name          String
+  assetType     String // DOMAIN|SSL_CERT|CLOUD_SUBSCRIPTION|VPS|SOFTWARE_LICENSE|MONITORING_LICENSE|EMAIL_SERVICE|API_SUBSCRIPTION
+  provider      String?
+  ownerId       String?
+  purchaseDate  DateTime?
+  expiryDate    DateTime?
+  autoRenewal   Boolean   @default(false)
+  cost          BigInt? // rupiah per periode
+  paymentMethod String?
+  reminderDays  Int       @default(30)
+  status        String    @default("ACTIVE") // ACTIVE|EXPIRED|CANCELLED
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner User? @relation("ItAssetOwner", fields: [ownerId], references: [id])
+
+  @@unique([name, assetType])
+  @@index([expiryDate])
+}
+
+// ═══════════════ Phase 7: Integrasi (PRD §30, §33, §50, §56) ═══════════════
+
+// Notifikasi event-based (§50). Channel awal: in-app; kolom channel disiapkan
+// agar adapter WhatsApp/email dapat ditambah tanpa mengubah skema.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // kode event, mis. APPROVAL_PENDING, BACKUP_FAILED
+  title     String
+  body      String?
+  link      String? // path in-app, mis. /approvals/xxx
+  module    String
+  channel   String    @default("IN_APP") // IN_APP | WHATSAPP | EMAIL (adapter menyusul)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+// Registry integrasi eksternal (§56). Secret TIDAK disimpan di sini —
+// credentialRef berisi NAMA environment variable (NFR: no plaintext secrets).
+model Integration {
+  id                String    @id @default(cuid())
+  code              String    @unique // slug, dipakai di URL webhook
+  name              String
+  category          String // NETWORK|CRM_CUSTOMER|ITOPS|FINANCE
+  provider          String // MIKROTIK|RADIUS|ZABBIX|...|OTHER
+  baseUrl           String?
+  authType          String    @default("NONE") // NONE|API_KEY|BASIC|TOKEN
+  credentialRef     String? // nama env var yang menyimpan secret
+  webhookToken      String // token inbound webhook (di-generate sistem)
+  isEnabled         Boolean   @default(false)
+  lastEventAt       DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  events IntegrationEvent[]
+}
+
+// Log lalu lintas integrasi (inbound webhook / outbound call).
+model IntegrationEvent {
+  id            String   @id @default(cuid())
+  integrationId String
+  direction     String // IN | OUT
+  eventType     String // mis. MONITORING_ALERT
+  payload       String? // JSON string (dipotong bila besar)
+  status        String // OK | REJECTED | ERROR
+  detail        String?
+  createdAt     DateTime @default(now())
+
+  integration Integration @relation(fields: [integrationId], references: [id])
+
+  @@index([integrationId, createdAt])
 }

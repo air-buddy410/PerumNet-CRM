@@ -168,13 +168,13 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 
 | Fase | Lingkup | Status |
 |---|---|---|
-| **1. Foundation** | Auth, user/role/permission, approval engine + matrix, audit log, master data (cost center, kategori, area, paket), app shell + dashboard | **← sekarang** |
-| 2. Sales & CRM | Campaign, lead, pipeline, activity, survey, quotation (versioned), customer, subscription | |
-| 3. Inventory & Operational | Item master, warehouse, serialized device, GR, stock issue, custody, WO, instalasi, return, opname | |
-| 4. Finance & Project | Cashbook, expense, reimbursement, cash advance, settlement, closing, project + rekonsiliasi | |
-| 5. NOC | Site/device/link inventory, IPAM, alarm, incident, outage, maintenance, change mgmt, NOC dashboard | |
-| 6. IT/DevOps | Server/app inventory, IT ticket, access request, deployment, backup, domain/SSL, dashboard | |
-| 7. Integrasi | Billing, MikroTik, RADIUS, monitoring, WhatsApp, GitHub, accounting, customer portal | |
+| **1. Foundation** | Auth, user/role/permission, approval engine + matrix, audit log, master data (cost center, kategori, area, paket), app shell + dashboard | ✅ selesai |
+| **2. Sales & CRM** | Campaign, lead, pipeline, activity, survey, quotation (versioned), customer, subscription | ✅ selesai (termasuk foto bukti survey + approval diskon quotation) |
+| **3. Inventory & Operational** | Item master, warehouse, serialized device, GR, stock issue, custody, WO, instalasi, return, opname | ✅ selesai (ledger immutable + reversal, custody bulk & serialized, gerbang penutupan WO, opname ber-approval, write-off ber-approval) |
+| **4. Finance & Project** | Cashbook, expense, reimbursement, cash advance, settlement, closing, project + rekonsiliasi | ✅ selesai (ledger kas immutable + approval matrix, advance overdue block, closing harian/bulanan dengan kunci periode, gerbang penutupan proyek) |
+| **5. NOC** | Site/device/link inventory, IPAM, alarm, incident, outage, maintenance, change mgmt | ✅ selesai (IPAM anti-duplikat + wajib tertaut perangkat/layanan, incident lifecycle dengan timeline append-only & gerbang penutupan P1/P2 oleh NOC Manager + preventive action, maintenance ber-approval, change management dengan rollback plan wajib + post-review emergency + SoD reviewer≠eksekutor) |
+| **6. IT/DevOps** | Server/app inventory, IT ticket, access request, deployment, backup, domain/SSL | ✅ selesai (service desk terbuka semua staff, akses production ber-approval + offboarding cabut semua akses, deployment production dengan gerbang §42 lengkap [change record, rollback plan, testing, backup terverifikasi, window] + SoD pengaju≠approver, backup production wajib terenkripsi + verifikasi backup kritikal, tracking expiry domain/SSL/license) |
+| **7. Integrasi** | Notification engine, integration adapter layer, webhook monitoring, outage communication | ✅ selesai (notifikasi event-based di-hook ke approval engine + event kunci semua modul; registry integrasi §56 dengan secret via env var — bukan plaintext; webhook inbound `/api/integrations/[code]/webhook` → alarm otomatis dengan dedup anti-flooding §31 + auto-clear; halaman Status Gangguan §33 khusus info yang disetujui NOC). **Adapter eksternal live (billing, WhatsApp send, MikroTik API, GitHub, accounting, customer portal) menunggu keputusan PO & kredensial — registry sudah siap menampung konfigurasinya.** |
 
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 

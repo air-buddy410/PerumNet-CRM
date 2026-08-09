@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, APPROVAL_STATUS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
 import { isEligibleApprover } from "@/lib/approval";
+import { Activity, ArrowRight, ClipboardCheck, ShieldCheck, UsersRound } from "lucide-react";
 
 export const metadata = { title: "Dashboard" };
 
@@ -51,38 +52,43 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div>
+    <div className="crm-dashboard">
       <PageHeader
         title={`Selamat datang, ${user.name}`}
-        subtitle="Ringkasan sistem — Phase 1 Foundation"
+        subtitle="Ringkasan operasional PerumNet CRM"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="crm-metric-grid" aria-label="Ringkasan sistem">
         {stats.map((s) => (
-          <Link key={s.label} href={s.href} className="card p-5 transition hover:shadow-md">
-            <div className="text-3xl font-semibold text-slate-900">{s.value}</div>
-            <div className="mt-1 text-sm text-slate-500">{s.label}</div>
+          <Link key={s.label} href={s.href} className="crm-metric-card">
+            <span className="crm-metric-icon">
+              {s.label === "User Aktif" ? <UsersRound /> : s.label === "Role" ? <ShieldCheck /> : s.label === "Approval Pending" ? <ClipboardCheck /> : <Activity />}
+            </span>
+            <span>
+              <strong>{s.value}</strong>
+              <small>{s.label}</small>
+            </span>
           </Link>
         ))}
-      </div>
+      </section>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="card">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <h2 className="font-medium">Menunggu Keputusan Anda</h2>
-            <Link href="/approvals" className="text-sm text-brand-600 hover:underline">
-              Lihat semua
+      <section className="crm-dashboard-panels">
+        <div className="crm-panel">
+          <div className="crm-panel-heading">
+            <div><h2>Menunggu Keputusan Anda</h2><p>Approval aktif yang membutuhkan tindakan Anda.</p></div>
+            <Link href="/approvals">
+              Lihat semua <ArrowRight aria-hidden="true" />
             </Link>
           </div>
           {myPending.length === 0 ? (
             <EmptyState message="Tidak ada approval yang menunggu keputusan Anda." />
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="crm-activity-list">
               {myPending.map((r) => (
                 <li key={r.id}>
                   <Link
                     href={`/approvals/${r.id}`}
-                    className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
+                    className="crm-activity-row"
                   >
                     <div>
                       <div className="text-sm font-medium">{r.title}</div>
@@ -98,22 +104,22 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="card">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <h2 className="font-medium">Pengajuan Saya</h2>
-            <Link href="/approvals/new" className="text-sm text-brand-600 hover:underline">
-              Ajukan baru
+        <div className="crm-panel">
+          <div className="crm-panel-heading">
+            <div><h2>Pengajuan Saya</h2><p>Riwayat pengajuan terbaru yang Anda buat.</p></div>
+            <Link href="/approvals/new">
+              Ajukan baru <ArrowRight aria-hidden="true" />
             </Link>
           </div>
           {recentRequests.length === 0 ? (
             <EmptyState message="Belum ada pengajuan." />
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="crm-activity-list">
               {recentRequests.map((r) => (
                 <li key={r.id}>
                   <Link
                     href={`/approvals/${r.id}`}
-                    className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
+                    className="crm-activity-row"
                   >
                     <div>
                       <div className="text-sm font-medium">{r.title}</div>
@@ -128,7 +134,7 @@ export default async function DashboardPage() {
             </ul>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

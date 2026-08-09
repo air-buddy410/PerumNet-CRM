@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { notifyUsers, notifyStepApprovers } from "@/lib/notify";
 import {
   APPROVAL_STATUS,
   APPROVER_TYPES,
@@ -139,6 +140,29 @@ export async function submitApprovalRequest(input: {
     metadata: { module: input.module, subtype, amount: amount?.toString() },
   });
 
+  // §50: beri tahu approver step pertama bahwa ada request menunggu.
+  const firstStep = rule.steps.find((s) => s.stepOrder === 1);
+  if (firstStep) {
+    await notifyStepApprovers(
+      {
+        approverType: firstStep.approverType,
+        roleId: firstStep.approverType === APPROVER_TYPES.ROLE ? firstStep.roleId : null,
+        divisionId:
+          firstStep.approverType === APPROVER_TYPES.SUPERVISOR
+            ? input.user.divisionId
+            : null,
+      },
+      {
+        type: "APPROVAL_PENDING",
+        title: `Approval menunggu: ${input.title}`,
+        body: `${requestNumber} diajukan oleh ${input.user.name}.`,
+        link: `/approvals/${request.id}`,
+        module: "approvals",
+      },
+      input.user.id
+    );
+  }
+
   return { ok: true, id: request.id };
 }
 
@@ -220,6 +244,13 @@ export async function actOnApproval(input: {
       description: `Menolak ${request.requestNumber} pada step ${step.stepOrder}`,
       metadata: { note: input.note },
     });
+    await notifyUsers([request.requestedById], {
+      type: "APPROVAL_REJECTED",
+      title: `Ditolak: ${request.title}`,
+      body: `${request.requestNumber} ditolak oleh ${input.user.name}${input.note ? ` — ${input.note}` : ""}.`,
+      link: `/approvals/${request.id}`,
+      module: "approvals",
+    });
     return { ok: true };
   }
 
@@ -250,6 +281,35 @@ export async function actOnApproval(input: {
     description: `Menyetujui ${request.requestNumber} step ${step.stepOrder}${isLastStep ? " (final)" : ""}`,
     metadata: { note: input.note },
   });
+  if (isLastStep) {
+    await notifyUsers([request.requestedById], {
+      type: "APPROVAL_APPROVED",
+      title: `Disetujui: ${request.title}`,
+      body: `${request.requestNumber} disetujui penuh.`,
+      link: `/approvals/${request.id}`,
+      module: "approvals",
+    });
+  } else {
+    // Beri tahu approver step berikutnya.
+    const nextStep = request.steps.find((s) => s.stepOrder === request.currentStep + 1);
+    if (nextStep) {
+      await notifyStepApprovers(
+        {
+          approverType: nextStep.approverType,
+          roleId: nextStep.roleId,
+          divisionId: nextStep.divisionId,
+        },
+        {
+          type: "APPROVAL_PENDING",
+          title: `Approval menunggu: ${request.title}`,
+          body: `${request.requestNumber} — step ${nextStep.stepOrder} giliran Anda.`,
+          link: `/approvals/${request.id}`,
+          module: "approvals",
+        },
+        request.requestedById
+      );
+    }
+  }
   return { ok: true };
 }
 
