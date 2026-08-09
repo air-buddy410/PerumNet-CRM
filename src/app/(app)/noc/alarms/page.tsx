@@ -75,7 +75,7 @@ export default async function AlarmsPage({
               <tbody className="divide-y divide-slate-100">
                 {alarms.map((a) => (
                   <tr key={a.id} className={a.clearedAt ? "hover:bg-slate-50" : "bg-red-50/30"}>
-                    <td className="td font-mono text-xs">
+                    <td className="td whitespace-nowrap font-mono text-xs">
                       {a.alarmNumber}
                       {a.source !== "MANUAL" && (
                         <span className="block font-sans text-[10px] uppercase tracking-wide text-slate-400">

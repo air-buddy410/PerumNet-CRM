@@ -43,22 +43,23 @@ export default async function TransactionsPage({
       <PageHeader
         title="Transaksi Stock"
         subtitle="Transaksi posted immutable — koreksi hanya lewat reversal (PRD §7.2)."
-        action={
-          canCreate ? (
-            <div className="flex flex-wrap gap-2">
-              {(["GOODS_RECEIPT", "STOCK_ISSUE", "STOCK_RETURN", "STOCK_TRANSFER"] as const).map((t) => (
-                <Link
-                  key={t}
-                  href={`/inventory/transactions/new?type=${t}`}
-                  className="btn-secondary px-3 py-1.5 text-xs"
-                >
-                  + {TX_TYPE_LABELS[t]}
-                </Link>
-              ))}
-            </div>
-          ) : undefined
-        }
       />
+      {/* Toolbar berdiri sendiri: slot `action` PageHeader dirancang untuk satu
+          tombol ringkas (flex: 0 0 auto), sehingga deretan tombol di sana
+          mendesak judul sampai meluber di layar sempit. */}
+      {canCreate && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(["GOODS_RECEIPT", "STOCK_ISSUE", "STOCK_RETURN", "STOCK_TRANSFER"] as const).map((t) => (
+            <Link
+              key={t}
+              href={`/inventory/transactions/new?type=${t}`}
+              className="btn-secondary px-3 py-1.5 text-xs"
+            >
+              + {TX_TYPE_LABELS[t]}
+            </Link>
+          ))}
+        </div>
+      )}
       <Flash ok={sp.ok} error={sp.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
@@ -118,8 +119,8 @@ export default async function TransactionsPage({
                         <span className="ml-1 text-xs text-amber-600">(reversal)</span>
                       )}
                     </td>
-                    <td className="td text-xs">{TX_TYPE_LABELS[t.type] ?? t.type}</td>
-                    <td className="td text-xs">{from} → {to}</td>
+                    <td className="td whitespace-nowrap text-xs">{TX_TYPE_LABELS[t.type] ?? t.type}</td>
+                    <td className="td whitespace-nowrap text-xs">{from} → {to}</td>
                     <td className="td max-w-56 truncate text-xs">
                       {t.purpose}
                       {t.workOrder ? ` · ${t.workOrder.woNumber}` : ""}

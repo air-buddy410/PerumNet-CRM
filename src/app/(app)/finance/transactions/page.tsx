@@ -48,20 +48,21 @@ export default async function CashTransactionsPage({
       <PageHeader
         title="Transaksi Kas"
         subtitle="Saldo hanya berubah saat posting. Expense/reimbursement/advance wajib approval + bukti (PRD §22–25)."
-        action={
-          <div className="flex flex-wrap gap-2">
-            {createTypes.map((t) => (
-              <Link
-                key={t}
-                href={`/finance/transactions/new?type=${t}`}
-                className="btn-secondary px-3 py-1.5 text-xs"
-              >
-                + {CASH_TX_LABELS[t]}
-              </Link>
-            ))}
-          </div>
-        }
       />
+      {/* Toolbar berdiri sendiri: slot `action` PageHeader dirancang untuk satu
+          tombol ringkas (flex: 0 0 auto), sehingga deretan tombol di sana
+          mendesak judul sampai meluber di layar sempit. */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {createTypes.map((t) => (
+          <Link
+            key={t}
+            href={`/finance/transactions/new?type=${t}`}
+            className="btn-secondary px-3 py-1.5 text-xs"
+          >
+            + {CASH_TX_LABELS[t]}
+          </Link>
+        ))}
+      </div>
       <Flash ok={sp.ok} error={sp.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
