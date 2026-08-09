@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { notifyUsers, notifyPermission } from "@/lib/notify";
 import { submitApprovalRequest } from "@/lib/approval";
 import {
   PERMISSIONS,
@@ -118,6 +119,15 @@ export async function assignTicket(
     description: `Assign tiket ${ticket.ticketNumber}`,
     metadata: { assigneeId },
   });
+  if (assigneeId !== user.id) {
+    await notifyUsers([assigneeId], {
+      type: "TICKET_ASSIGNED",
+      title: `Tiket untuk Anda: ${ticket.title}`,
+      body: `${ticket.ticketNumber} di-assign oleh ${user.name}.`,
+      link: `/it/tickets/${ticketId}`,
+      module: "itops",
+    });
+  }
   return { ok: true, id: ticketId };
 }
 
@@ -171,6 +181,13 @@ export async function resolveTicket(
     entityType: "ItTicket",
     entityId: ticketId,
     description: `Resolve tiket ${ticket.ticketNumber}`,
+  });
+  await notifyUsers([ticket.requesterId].filter((id) => id !== user.id), {
+    type: "TICKET_RESOLVED",
+    title: `Tiket selesai: ${ticket.title}`,
+    body: `${ticket.ticketNumber} — ${resolution}`,
+    link: `/it/tickets/${ticketId}`,
+    module: "itops",
   });
   return { ok: true, id: ticketId };
 }
@@ -330,6 +347,13 @@ export async function grantAccess(user: CurrentUser, id: string): Promise<Result
     entityType: "AccessRequest",
     entityId: id,
     description: `Memberikan akses ${req.requestNumber} (${req.systemName})`,
+  });
+  await notifyUsers([req.targetUserId].filter((uid) => uid !== user.id), {
+    type: "ACCESS_GRANTED",
+    title: `Akses diberikan: ${req.systemName}`,
+    body: `${req.requestNumber} (${req.roleRequested})${req.expiryDate ? " — berlaku sampai expiry." : ""}`,
+    link: `/it/access/${id}`,
+    module: "itops",
   });
   return { ok: true, id };
 }
@@ -616,6 +640,27 @@ export async function finishDeployment(
     entityId: id,
     description: `Deployment ${dep.deployNumber}: ${success ? "berhasil" : "GAGAL"}`,
   });
+  if (!success) {
+    // §50: deployment gagal — pembuat & tim eksekusi harus tahu segera.
+    await notifyUsers([dep.createdById].filter((uid) => uid !== user.id), {
+      type: "DEPLOY_FAILED",
+      title: `Deployment GAGAL: ${dep.deployNumber}`,
+      body: result,
+      link: `/it/deployments/${id}`,
+      module: "itops",
+    });
+    await notifyPermission(
+      PERMISSIONS.DEPLOYMENTS_EXECUTE,
+      {
+        type: "DEPLOY_FAILED",
+        title: `Deployment GAGAL: ${dep.deployNumber}`,
+        body: result,
+        link: `/it/deployments/${id}`,
+        module: "itops",
+      },
+      user.id
+    );
+  }
   return { ok: true, id };
 }
 
@@ -753,6 +798,20 @@ export async function createBackupRecord(
     entityId: backup.id,
     description: `Backup ${backupNumber} (${statusLabel(data.backupType)}): ${statusLabel(data.status)}${data.status === "FAILED" ? ` — ${data.failureNote}` : ""}`,
   });
+  if (data.status === "FAILED") {
+    // §44: backup gagal menghasilkan alert.
+    await notifyPermission(
+      PERMISSIONS.BACKUPS_MANAGE,
+      {
+        type: "BACKUP_FAILED",
+        title: `Backup GAGAL: ${backupNumber}`,
+        body: data.failureNote,
+        link: `/it/backups/${backup.id}`,
+        module: "itops",
+      },
+      user.id
+    );
+  }
   return { ok: true, id: backup.id };
 }
 

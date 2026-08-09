@@ -7,6 +7,12 @@ const PUBLIC_PATHS = ["/login"];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Webhook integrasi (§56): dipanggil sistem eksternal tanpa sesi —
+  // autentikasi memakai token per-integrasi di route handler.
+  if (pathname.startsWith("/api/integrations/")) {
+    return NextResponse.next();
+  }
+
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const token = request.cookies.get(SESSION_COOKIE)?.value;
 

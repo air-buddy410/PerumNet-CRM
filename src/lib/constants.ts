@@ -105,6 +105,9 @@ export const PERMISSIONS = {
   DEPLOYMENTS_EXECUTE: "deployments.execute",
   BACKUPS_MANAGE: "backups.manage",
   IT_ASSETS_MANAGE: "it_assets.manage", // domain, SSL, license, subscription
+  // Phase 7 — Integrasi
+  INTEGRATIONS_MANAGE: "integrations.manage", // registry integrasi & webhook
+  OUTAGES_VIEW: "outages.view", // status gangguan yang disetujui (§33)
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -603,6 +606,39 @@ export const IT_ASSET_TYPES = [
   ["EMAIL_SERVICE", "Email Service"],
   ["API_SUBSCRIPTION", "API Subscription"],
 ] as const;
+
+// ── Phase 7: Integrasi ──────────────────────────────────────────
+
+export const INTEGRATION_CATEGORIES = [
+  ["NETWORK", "Jaringan & Monitoring"],
+  ["CRM_CUSTOMER", "CRM & Pelanggan"],
+  ["ITOPS", "IT/DevOps"],
+  ["FINANCE", "Finance"],
+] as const;
+
+export const INTEGRATION_PROVIDERS = [
+  ["MIKROTIK", "MikroTik"],
+  ["RADIUS", "RADIUS"],
+  ["RUIJIE", "Ruijie"],
+  ["UNIFI", "UniFi"],
+  ["ZABBIX", "Zabbix"],
+  ["LIBRENMS", "LibreNMS"],
+  ["THE_DUDE", "The Dude"],
+  ["PROMETHEUS", "Prometheus"],
+  ["GRAFANA", "Grafana"],
+  ["BILLING", "Billing"],
+  ["PAYMENT_GATEWAY", "Payment Gateway"],
+  ["WHATSAPP", "WhatsApp Gateway"],
+  ["EMAIL", "Email/SMTP"],
+  ["GITHUB", "GitHub"],
+  ["GITLAB", "GitLab"],
+  ["SENTRY", "Sentry"],
+  ["UPTIME", "Uptime Monitoring"],
+  ["ACCOUNTING", "Accounting"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const INTEGRATION_AUTH_TYPES = ["NONE", "API_KEY", "BASIC", "TOKEN"] as const;
 
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {

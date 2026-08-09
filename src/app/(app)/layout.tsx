@@ -4,6 +4,7 @@ import CrmAppShell from "@/components/app-shell";
 import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { logout } from "@/lib/auth";
+import { unreadCount } from "@/lib/notify";
 import { PERMISSIONS } from "@/lib/constants";
 
 export default async function AppLayout({
@@ -11,15 +12,20 @@ export default async function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   const can = (p: string) => user.permissions.has(p);
+  const unread = await unreadCount(user.id);
 
   const groups: NavGroup[] = [];
 
-  if (can(PERMISSIONS.DASHBOARD_VIEW)) {
-    groups.push({
-      title: "Utama",
-      items: [{ href: "/dashboard", label: "Dashboard" }],
-    });
-  }
+  const utamaItems = [];
+  if (can(PERMISSIONS.DASHBOARD_VIEW))
+    utamaItems.push({ href: "/dashboard", label: "Dashboard" });
+  utamaItems.push({
+    href: "/notifications",
+    label: unread > 0 ? `Notifikasi (${unread > 9 ? "9+" : unread})` : "Notifikasi",
+  });
+  if (can(PERMISSIONS.OUTAGES_VIEW))
+    utamaItems.push({ href: "/outages", label: "Status Gangguan" });
+  groups.push({ title: "Utama", items: utamaItems });
 
   if (can(PERMISSIONS.CAMPAIGNS_VIEW)) {
     groups.push({
@@ -149,6 +155,8 @@ export default async function AppLayout({
       { href: "/settings/master/packages", label: "Paket Internet" }
     );
   }
+  if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
+    settingItems.push({ href: "/settings/integrations", label: "Integrasi" });
   if (settingItems.length)
     groups.push({ title: "Pengaturan", items: settingItems });
 

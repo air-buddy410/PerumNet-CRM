@@ -15,6 +15,7 @@ import {
   setImpactAction,
   resolveIncidentAction,
   closeIncidentAction,
+  setOutageCommAction,
 } from "../actions";
 
 export const metadata = { title: "Detail Incident" };
@@ -284,6 +285,41 @@ export default async function IncidentDetailPage({
                   Menunggu verifikasi & penutupan oleh NOC Manager.
                 </p>
               )}
+            </div>
+          )}
+
+          {incident.isOutage && canManage && incident.status !== "CLOSED" && (
+            <div className="card p-5">
+              <h2 className="mb-1 text-sm font-medium">Komunikasi Publik (§33)</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Hanya info yang dipublikasikan yang tampil untuk CS/Sales/Management di halaman Status Gangguan.
+              </p>
+              <form action={setOutageCommAction} className="space-y-3">
+                <input type="hidden" name="incidentId" value={incident.id} />
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="isPublic" className="h-4 w-4" defaultChecked={incident.isPublic} />
+                  Publikasikan info gangguan
+                </label>
+                <textarea
+                  name="publicNote"
+                  rows={3}
+                  className="input"
+                  placeholder="Info untuk pelanggan/CS (area terdampak, status, penyebab bila diketahui)"
+                  defaultValue={incident.publicNote ?? ""}
+                />
+                <div>
+                  <label className="label" htmlFor="publicEta">Estimasi Pemulihan</label>
+                  {incident.publicEta && (
+                    <p className="mb-1 text-xs text-slate-500">
+                      Saat ini: {formatDateTime(incident.publicEta)}
+                    </p>
+                  )}
+                  <input id="publicEta" name="publicEta" type="datetime-local" className="input" />
+                </div>
+                <button type="submit" className="btn-secondary w-full justify-center">
+                  Simpan Komunikasi
+                </button>
+              </form>
             </div>
           )}
 

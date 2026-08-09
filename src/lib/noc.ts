@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { notifyPermission } from "@/lib/notify";
 import { submitApprovalRequest } from "@/lib/approval";
 import {
   PERMISSIONS,
@@ -349,6 +350,20 @@ export async function createIncident(
     entityId: incident.id,
     description: `Membuat ${incidentNumber} [${data.severity}] ${data.title}`,
   });
+  if (MAJOR_INCIDENT_SEVERITIES.includes(data.severity as never)) {
+    // §50: incident besar — tim NOC harus tahu segera.
+    await notifyPermission(
+      PERMISSIONS.INCIDENTS_MANAGE,
+      {
+        type: "INCIDENT_MAJOR",
+        title: `Incident ${data.severity}: ${data.title}`,
+        body: `${incidentNumber}${data.isOutage ? " — OUTAGE" : ""}`,
+        link: `/noc/incidents/${incident.id}`,
+        module: "noc",
+      },
+      user.id
+    );
+  }
   return { ok: true, id: incident.id };
 }
 
@@ -473,6 +488,20 @@ export async function resolveIncident(
     entityId: incidentId,
     description: `Resolve ${incident.incidentNumber}`,
   });
+  if (incident.isOutage && incident.isPublic) {
+    // §33/§50: outage yang dipublikasikan pulih — CS/Sales/Management tahu.
+    await notifyPermission(
+      PERMISSIONS.OUTAGES_VIEW,
+      {
+        type: "OUTAGE_RESOLVED",
+        title: `Gangguan pulih: ${incident.title}`,
+        body: `${incident.incidentNumber} — ${resolution}`,
+        link: "/outages",
+        module: "noc",
+      },
+      user.id
+    );
+  }
   return { ok: true, id: incidentId };
 }
 

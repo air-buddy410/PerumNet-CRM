@@ -108,14 +108,18 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "deployments.execute", module: "itops", action: "deploy_execute", description: "Mengeksekusi deployment yang disetujui & rollback" },
   { code: "backups.manage", module: "itops", action: "backup", description: "Mencatat, memverifikasi, dan restore test backup" },
   { code: "it_assets.manage", module: "itops", action: "asset", description: "Mengelola domain, SSL, license, dan subscription" },
+  // Phase 7 — Integrasi
+  { code: "integrations.manage", module: "integrations", action: "manage", description: "Registry integrasi eksternal, webhook token, log event" },
+  { code: "outages.view", module: "noc", action: "outage_view", description: "Melihat status gangguan yang disetujui untuk komunikasi (§33)" },
 ];
 
 // Pemetaan permission per role.
 const ALL = PERMISSIONS.map((p) => p.code);
 // cash.create untuk semua role: seluruh divisi dapat mengajukan expense (PRD §22).
 // it_tickets.create & access.request untuk semua role: service desk terbuka
-// bagi seluruh staff (PRD §39–40).
-const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create", "it_tickets.create", "access.request"];
+// bagi seluruh staff (PRD §39–40). outages.view: seluruh staff boleh melihat
+// status gangguan yang telah disetujui untuk komunikasi (§33).
+const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create", "it_tickets.create", "access.request", "outages.view"];
 const CRM_VIEW = [
   "campaigns.view", "leads.view", "opportunities.view", "surveys.view",
   "quotations.view", "customers.view", "subscriptions.view",
@@ -136,8 +140,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
-  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review"],
-  it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage"],
+  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage"],
+  it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],

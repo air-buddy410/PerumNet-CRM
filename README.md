@@ -105,6 +105,33 @@ CRM & Operations Management System untuk ISP PerumNet.
   per-aset, biaya BigInt rupiah (§45)
 - Service layer `src/lib/itops.ts`; engine diuji 73 skenario positif + negatif
 
+**Phase 7 — Integrasi** ✅
+
+- **Notification engine** (§50): event-based di `src/lib/notify.ts` — approval
+  masuk → approver step aktif dinotifikasi, keputusan → pengaju dinotifikasi
+  (berlaku otomatis untuk semua modul ber-approval); plus event kunci:
+  incident besar, alarm critical, backup gagal, deployment gagal, akses
+  diberikan, tiket di-assign/selesai, info gangguan. Halaman `/notifications`
+  + badge unread di sidebar. Kolom channel disiapkan untuk WhatsApp/email.
+- **Integration adapter layer** (§56): registry integrasi per kategori/provider
+  di `/settings/integrations` — secret TIDAK disimpan di database, kolom
+  credential hanya menerima *nama environment variable* (NFR §57, rule 31);
+  webhook token per-integrasi dengan rotasi; log event masuk/keluar.
+- **Webhook monitoring inbound** (§30–31): `POST
+  /api/integrations/[kode]/webhook` menerima alert generik
+  (Zabbix/LibreNMS/Prometheus/MikroTik) → alarm otomatis tertaut
+  device/site, severity dipetakan (Disaster→Critical dll), **duplikat
+  dikelompokkan** (anti alarm-flooding), alert RESOLVED **auto-clear** alarm,
+  alarm Critical/Major menotifikasi tim NOC.
+- **Outage communication** (§33): NOC menyetujui info per-incident untuk
+  komunikasi eksternal (catatan publik + estimasi pemulihan); halaman
+  `/outages` untuk seluruh staff **hanya menampilkan yang disetujui**;
+  publikasi & pemulihan menotifikasi CS/Sales/Management.
+- Engine diuji 39 skenario + uji webhook end-to-end via HTTP.
+- *Adapter live (billing, WhatsApp send, MikroTik API, GitHub, accounting,
+  customer portal) menunggu keputusan Product Owner & kredensial — lihat
+  `docs/TECHNICAL-PLAN.md` §9.*
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

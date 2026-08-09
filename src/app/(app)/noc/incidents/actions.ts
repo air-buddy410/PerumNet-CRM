@@ -12,6 +12,7 @@ import {
   resolveIncident,
   closeIncident,
 } from "@/lib/noc";
+import { setOutageCommunication } from "@/lib/integrations";
 
 export async function createIncidentAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.INCIDENTS_CREATE);
@@ -95,4 +96,17 @@ export async function closeIncidentAction(formData: FormData): Promise<void> {
   );
   revalidatePath("/noc/incidents");
   back(id, result, "Incident ditutup.");
+}
+
+export async function setOutageCommAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.INCIDENTS_MANAGE);
+  const id = String(formData.get("incidentId") ?? "");
+  const eta = String(formData.get("publicEta") ?? "");
+  const result = await setOutageCommunication(user, id, {
+    isPublic: formData.get("isPublic") === "on",
+    publicNote: String(formData.get("publicNote") ?? "") || undefined,
+    publicEta: eta ? new Date(eta) : undefined,
+  });
+  revalidatePath("/outages");
+  back(id, result, "Komunikasi publik diperbarui.");
 }

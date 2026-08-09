@@ -101,6 +101,8 @@ model User {
   backupsVerified  BackupRecord[]  @relation("BackupVerifier")
   backupsCreated   BackupRecord[]  @relation("BackupCreator")
   itAssetsOwned    ItAsset[]       @relation("ItAssetOwner")
+
+  notifications Notification[]
 }
 
 model Division {
@@ -1059,25 +1061,30 @@ model NetworkAlarm {
   id               String    @id @default(cuid())
   alarmNumber      String    @unique // ALM-YYYYMM-####
   severity         String // INFORMATIONAL|WARNING|MINOR|MAJOR|CRITICAL
-  source           String    @default("MANUAL")
+  source           String    @default("MANUAL") // MANUAL | kode integrasi (webhook §30)
   deviceId         String?
   siteId           String?
   message          String
+  // Anti alarm-flooding (§31): alarm duplikat dikelompokkan, bukan baris baru.
+  dedupKey         String?
+  count            Int       @default(1)
+  lastSeenAt       DateTime?
   occurredAt       DateTime  @default(now())
   acknowledgedById String?
   acknowledgedAt   DateTime?
   incidentId       String?
   clearedAt        DateTime?
-  createdById      String
+  createdById      String? // null = alarm otomatis dari integrasi monitoring
   createdAt        DateTime  @default(now())
 
   device         NetworkDevice? @relation(fields: [deviceId], references: [id])
   site           NetworkSite?   @relation(fields: [siteId], references: [id])
   acknowledgedBy User?          @relation("AlarmAck", fields: [acknowledgedById], references: [id])
   incident       Incident?      @relation(fields: [incidentId], references: [id])
-  createdBy      User           @relation("AlarmCreator", fields: [createdById], references: [id])
+  createdBy      User?          @relation("AlarmCreator", fields: [createdById], references: [id])
 
   @@index([severity, clearedAt])
+  @@index([dedupKey, clearedAt])
 }
 
 model Incident {
@@ -1101,6 +1108,12 @@ model Incident {
   resolution       String?
   preventiveAction String?
   recoveryNote     String? // verifikasi pemulihan (PRD §32.4)
+  // Outage communication (§33): hanya info yang disetujui NOC yang tampil
+  // untuk Customer Service / Sales / Management di halaman /outages.
+  isPublic         Boolean   @default(false)
+  publicNote       String?
+  publicEta        DateTime?
+  publicUpdatedAt  DateTime?
   relatedChangeId  String?
   workOrderId      String?
   createdById      String
@@ -1413,4 +1426,63 @@ model ItAsset {
 
   @@unique([name, assetType])
   @@index([expiryDate])
+}
+
+// ═══════════════ Phase 7: Integrasi (PRD §30, §33, §50, §56) ═══════════════
+
+// Notifikasi event-based (§50). Channel awal: in-app; kolom channel disiapkan
+// agar adapter WhatsApp/email dapat ditambah tanpa mengubah skema.
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // kode event, mis. APPROVAL_PENDING, BACKUP_FAILED
+  title     String
+  body      String?
+  link      String? // path in-app, mis. /approvals/xxx
+  module    String
+  channel   String    @default("IN_APP") // IN_APP | WHATSAPP | EMAIL (adapter menyusul)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+// Registry integrasi eksternal (§56). Secret TIDAK disimpan di sini —
+// credentialRef berisi NAMA environment variable (NFR: no plaintext secrets).
+model Integration {
+  id                String    @id @default(cuid())
+  code              String    @unique // slug, dipakai di URL webhook
+  name              String
+  category          String // NETWORK|CRM_CUSTOMER|ITOPS|FINANCE
+  provider          String // MIKROTIK|RADIUS|ZABBIX|...|OTHER
+  baseUrl           String?
+  authType          String    @default("NONE") // NONE|API_KEY|BASIC|TOKEN
+  credentialRef     String? // nama env var yang menyimpan secret
+  webhookToken      String // token inbound webhook (di-generate sistem)
+  isEnabled         Boolean   @default(false)
+  lastEventAt       DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  events IntegrationEvent[]
+}
+
+// Log lalu lintas integrasi (inbound webhook / outbound call).
+model IntegrationEvent {
+  id            String   @id @default(cuid())
+  integrationId String
+  direction     String // IN | OUT
+  eventType     String // mis. MONITORING_ALERT
+  payload       String? // JSON string (dipotong bila besar)
+  status        String // OK | REJECTED | ERROR
+  detail        String?
+  createdAt     DateTime @default(now())
+
+  integration Integration @relation(fields: [integrationId], references: [id])
+
+  @@index([integrationId, createdAt])
 }
