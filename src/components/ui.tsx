@@ -125,6 +125,27 @@ const STATUS_STYLES: Record<string, string> = {
   STANDARD: "is-neutral",
   NORMAL: "is-pending",
   EMERGENCY: "is-rejected",
+  // IT/DevOps — environment & inventory
+  DEVELOPMENT: "is-neutral",
+  TESTING: "is-neutral",
+  STAGING: "is-pending",
+  PRODUCTION: "is-rejected",
+  DR: "is-neutral",
+  DECOMMISSIONED: "is-neutral",
+  DEPRECATED: "is-rejected",
+  // IT/DevOps — prioritas & tiket
+  LOW: "is-neutral",
+  MEDIUM: "is-neutral",
+  HIGH: "is-pending",
+  URGENT: "is-rejected",
+  WAITING_USER: "is-pending",
+  WAITING_VENDOR: "is-pending",
+  // IT/DevOps — akses, deployment, backup
+  GRANTED: "is-approved",
+  REVOKED: "is-neutral",
+  READY: "is-pending",
+  ROLLED_BACK: "is-rejected",
+  SUCCESS: "is-approved",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

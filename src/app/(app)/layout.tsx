@@ -103,6 +103,30 @@ export default async function AppLayout({
     });
   }
 
+  if (can(PERMISSIONS.IT_VIEW)) {
+    groups.push({
+      title: "IT/DevOps",
+      items: [
+        { href: "/it/tickets", label: "IT Tickets" },
+        { href: "/it/access", label: "Access" },
+        { href: "/it/deployments", label: "Deployments" },
+        { href: "/it/backups", label: "Backup & DR" },
+        { href: "/it/servers", label: "Servers" },
+        { href: "/it/applications", label: "Applications" },
+        { href: "/it/assets", label: "Domain & License" },
+      ],
+    });
+  } else {
+    // Service desk terbuka untuk seluruh staff (PRD §39–40).
+    const supportItems = [];
+    if (can(PERMISSIONS.IT_TICKETS_CREATE))
+      supportItems.push({ href: "/it/tickets", label: "IT Tickets" });
+    if (can(PERMISSIONS.ACCESS_REQUEST))
+      supportItems.push({ href: "/it/access", label: "Akses Sistem" });
+    if (supportItems.length)
+      groups.push({ title: "IT Support", items: supportItems });
+  }
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });

@@ -80,6 +80,31 @@ CRM & Operations Management System untuk ISP PerumNet.
   (§48), emergency wajib **post-review** oleh reviewer ≠ eksekutor (rule 23, §35)
 - Service layer `src/lib/noc.ts`; engine diuji 66 skenario positif + negatif
 
+**Phase 6 — IT/DevOps** ✅
+
+- Server & application inventory: environment, owner, tujuan wajib, criticality,
+  expiry kontrak (§38)
+- IT Service Desk **terbuka untuk seluruh staff**: 13 jenis tiket, prioritas,
+  alur New → Assigned → In Progress/Waiting → Resolved → Closed; resolve wajib
+  resolusi, tutup hanya setelah resolved; staff non-IT hanya melihat tiketnya
+  sendiri (§39)
+- Access management: alasan wajib, **akses production wajib approval IT
+  Manager** (rule 28), akses sementara wajib expiry (rule 29), **offboarding
+  mencabut seluruh akses aktif** sekali jalan (rule 30), tidak ada kolom
+  password/secret (rule 31) (§40)
+- Deployment management: development/testing tanpa approval; staging &
+  production lewat approval matrix (§48); **production diblokir** tanpa hasil
+  testing, change record (rule 24), rollback plan (rule 25), maintenance
+  window, dan backup sukses **yang sudah diverifikasi** (§42);
+  pengaju tidak bisa menyetujui deployment sendiri (rule 26); hasil eksekusi
+  & rollback tercatat
+- Backup & DR: lokasi + retention wajib, backup production wajib terenkripsi,
+  backup gagal wajib kronologi (tercatat sebagai BACKUP_FAILED di audit log),
+  verifikasi backup kritikal (rule 27) + restore test berkala (§44)
+- Domain, SSL, license & subscription: expiry tracking dengan reminder
+  per-aset, biaya BigInt rupiah (§45)
+- Service layer `src/lib/itops.ts`; engine diuji 73 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

@@ -97,12 +97,25 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "changes.create", module: "noc", action: "change_create", description: "Membuat change request" },
   { code: "changes.implement", module: "noc", action: "change_implement", description: "Mengeksekusi change yang disetujui" },
   { code: "changes.review", module: "noc", action: "change_review", description: "Post-review emergency change (NOC Manager)" },
+  // Phase 6 — IT/DevOps
+  { code: "it.view", module: "itops", action: "view", description: "Melihat modul IT/DevOps (server, aplikasi, deployment, backup, aset)" },
+  { code: "it_inventory.manage", module: "itops", action: "inventory", description: "Mengelola server & application inventory" },
+  { code: "it_tickets.create", module: "itops", action: "ticket_create", description: "Membuat tiket IT service desk" },
+  { code: "it_tickets.manage", module: "itops", action: "ticket_manage", description: "Assign, update status, resolve, dan tutup tiket IT" },
+  { code: "access.request", module: "itops", action: "access_request", description: "Membuat permintaan akses sistem" },
+  { code: "access.manage", module: "itops", action: "access_manage", description: "Memberikan/mencabut akses & offboarding (rule 28–30)" },
+  { code: "deployments.create", module: "itops", action: "deploy_create", description: "Membuat & mengajukan deployment record" },
+  { code: "deployments.execute", module: "itops", action: "deploy_execute", description: "Mengeksekusi deployment yang disetujui & rollback" },
+  { code: "backups.manage", module: "itops", action: "backup", description: "Mencatat, memverifikasi, dan restore test backup" },
+  { code: "it_assets.manage", module: "itops", action: "asset", description: "Mengelola domain, SSL, license, dan subscription" },
 ];
 
 // Pemetaan permission per role.
 const ALL = PERMISSIONS.map((p) => p.code);
 // cash.create untuk semua role: seluruh divisi dapat mengajukan expense (PRD §22).
-const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create"];
+// it_tickets.create & access.request untuk semua role: service desk terbuka
+// bagi seluruh staff (PRD §39–40).
+const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create", "it_tickets.create", "access.request"];
 const CRM_VIEW = [
   "campaigns.view", "leads.view", "opportunities.view", "surveys.view",
   "quotations.view", "customers.view", "subscriptions.view",
@@ -120,11 +133,11 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review"],
-  it_manager: [...BASE, "approvals.act"],
+  it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
@@ -133,9 +146,9 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view"],
   noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement"],
-  developer: BASE,
-  devops_engineer: BASE,
-  it_support: BASE,
+  developer: [...BASE, "it.view", "deployments.create"],
+  devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
+  it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],
 };
 
 // Struktur organisasi: staff -> supervisor -> owner; staff & supervisor per divisi.
@@ -231,6 +244,8 @@ const APPROVAL_RULES: {
   { module: "stock_opname", subtype: null, name: "Adjustment Stock Opname", min: 0, max: null, steps: [SUP, OWN] },
   { module: "device_writeoff", subtype: null, name: "Write-off Perangkat (Lost/Damaged)", min: 0, max: null, steps: [SUP, OWN] },
   { module: "network_maintenance", subtype: null, name: "Network Maintenance", min: 0, max: null, steps: [R("noc_manager")] },
+  // Phase 6: akses production wajib approval IT Manager (rule 28).
+  { module: "access_request", subtype: "production", name: "Akses Production", min: 0, max: null, steps: [R("it_manager")] },
 ];
 
 async function main() {

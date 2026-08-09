@@ -94,6 +94,17 @@ export const PERMISSIONS = {
   CHANGES_CREATE: "changes.create",
   CHANGES_IMPLEMENT: "changes.implement", // eksekusi change yang disetujui
   CHANGES_REVIEW: "changes.review", // post-review emergency (NOC Manager)
+  // Phase 6 — IT/DevOps
+  IT_VIEW: "it.view",
+  IT_INVENTORY_MANAGE: "it_inventory.manage", // server & application inventory
+  IT_TICKETS_CREATE: "it_tickets.create", // semua staff boleh buat tiket
+  IT_TICKETS_MANAGE: "it_tickets.manage", // assign, status, resolve, close
+  ACCESS_REQUEST: "access.request", // semua staff boleh minta akses
+  ACCESS_MANAGE: "access.manage", // grant, revoke, offboarding
+  DEPLOYMENTS_CREATE: "deployments.create",
+  DEPLOYMENTS_EXECUTE: "deployments.execute",
+  BACKUPS_MANAGE: "backups.manage",
+  IT_ASSETS_MANAGE: "it_assets.manage", // domain, SSL, license, subscription
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -165,6 +176,12 @@ export const APPROVAL_MODULES: {
     code: "network_maintenance",
     name: "Network Maintenance",
     subtypes: [],
+    manual: false,
+  },
+  {
+    code: "access_request",
+    name: "Access Request Production",
+    subtypes: ["production"],
     manual: false,
   },
   { code: "general", name: "Umum / Lainnya", subtypes: [] },
@@ -504,6 +521,89 @@ export const MAINTENANCE_TYPES = [
 
 export const CHANGE_TYPES = ["STANDARD", "NORMAL", "MAJOR", "EMERGENCY"] as const;
 
+// ── Phase 6: IT/DevOps ──────────────────────────────────────────
+
+export const ENVIRONMENTS = [
+  "DEVELOPMENT",
+  "TESTING",
+  "STAGING",
+  "PRODUCTION",
+  "DR",
+] as const;
+
+// Environment yang boleh menjadi target deployment (DR tidak di-deploy langsung)
+export const DEPLOY_ENVIRONMENTS = [
+  "DEVELOPMENT",
+  "TESTING",
+  "STAGING",
+  "PRODUCTION",
+] as const;
+
+// Deployment ke env ini wajib melalui approval matrix (§48)
+export const DEPLOY_ENVS_NEED_APPROVAL = ["STAGING", "PRODUCTION"] as const;
+
+export const IT_TICKET_TYPES = [
+  ["LAPTOP_ISSUE", "Laptop Issue"],
+  ["ACCOUNT_REQUEST", "Account Request"],
+  ["PASSWORD_RESET", "Password Reset"],
+  ["EMAIL_ISSUE", "Email Issue"],
+  ["PRINTER_ISSUE", "Printer Issue"],
+  ["SOFTWARE_INSTALL", "Software Installation"],
+  ["ACCESS_REQUEST", "Access Request"],
+  ["VPN_ISSUE", "VPN Issue"],
+  ["APP_BUG", "Application Bug"],
+  ["SERVER_ISSUE", "Server Issue"],
+  ["SECURITY_INCIDENT", "Security Incident"],
+  ["ONBOARDING", "New Employee Onboarding"],
+  ["OFFBOARDING", "Employee Offboarding"],
+] as const;
+
+export const IT_TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
+
+export const IT_TICKET_STATUSES = [
+  "NEW",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "WAITING_USER",
+  "WAITING_VENDOR",
+  "RESOLVED",
+  "CLOSED",
+] as const;
+
+export const ACCESS_TYPES = [
+  ["SERVER", "Server"],
+  ["DATABASE", "Database"],
+  ["REPOSITORY", "Repository"],
+  ["CLOUD", "Cloud"],
+  ["NETWORK_DEVICE", "Network Device"],
+  ["CRM", "CRM"],
+  ["MONITORING", "Monitoring"],
+  ["EMAIL", "Email"],
+  ["VPN", "VPN"],
+  ["DOMAIN", "Domain"],
+  ["BILLING", "Billing"],
+] as const;
+
+export const BACKUP_TYPES = [
+  ["DATABASE", "Database Backup"],
+  ["FILE", "File Backup"],
+  ["CONFIGURATION", "Configuration Backup"],
+  ["VM_SNAPSHOT", "VM Snapshot"],
+  ["NETWORK_CONFIG", "Network Configuration Backup"],
+  ["OFFSITE", "Offsite Backup"],
+] as const;
+
+export const IT_ASSET_TYPES = [
+  ["DOMAIN", "Domain"],
+  ["SSL_CERT", "SSL Certificate"],
+  ["CLOUD_SUBSCRIPTION", "Cloud Subscription"],
+  ["VPS", "VPS"],
+  ["SOFTWARE_LICENSE", "Software License"],
+  ["MONITORING_LICENSE", "Monitoring License"],
+  ["EMAIL_SERVICE", "Email Service"],
+  ["API_SUBSCRIPTION", "API Subscription"],
+] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -598,6 +698,24 @@ export const STATUS_LABELS: Record<string, string> = {
   P2: "P2 — Major",
   P3: "P3 — Minor",
   P4: "P4 — Informational",
+  // Phase 6 — IT/DevOps
+  DEVELOPMENT: "Development",
+  TESTING: "Testing",
+  STAGING: "Staging",
+  PRODUCTION: "Production",
+  DR: "Disaster Recovery",
+  DECOMMISSIONED: "Decommissioned",
+  DEPRECATED: "Deprecated",
+  MONITORED: "Termonitor",
+  UNMONITORED: "Tidak Termonitor",
+  URGENT: "Urgent",
+  WAITING_USER: "Menunggu User",
+  WAITING_VENDOR: "Menunggu Vendor",
+  GRANTED: "Diberikan",
+  REVOKED: "Dicabut",
+  READY: "Siap Dieksekusi",
+  ROLLED_BACK: "Di-rollback",
+  SUCCESS: "Sukses",
 };
 
 export function statusLabel(code: string | null | undefined): string {

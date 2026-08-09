@@ -85,6 +85,22 @@ model User {
   changesExecuted  ChangeRequest[]      @relation("ChangeExecutor")
   changesReviewed  ChangeRequest[]      @relation("ChangeReviewer")
   changesCreated   ChangeRequest[]      @relation("ChangeCreator")
+
+  serversOwned     Server[]        @relation("ServerOwner")
+  appsOwned        Application[]   @relation("AppOwner")
+  appsBusinessOwn  Application[]   @relation("AppBusinessOwner")
+  ticketsRequested ItTicket[]      @relation("TicketRequester")
+  ticketsAssigned  ItTicket[]      @relation("TicketAssignee")
+  ticketsCreated   ItTicket[]      @relation("TicketCreator")
+  accessAsTarget   AccessRequest[] @relation("AccessTarget")
+  accessGranted    AccessRequest[] @relation("AccessGrantor")
+  accessRevoked    AccessRequest[] @relation("AccessRevoker")
+  accessCreated    AccessRequest[] @relation("AccessCreator")
+  deploysExecuted  Deployment[]    @relation("DeployExecutor")
+  deploysCreated   Deployment[]    @relation("DeployCreator")
+  backupsVerified  BackupRecord[]  @relation("BackupVerifier")
+  backupsCreated   BackupRecord[]  @relation("BackupCreator")
+  itAssetsOwned    ItAsset[]       @relation("ItAssetOwner")
 }
 
 model Division {
@@ -1194,4 +1210,207 @@ model ChangeRequest {
   incidents      Incident[]
 
   @@index([status, changeType])
+}
+
+// ═══════════════ Phase 6: IT/DevOps (PRD §38–45) ═══════════════
+
+model Server {
+  id               String    @id @default(cuid())
+  hostname         String    @unique
+  environment      String // DEVELOPMENT|TESTING|STAGING|PRODUCTION|DR
+  os               String?
+  ipAddress        String?
+  provider         String?
+  region           String?
+  cpu              String?
+  ram              String?
+  storage          String?
+  ownerId          String?
+  purpose          String // setiap server wajib punya tujuan (traceability)
+  backupPolicy     String?
+  monitoringStatus String? // MONITORED|UNMONITORED
+  criticality      String    @default("MEDIUM") // LOW|MEDIUM|HIGH|CRITICAL
+  expiryDate       DateTime? // sewa/kontrak VPS
+  status           String    @default("ACTIVE") // ACTIVE|INACTIVE|DECOMMISSIONED
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  owner   User?          @relation("ServerOwner", fields: [ownerId], references: [id])
+  apps    Application[]
+  backups BackupRecord[]
+
+  @@index([environment, status])
+}
+
+model Application {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  repository       String?
+  ownerId          String? // technical owner
+  businessOwnerId  String?
+  environment      String // env utama aplikasi: DEVELOPMENT|TESTING|STAGING|PRODUCTION
+  domain           String?
+  techStack        String?
+  databaseInfo     String?
+  dependencyNote   String?
+  deploymentMethod String?
+  sla              String?
+  backupNote       String?
+  monitoringNote   String?
+  status           String   @default("ACTIVE") // ACTIVE|INACTIVE|DEPRECATED
+  serverId         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  owner         User?          @relation("AppOwner", fields: [ownerId], references: [id])
+  businessOwner User?          @relation("AppBusinessOwner", fields: [businessOwnerId], references: [id])
+  server        Server?        @relation(fields: [serverId], references: [id])
+  deployments   Deployment[]
+  backups       BackupRecord[]
+}
+
+model ItTicket {
+  id           String    @id @default(cuid())
+  ticketNumber String    @unique // TIK-YYYYMM-####
+  title        String
+  type         String // LAPTOP_ISSUE|ACCOUNT_REQUEST|...(§39)
+  priority     String    @default("MEDIUM") // LOW|MEDIUM|HIGH|URGENT
+  description  String
+  requesterId  String
+  assigneeId   String?
+  status       String    @default("NEW") // NEW|ASSIGNED|IN_PROGRESS|WAITING_USER|WAITING_VENDOR|RESOLVED|CLOSED
+  resolution   String?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  requester User  @relation("TicketRequester", fields: [requesterId], references: [id])
+  assignee  User? @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  createdBy User  @relation("TicketCreator", fields: [createdById], references: [id])
+
+  @@index([status, assigneeId])
+}
+
+model AccessRequest {
+  id                String    @id @default(cuid())
+  requestNumber     String    @unique // ACC-YYYYMM-####
+  targetUserId      String // user penerima akses
+  accessType        String // SERVER|DATABASE|REPOSITORY|CLOUD|NETWORK_DEVICE|CRM|MONITORING|EMAIL|VPN|DOMAIN|BILLING
+  systemName        String // sistem spesifik yang diminta
+  roleRequested     String // role/level akses
+  reason            String
+  isProduction      Boolean   @default(false) // rule 28: wajib approval
+  isTemporary       Boolean   @default(false) // rule 29: wajib expiry
+  expiryDate        DateTime?
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|GRANTED|REVOKED|REJECTED
+  approvalRequestId String?
+  grantedById       String?
+  grantedAt         DateTime?
+  revokedById       String?
+  revokedAt         DateTime?
+  revokeReason      String?
+  createdById       String // requester
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  targetUser User  @relation("AccessTarget", fields: [targetUserId], references: [id])
+  grantedBy  User? @relation("AccessGrantor", fields: [grantedById], references: [id])
+  revokedBy  User? @relation("AccessRevoker", fields: [revokedById], references: [id])
+  createdBy  User  @relation("AccessCreator", fields: [createdById], references: [id])
+
+  @@index([targetUserId, status])
+}
+
+model Deployment {
+  id                String    @id @default(cuid())
+  deployNumber      String    @unique // DEP-YYYYMM-####
+  applicationId     String
+  version           String
+  environment       String // DEVELOPMENT|TESTING|STAGING|PRODUCTION
+  isMajor           Boolean   @default(false) // production: minor vs major (matrix §48)
+  changeRecord      String? // rule 24: production wajib change record
+  releaseNote       String?
+  commitRef         String?
+  hasMigration      Boolean   @default(false)
+  migrationNote     String?
+  deploymentPlan    String
+  testingResult     String? // production: wajib terisi sebelum submit (§42)
+  rollbackPlan      String? // rule 25: production wajib
+  backupId          String? // §42: production wajib backup tersedia (SUCCESS + terverifikasi)
+  windowStart       DateTime?
+  windowEnd         DateTime?
+  approvalRequestId String?
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|READY|IN_PROGRESS|COMPLETED|FAILED|ROLLED_BACK|CANCELLED
+  executedById      String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  result            String?
+  rollbackNote      String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  application Application   @relation(fields: [applicationId], references: [id])
+  backup      BackupRecord? @relation(fields: [backupId], references: [id])
+  executedBy  User?         @relation("DeployExecutor", fields: [executedById], references: [id])
+  createdBy   User          @relation("DeployCreator", fields: [createdById], references: [id])
+
+  @@index([status, environment])
+}
+
+model BackupRecord {
+  id                 String    @id @default(cuid())
+  backupNumber       String    @unique // BCK-YYYYMM-####
+  serverId           String?
+  applicationId      String?
+  backupType         String // DATABASE|FILE|CONFIGURATION|VM_SNAPSHOT|NETWORK_CONFIG|OFFSITE
+  schedule           String?
+  location           String
+  retention          String // §44: backup wajib punya retention
+  isEncrypted        Boolean   @default(false) // §44: backup production wajib terenkripsi
+  isCritical         Boolean   @default(false) // rule 27: wajib diverifikasi
+  status             String // SUCCESS|FAILED
+  failureNote        String?
+  verificationResult String?
+  verifiedById       String?
+  verifiedAt         DateTime?
+  restoreTestAt      DateTime?
+  restoreTestResult  String?
+  executedAt         DateTime
+  createdById        String
+  createdAt          DateTime  @default(now())
+
+  server      Server?      @relation(fields: [serverId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  verifiedBy  User?        @relation("BackupVerifier", fields: [verifiedById], references: [id])
+  createdBy   User         @relation("BackupCreator", fields: [createdById], references: [id])
+  deployments Deployment[]
+
+  @@index([status, executedAt])
+}
+
+model ItAsset {
+  id            String    @id @default(cuid())
+  name          String
+  assetType     String // DOMAIN|SSL_CERT|CLOUD_SUBSCRIPTION|VPS|SOFTWARE_LICENSE|MONITORING_LICENSE|EMAIL_SERVICE|API_SUBSCRIPTION
+  provider      String?
+  ownerId       String?
+  purchaseDate  DateTime?
+  expiryDate    DateTime?
+  autoRenewal   Boolean   @default(false)
+  cost          BigInt? // rupiah per periode
+  paymentMethod String?
+  reminderDays  Int       @default(30)
+  status        String    @default("ACTIVE") // ACTIVE|EXPIRED|CANCELLED
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner User? @relation("ItAssetOwner", fields: [ownerId], references: [id])
+
+  @@unique([name, assetType])
+  @@index([expiryDate])
 }
