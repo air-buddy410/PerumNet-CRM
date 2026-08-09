@@ -69,6 +69,22 @@ model User {
   projectsManaged Project[]         @relation("ProjectManager")
   projectsClosed  Project[]         @relation("ProjectCloser")
   projectsCreated Project[]         @relation("ProjectCreator")
+
+  sitesAsPic       NetworkSite[]        @relation("SitePic")
+  netDevicesOwned  NetworkDevice[]      @relation("NetDeviceOwner")
+  subnetsOwned     Subnet[]             @relation("SubnetOwner")
+  ipsCreated       IPAddress[]          @relation("IpCreator")
+  alarmsAcked      NetworkAlarm[]       @relation("AlarmAck")
+  alarmsCreated    NetworkAlarm[]       @relation("AlarmCreator")
+  incidentsAsPic   Incident[]           @relation("IncidentPic")
+  incidentsCreated Incident[]           @relation("IncidentCreator")
+  incidentUpdates  IncidentUpdate[]     @relation("IncidentUpdater")
+  maintAsPic       NetworkMaintenance[] @relation("MaintPic")
+  maintCreated     NetworkMaintenance[] @relation("MaintCreator")
+  changesAsPic     ChangeRequest[]      @relation("ChangePic")
+  changesExecuted  ChangeRequest[]      @relation("ChangeExecutor")
+  changesReviewed  ChangeRequest[]      @relation("ChangeReviewer")
+  changesCreated   ChangeRequest[]      @relation("ChangeCreator")
 }
 
 model Division {
@@ -257,9 +273,11 @@ model Area {
   description String?
   isActive    Boolean @default(true)
 
-  campaigns Campaign[]
-  customers Customer[]
-  projects  Project[]
+  campaigns    Campaign[]
+  customers    Customer[]
+  projects     Project[]
+  networkSites NetworkSite[]
+  incidents    Incident[]
 }
 
 model Package {
@@ -498,8 +516,10 @@ model Subscription {
   customer  Customer @relation(fields: [customerId], references: [id])
   package   Package  @relation(fields: [packageId], references: [id])
   createdBy User     @relation("SubscriptionCreator", fields: [createdById], references: [id])
-  devices    SerializedDevice[]
-  workOrders WorkOrder[]
+  devices         SerializedDevice[]
+  workOrders      WorkOrder[]
+  ips             IPAddress[]
+  incidentImpacts IncidentSubscription[]
 
   @@index([status])
 }
@@ -716,6 +736,7 @@ model WorkOrder {
   movements    DeviceMovement[]
   materialUsages MaterialUsage[]
   cashTransactions CashTransaction[]
+  incidents        Incident[]
 
   @@index([status])
   @@index([technicianId])
@@ -898,4 +919,279 @@ model ProjectBomLine {
   item    Item    @relation(fields: [itemId], references: [id])
 
   @@unique([projectId, itemId])
+}
+
+// ── Phase 5: NOC ────────────────────────────────────────────────
+// Prinsip (PRD §28–35, §53):
+//  - IP address tidak boleh duplikat dan wajib tertaut perangkat/layanan.
+//  - Incident wajib severity + PIC; timeline append-only; incident besar
+//    wajib root cause review dan hanya ditutup NOC Manager.
+//  - Change wajib rollback plan, tidak dieksekusi tanpa approval,
+//    emergency wajib post-review.
+
+model NetworkSite {
+  id               String  @id @default(cuid())
+  siteCode         String  @unique
+  name             String
+  type             String // HEAD_OFFICE|DATA_CENTER|POP|MINI_POP|TOWER|ODC|ODP|RELAY|COLOCATION
+  address          String?
+  latitude         Float?
+  longitude        Float?
+  areaId           String?
+  picId            String?
+  status           String  @default("ACTIVE") // ACTIVE|INACTIVE|PLANNED
+  powerSource      String?
+  backupPower      String?
+  upstreamProvider String?
+  capacityNote     String?
+  notes            String?
+
+  area        Area?                @relation(fields: [areaId], references: [id])
+  pic         User?                @relation("SitePic", fields: [picId], references: [id])
+  devices     NetworkDevice[]
+  linksA      NetworkLink[]        @relation("LinkSiteA")
+  linksB      NetworkLink[]        @relation("LinkSiteB")
+  subnets     Subnet[]
+  alarms      NetworkAlarm[]
+  incidents   Incident[]
+  maintenance NetworkMaintenance[]
+}
+
+model NetworkDevice {
+  id           String  @id @default(cuid())
+  hostname     String  @unique
+  deviceType   String // ROUTER|CORE_ROUTER|DIST_SWITCH|ACCESS_SWITCH|OLT|ONT|WIRELESS_BACKHAUL|ACCESS_POINT|FIREWALL|SERVER|UPS|OTHER
+  vendor       String?
+  model        String?
+  serialNumber String?
+  macAddress   String?
+  managementIp String?
+  siteId       String
+  rack         String?
+  uPosition    String?
+  firmware     String?
+  criticality  String  @default("MEDIUM") // LOW|MEDIUM|HIGH|CRITICAL
+  status       String  @default("ACTIVE") // ACTIVE|INACTIVE|MAINTENANCE|DOWN
+  ownerId      String?
+  notes        String?
+
+  site        NetworkSite          @relation(fields: [siteId], references: [id])
+  owner       User?                @relation("NetDeviceOwner", fields: [ownerId], references: [id])
+  ips         IPAddress[]
+  alarms      NetworkAlarm[]
+  incidents   Incident[]
+  maintenance NetworkMaintenance[]
+}
+
+model NetworkLink {
+  id        String  @id @default(cuid())
+  linkCode  String  @unique
+  name      String?
+  siteAId   String
+  siteBId   String
+  media     String // FIBER|WIRELESS|LEASED_LINE|VPN
+  capacity  String?
+  provider  String?
+  circuitId String?
+  isPrimary Boolean @default(true)
+  status    String  @default("ACTIVE") // ACTIVE|DEGRADED|DOWN|INACTIVE
+  notes     String?
+
+  siteA     NetworkSite @relation("LinkSiteA", fields: [siteAId], references: [id])
+  siteB     NetworkSite @relation("LinkSiteB", fields: [siteBId], references: [id])
+  incidents Incident[]
+}
+
+model Subnet {
+  id      String  @id @default(cuid())
+  cidr    String  @unique // mis. 10.10.0.0/24
+  name    String
+  vlan    String?
+  gateway String?
+  purpose String // subnet wajib punya tujuan (PRD §29)
+  ownerId String?
+  siteId  String?
+  notes   String?
+
+  owner User?        @relation("SubnetOwner", fields: [ownerId], references: [id])
+  site  NetworkSite? @relation(fields: [siteId], references: [id])
+  ips   IPAddress[]
+}
+
+model IPAddress {
+  id             String    @id @default(cuid())
+  subnetId       String
+  address        String    @unique // rule 18: tidak boleh duplikat
+  status         String    @default("ALLOCATED") // ALLOCATED|RESERVED|RELEASED
+  assignedType   String? // DEVICE|SUBSCRIPTION|OTHER
+  deviceId       String?
+  subscriptionId String?
+  description    String?
+  assignedAt     DateTime  @default(now())
+  releasedAt     DateTime?
+  createdById    String
+
+  subnet       Subnet         @relation(fields: [subnetId], references: [id])
+  device       NetworkDevice? @relation(fields: [deviceId], references: [id])
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+  createdBy    User           @relation("IpCreator", fields: [createdById], references: [id])
+
+  @@index([subnetId, status])
+}
+
+model NetworkAlarm {
+  id               String    @id @default(cuid())
+  alarmNumber      String    @unique // ALM-YYYYMM-####
+  severity         String // INFORMATIONAL|WARNING|MINOR|MAJOR|CRITICAL
+  source           String    @default("MANUAL")
+  deviceId         String?
+  siteId           String?
+  message          String
+  occurredAt       DateTime  @default(now())
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  incidentId       String?
+  clearedAt        DateTime?
+  createdById      String
+  createdAt        DateTime  @default(now())
+
+  device         NetworkDevice? @relation(fields: [deviceId], references: [id])
+  site           NetworkSite?   @relation(fields: [siteId], references: [id])
+  acknowledgedBy User?          @relation("AlarmAck", fields: [acknowledgedById], references: [id])
+  incident       Incident?      @relation(fields: [incidentId], references: [id])
+  createdBy      User           @relation("AlarmCreator", fields: [createdById], references: [id])
+
+  @@index([severity, clearedAt])
+}
+
+model Incident {
+  id               String    @id @default(cuid())
+  incidentNumber   String    @unique // INC-YYYYMM-####
+  title            String
+  type             String // DEVICE_DOWN|LINK_DOWN|HIGH_LATENCY|PACKET_LOSS|POWER_OUTAGE|FIBER_CUT|WIRELESS_INTERFERENCE|UPSTREAM_OUTAGE|CORE_ISSUE|AUTH_FAILURE|DNS_ISSUE|SECURITY|OTHER
+  severity         String // P1|P2|P3|P4 — wajib (rule 19)
+  status           String    @default("DETECTED") // DETECTED|ACKNOWLEDGED|INVESTIGATING|MITIGATING|RESOLVED|CLOSED
+  isOutage         Boolean   @default(false)
+  picId            String?
+  deviceId         String?
+  linkId           String?
+  siteId           String?
+  areaId           String?
+  detectedAt       DateTime  @default(now())
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  rootCause        String?
+  resolution       String?
+  preventiveAction String?
+  recoveryNote     String? // verifikasi pemulihan (PRD §32.4)
+  relatedChangeId  String?
+  workOrderId      String?
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  pic           User?                  @relation("IncidentPic", fields: [picId], references: [id])
+  device        NetworkDevice?         @relation(fields: [deviceId], references: [id])
+  link          NetworkLink?           @relation(fields: [linkId], references: [id])
+  site          NetworkSite?           @relation(fields: [siteId], references: [id])
+  area          Area?                  @relation(fields: [areaId], references: [id])
+  relatedChange ChangeRequest?         @relation(fields: [relatedChangeId], references: [id])
+  workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  createdBy     User                   @relation("IncidentCreator", fields: [createdById], references: [id])
+  updates       IncidentUpdate[]
+  alarms        NetworkAlarm[]
+  impacted      IncidentSubscription[]
+
+  @@index([status, severity])
+}
+
+// Timeline incident — append-only.
+model IncidentUpdate {
+  id         String   @id @default(cuid())
+  incidentId String
+  note       String
+  status     String? // status saat update (jejak transisi)
+  byUserId   String
+  createdAt  DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  byUser   User     @relation("IncidentUpdater", fields: [byUserId], references: [id])
+
+  @@index([incidentId, createdAt])
+}
+
+model IncidentSubscription {
+  id             String @id @default(cuid())
+  incidentId     String
+  subscriptionId String
+
+  incident     Incident     @relation(fields: [incidentId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([incidentId, subscriptionId])
+}
+
+model NetworkMaintenance {
+  id                String    @id @default(cuid())
+  maintNumber       String    @unique // MNT-YYYYMM-####
+  title             String
+  type              String // PREVENTIVE|CORRECTIVE|EMERGENCY|FIRMWARE_UPGRADE|FIBER|POWER|TOWER|CAPACITY|SECURITY
+  siteId            String?
+  deviceId          String?
+  purpose           String
+  risk              String
+  scheduledStart    DateTime
+  scheduledEnd      DateTime
+  estDowntimeMin    Int?
+  picId             String
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|IN_PROGRESS|COMPLETED|CANCELLED
+  approvalRequestId String?
+  result            String?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  site      NetworkSite?   @relation(fields: [siteId], references: [id])
+  device    NetworkDevice? @relation(fields: [deviceId], references: [id])
+  pic       User           @relation("MaintPic", fields: [picId], references: [id])
+  createdBy User           @relation("MaintCreator", fields: [createdById], references: [id])
+
+  @@index([status])
+}
+
+model ChangeRequest {
+  id                String    @id @default(cuid())
+  changeNumber      String    @unique // CHG-YYYYMM-####
+  title             String
+  changeType        String // STANDARD|NORMAL|MAJOR|EMERGENCY
+  reason            String
+  impactedDevices   String?
+  impactedServices  String?
+  risk              String
+  implementationPlan String
+  testPlan          String?
+  rollbackPlan      String? // wajib kecuali STANDARD (rule 21, §35)
+  windowStart       DateTime?
+  windowEnd         DateTime?
+  picId             String
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|COMPLETED|PENDING_REVIEW|FAILED|CANCELLED
+  approvalRequestId String?
+  result            String?
+  implementedAt     DateTime?
+  executedById      String?
+  postReviewNote    String? // emergency wajib post-review (rule 23)
+  postReviewedById  String?
+  postReviewedAt    DateTime?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  pic            User       @relation("ChangePic", fields: [picId], references: [id])
+  executedBy     User?      @relation("ChangeExecutor", fields: [executedById], references: [id])
+  postReviewedBy User?      @relation("ChangeReviewer", fields: [postReviewedById], references: [id])
+  createdBy      User       @relation("ChangeCreator", fields: [createdById], references: [id])
+  incidents      Incident[]
+
+  @@index([status, changeType])
 }

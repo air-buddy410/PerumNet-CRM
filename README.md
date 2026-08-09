@@ -60,6 +60,26 @@ CRM & Operations Management System untuk ISP PerumNet.
   penutupan** — perangkat dipertanggungjawabkan, advance selesai, tidak ada
   transaksi menggantung, dokumentasi ada (§19, rule 8)
 
+**Phase 5 — NOC (Network Operations)** ✅
+
+- Network inventory: site (POP/tower/ODC…), perangkat jaringan (hostname unik,
+  criticality, PIC), link antar site (§28)
+- IPAM: subnet wajib tujuan, **IP duplikat ditolak** (rule 18), IP teralokasi
+  wajib tertaut perangkat/subscription (reserved wajib keterangan), validasi
+  IP-dalam-subnet; release → boleh dipakai ulang dengan riwayat di audit log (§29)
+- Alarm manual: severity, acknowledge, clear, eskalasi satu klik → incident (§31)
+- Incident: **wajib severity P1–P4** (rule 19), acknowledge menetapkan PIC,
+  timeline **append-only** (terkunci setelah resolved), pelanggan terdampak,
+  resolve wajib resolusi + verifikasi pemulihan, **penutupan** wajib root cause;
+  incident besar P1/P2 hanya ditutup NOC Manager + preventive action
+  (rule 20, §6.13, §32) — durasi outage tercatat otomatis
+- Maintenance terjadwal: tujuan + risiko wajib, **approval sebelum eksekusi**,
+  start diblokir sampai disetujui (§34)
+- Change management: rollback plan wajib kecuali Standard (rule 21), **tidak
+  bisa dieksekusi tanpa approval** (rule 22) mengikuti matrix per jenis change
+  (§48), emergency wajib **post-review** oleh reviewer ≠ eksekutor (rule 23, §35)
+- Service layer `src/lib/noc.ts`; engine diuji 66 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

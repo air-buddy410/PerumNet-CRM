@@ -82,6 +82,18 @@ export const PERMISSIONS = {
   PROJECTS_VIEW: "projects.view",
   PROJECTS_MANAGE: "projects.manage",
   PROJECTS_CLOSE: "projects.close",
+  // Phase 5 — NOC
+  NOC_VIEW: "noc.view",
+  NET_INVENTORY_MANAGE: "net_inventory.manage", // site, device, link
+  IPAM_MANAGE: "ipam.manage",
+  ALARMS_MANAGE: "alarms.manage",
+  INCIDENTS_CREATE: "incidents.create",
+  INCIDENTS_MANAGE: "incidents.manage", // update/ack/resolve + tutup P3/P4
+  INCIDENTS_CLOSE: "incidents.close", // tutup incident besar P1/P2 (NOC Manager)
+  MAINTENANCE_MANAGE: "maintenance.manage",
+  CHANGES_CREATE: "changes.create",
+  CHANGES_IMPLEMENT: "changes.implement", // eksekusi change yang disetujui
+  CHANGES_REVIEW: "changes.review", // post-review emergency (NOC Manager)
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -146,6 +158,12 @@ export const APPROVAL_MODULES: {
   {
     code: "device_writeoff",
     name: "Write-off Perangkat",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "network_maintenance",
+    name: "Network Maintenance",
     subtypes: [],
     manual: false,
   },
@@ -403,6 +421,89 @@ export const CASH_TYPES_NEED_EVIDENCE = ["EXPENSE", "REIMBURSEMENT"] as const;
 
 export const PROJECT_STATUSES = ["OPEN", "CLOSED", "CANCELLED"] as const;
 
+// ── Phase 5: NOC ────────────────────────────────────────────────
+
+export const SITE_TYPES = [
+  ["HEAD_OFFICE", "Head Office"],
+  ["DATA_CENTER", "Data Center"],
+  ["POP", "POP"],
+  ["MINI_POP", "Mini POP"],
+  ["TOWER", "Tower"],
+  ["ODC", "ODC"],
+  ["ODP", "ODP"],
+  ["RELAY", "Relay Site"],
+  ["COLOCATION", "Colocation"],
+] as const;
+
+export const NET_DEVICE_TYPES = [
+  ["ROUTER", "Router"],
+  ["CORE_ROUTER", "Core Router"],
+  ["DIST_SWITCH", "Distribution Switch"],
+  ["ACCESS_SWITCH", "Access Switch"],
+  ["OLT", "OLT"],
+  ["ONT", "ONU / ONT"],
+  ["WIRELESS_BACKHAUL", "Wireless Backhaul"],
+  ["ACCESS_POINT", "Access Point"],
+  ["FIREWALL", "Firewall"],
+  ["SERVER", "Server"],
+  ["UPS", "UPS"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const LINK_MEDIA = ["FIBER", "WIRELESS", "LEASED_LINE", "VPN"] as const;
+export const CRITICALITY = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+
+export const ALARM_SEVERITIES = [
+  "INFORMATIONAL",
+  "WARNING",
+  "MINOR",
+  "MAJOR",
+  "CRITICAL",
+] as const;
+
+export const INCIDENT_TYPES = [
+  ["DEVICE_DOWN", "Device Down"],
+  ["LINK_DOWN", "Link Down"],
+  ["HIGH_LATENCY", "High Latency"],
+  ["PACKET_LOSS", "Packet Loss"],
+  ["POWER_OUTAGE", "Power Outage"],
+  ["FIBER_CUT", "Fiber Cut"],
+  ["WIRELESS_INTERFERENCE", "Wireless Interference"],
+  ["UPSTREAM_OUTAGE", "Upstream Provider Outage"],
+  ["CORE_ISSUE", "Core Network Issue"],
+  ["AUTH_FAILURE", "Authentication Failure"],
+  ["DNS_ISSUE", "DNS Issue"],
+  ["SECURITY", "DDoS / Security"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const INCIDENT_SEVERITIES = ["P1", "P2", "P3", "P4"] as const;
+// Incident besar — wajib root cause review & hanya ditutup NOC Manager.
+export const MAJOR_INCIDENT_SEVERITIES = ["P1", "P2"] as const;
+
+export const INCIDENT_STATUSES = [
+  "DETECTED",
+  "ACKNOWLEDGED",
+  "INVESTIGATING",
+  "MITIGATING",
+  "RESOLVED",
+  "CLOSED",
+] as const;
+
+export const MAINTENANCE_TYPES = [
+  ["PREVENTIVE", "Preventive"],
+  ["CORRECTIVE", "Corrective"],
+  ["EMERGENCY", "Emergency"],
+  ["FIRMWARE_UPGRADE", "Firmware Upgrade"],
+  ["FIBER", "Fiber Maintenance"],
+  ["POWER", "Power Maintenance"],
+  ["TOWER", "Tower Maintenance"],
+  ["CAPACITY", "Capacity Upgrade"],
+  ["SECURITY", "Security Hardening"],
+] as const;
+
+export const CHANGE_TYPES = ["STANDARD", "NORMAL", "MAJOR", "EMERGENCY"] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -472,6 +573,31 @@ export const STATUS_LABELS: Record<string, string> = {
   OVERDUE: "Jatuh Tempo",
   DAILY: "Harian",
   MONTHLY: "Bulanan",
+  // Phase 5
+  PLANNED: "Direncanakan",
+  DEGRADED: "Menurun",
+  DOWN: "Down",
+  ALLOCATED: "Teralokasi",
+  RELEASED: "Dilepas",
+  INFORMATIONAL: "Informational",
+  WARNING: "Warning",
+  MINOR: "Minor",
+  MAJOR: "Major",
+  CRITICAL: "Critical",
+  DETECTED: "Terdeteksi",
+  ACKNOWLEDGED: "Di-acknowledge",
+  INVESTIGATING: "Investigasi",
+  MITIGATING: "Mitigasi",
+  RESOLVED: "Pulih",
+  PENDING_REVIEW: "Menunggu Post-Review",
+  FAILED: "Gagal",
+  STANDARD: "Standard",
+  NORMAL: "Normal",
+  EMERGENCY: "Emergency",
+  P1: "P1 — Critical",
+  P2: "P2 — Major",
+  P3: "P3 — Minor",
+  P4: "P4 — Informational",
 };
 
 export function statusLabel(code: string | null | undefined): string {

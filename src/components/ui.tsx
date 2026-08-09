@@ -95,6 +95,36 @@ const STATUS_STYLES: Record<string, string> = {
   CLOSED: "is-approved",
   SERIALIZED: "is-pending",
   BULK: "is-neutral",
+  // NOC — network inventory & IPAM
+  PLANNED: "is-neutral",
+  DEGRADED: "is-pending",
+  DOWN: "is-rejected",
+  ALLOCATED: "is-approved",
+  RESERVED: "is-pending",
+  RELEASED: "is-neutral",
+  // NOC — alarm
+  INFORMATIONAL: "is-neutral",
+  WARNING: "is-pending",
+  MINOR: "is-pending",
+  MAJOR: "is-rejected",
+  CRITICAL: "is-rejected",
+  ACKNOWLEDGED: "is-pending",
+  CLEARED: "is-approved",
+  // NOC — incident
+  DETECTED: "is-rejected",
+  INVESTIGATING: "is-pending",
+  MITIGATING: "is-pending",
+  RESOLVED: "is-approved",
+  P1: "is-rejected",
+  P2: "is-rejected",
+  P3: "is-pending",
+  P4: "is-neutral",
+  // NOC — change management
+  PENDING_REVIEW: "is-pending",
+  FAILED: "is-rejected",
+  STANDARD: "is-neutral",
+  NORMAL: "is-pending",
+  EMERGENCY: "is-rejected",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

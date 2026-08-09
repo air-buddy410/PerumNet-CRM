@@ -87,6 +87,22 @@ export default async function AppLayout({
     });
   }
 
+  if (can(PERMISSIONS.NOC_VIEW)) {
+    groups.push({
+      title: "NOC",
+      items: [
+        { href: "/noc/incidents", label: "Incidents" },
+        { href: "/noc/alarms", label: "Alarms" },
+        { href: "/noc/maintenance", label: "Maintenance" },
+        { href: "/noc/changes", label: "Changes" },
+        { href: "/noc/sites", label: "Sites" },
+        { href: "/noc/devices", label: "Perangkat Jaringan" },
+        { href: "/noc/links", label: "Links" },
+        { href: "/noc/ipam", label: "IPAM" },
+      ],
+    });
+  }
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });

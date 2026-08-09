@@ -172,7 +172,7 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 | **2. Sales & CRM** | Campaign, lead, pipeline, activity, survey, quotation (versioned), customer, subscription | ✅ selesai (termasuk foto bukti survey + approval diskon quotation) |
 | **3. Inventory & Operational** | Item master, warehouse, serialized device, GR, stock issue, custody, WO, instalasi, return, opname | ✅ selesai (ledger immutable + reversal, custody bulk & serialized, gerbang penutupan WO, opname ber-approval, write-off ber-approval) |
 | **4. Finance & Project** | Cashbook, expense, reimbursement, cash advance, settlement, closing, project + rekonsiliasi | ✅ selesai (ledger kas immutable + approval matrix, advance overdue block, closing harian/bulanan dengan kunci periode, gerbang penutupan proyek) |
-| 5. NOC | Site/device/link inventory, IPAM, alarm, incident, outage, maintenance, change mgmt, NOC dashboard | |
+| **5. NOC** | Site/device/link inventory, IPAM, alarm, incident, outage, maintenance, change mgmt | ✅ selesai (IPAM anti-duplikat + wajib tertaut perangkat/layanan, incident lifecycle dengan timeline append-only & gerbang penutupan P1/P2 oleh NOC Manager + preventive action, maintenance ber-approval, change management dengan rollback plan wajib + post-review emergency + SoD reviewer≠eksekutor) |
 | 6. IT/DevOps | Server/app inventory, IT ticket, access request, deployment, backup, domain/SSL, dashboard | |
 | 7. Integrasi | Billing, MikroTik, RADIUS, monitoring, WhatsApp, GitHub, accounting, customer portal | |
 

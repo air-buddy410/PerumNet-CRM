@@ -85,6 +85,18 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "projects.view", module: "projects", action: "view", description: "Melihat proyek" },
   { code: "projects.manage", module: "projects", action: "manage", description: "Membuat & mengelola proyek + BoM" },
   { code: "projects.close", module: "projects", action: "close", description: "Menutup proyek (setelah rekonsiliasi)" },
+  // Phase 5 — NOC
+  { code: "noc.view", module: "noc", action: "view", description: "Melihat network inventory, IPAM, alarm, incident, maintenance, change" },
+  { code: "net_inventory.manage", module: "noc", action: "inventory", description: "Mengelola site, perangkat jaringan, dan link" },
+  { code: "ipam.manage", module: "noc", action: "ipam", description: "Mengelola subnet & alokasi IP" },
+  { code: "alarms.manage", module: "noc", action: "alarm", description: "Membuat, acknowledge, dan clear alarm" },
+  { code: "incidents.create", module: "noc", action: "incident_create", description: "Membuat incident ticket" },
+  { code: "incidents.manage", module: "noc", action: "incident_manage", description: "Acknowledge, update, resolve, tutup incident kecil" },
+  { code: "incidents.close", module: "noc", action: "incident_close", description: "Menutup incident besar P1/P2 (NOC Manager)" },
+  { code: "maintenance.manage", module: "noc", action: "maintenance", description: "Mengelola network maintenance" },
+  { code: "changes.create", module: "noc", action: "change_create", description: "Membuat change request" },
+  { code: "changes.implement", module: "noc", action: "change_implement", description: "Mengeksekusi change yang disetujui" },
+  { code: "changes.review", module: "noc", action: "change_review", description: "Post-review emergency change (NOC Manager)" },
 ];
 
 // Pemetaan permission per role.
@@ -108,10 +120,10 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
-  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW],
+  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review"],
   it_manager: [...BASE, "approvals.act"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
@@ -120,7 +132,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view"],
-  noc_engineer: BASE,
+  noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement"],
   developer: BASE,
   devops_engineer: BASE,
   it_support: BASE,
@@ -218,6 +230,7 @@ const APPROVAL_RULES: {
   { module: "quotation_discount", subtype: null, name: "Diskon Quotation > Rp500.000", min: 500_001, max: null, steps: [R("sales_manager"), OWN] },
   { module: "stock_opname", subtype: null, name: "Adjustment Stock Opname", min: 0, max: null, steps: [SUP, OWN] },
   { module: "device_writeoff", subtype: null, name: "Write-off Perangkat (Lost/Damaged)", min: 0, max: null, steps: [SUP, OWN] },
+  { module: "network_maintenance", subtype: null, name: "Network Maintenance", min: 0, max: null, steps: [R("noc_manager")] },
 ];
 
 async function main() {
