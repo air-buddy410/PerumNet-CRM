@@ -75,6 +75,19 @@ export default async function AppLayout({
     });
   }
 
+  if (can(PERMISSIONS.BILLING_VIEW)) {
+    groups.push({
+      title: "Billing",
+      items: [
+        { href: "/billing/invoices", label: "Invoices" },
+        { href: "/billing/runs", label: "Invoice Runs" },
+        { href: "/billing/receivables", label: "Aging Piutang" },
+        { href: "/billing/profiles", label: "Billing Profiles" },
+        { href: "/billing/addons", label: "Addon Services" },
+      ],
+    });
+  }
+
   const financeItems = [];
   if (can(PERMISSIONS.CASH_CREATE) || can(PERMISSIONS.FINANCE_VIEW))
     financeItems.push({ href: "/finance/transactions", label: "Transaksi Kas" });
