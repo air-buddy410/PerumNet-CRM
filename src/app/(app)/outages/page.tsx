@@ -8,6 +8,7 @@ export const metadata = { title: "Status Gangguan" };
 function durationText(start: Date, end: Date | null): string {
   const ms = (end ? end.getTime() : Date.now()) - start.getTime();
   const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "< 1 menit";
   if (minutes < 60) return `${minutes} menit`;
   const hours = Math.floor(minutes / 60);
   return `${hours} jam ${minutes % 60} menit`;
@@ -84,8 +85,13 @@ export default async function OutagesPage() {
                 </div>
                 <h3 className="font-medium">{o.title}</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  {o.area?.name ?? o.site?.name ?? "-"} · pulih {formatDateTime(o.resolvedAt)} · durasi{" "}
-                  {durationText(o.detectedAt, o.resolvedAt)}
+                  {[
+                    o.area?.name ?? o.site?.name,
+                    `pulih ${formatDateTime(o.resolvedAt)}`,
+                    `durasi ${durationText(o.detectedAt, o.resolvedAt)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </p>
                 {o.publicNote && (
                   <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{o.publicNote}</p>

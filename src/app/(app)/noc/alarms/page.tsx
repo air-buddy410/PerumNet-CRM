@@ -75,11 +75,28 @@ export default async function AlarmsPage({
               <tbody className="divide-y divide-slate-100">
                 {alarms.map((a) => (
                   <tr key={a.id} className={a.clearedAt ? "hover:bg-slate-50" : "bg-red-50/30"}>
-                    <td className="td font-mono text-xs">{a.alarmNumber}</td>
+                    <td className="td font-mono text-xs">
+                      {a.alarmNumber}
+                      {a.source !== "MANUAL" && (
+                        <span className="block font-sans text-[10px] uppercase tracking-wide text-slate-400">
+                          via {a.source}
+                        </span>
+                      )}
+                    </td>
                     <td className="td">
                       <Badge value={SEV_BADGE[a.severity] ?? "PENDING"} label={statusLabel(a.severity)} />
                     </td>
-                    <td className="td max-w-56 truncate text-xs">{a.message}</td>
+                    <td className="td max-w-56 text-xs">
+                      <span className="block truncate">{a.message}</span>
+                      {a.count > 1 && (
+                        <span
+                          className="text-[10px] font-semibold text-red-600"
+                          title={`Terjadi ${a.count}× — duplikat dikelompokkan (anti alarm-flooding)`}
+                        >
+                          ×{a.count} kejadian
+                        </span>
+                      )}
+                    </td>
                     <td className="td text-xs">
                       {a.device?.hostname ?? a.site?.siteCode ?? "-"}
                     </td>

@@ -71,12 +71,13 @@ export function hasPermission(user: CurrentUser, code: PermissionCode): boolean 
   return user.permissions.has(code);
 }
 
-// Guard untuk halaman & server action. Melempar redirect bila belum login,
-// dan error bila tidak berhak — mutasi selalu dicek di server, bukan di UI.
+// Guard untuk halaman & server action. Redirect ke /login bila belum login,
+// dan ke /forbidden bila tidak berhak — mutasi selalu dicek di server,
+// bukan di UI (dulu melempar Error → HTTP 500 mentah).
 export async function requirePermission(code: PermissionCode): Promise<CurrentUser> {
   const user = await requireUser();
   if (!user.permissions.has(code)) {
-    throw new Error(`Akses ditolak: memerlukan permission "${code}"`);
+    redirect(`/forbidden?perm=${encodeURIComponent(code)}`);
   }
   return user;
 }
