@@ -4,6 +4,12 @@
 **Sistem pembanding:** PERUMNET Helpdesk System v2.0.1 (Laravel, vendor "lubax"), sistem produksi pihak lain
 **Sistem kita:** PerumNet-CRM (Next.js + Prisma, 60 model, branch `feat/phase-2-sales-crm`)
 
+> **STATUS: CATATAN / BACKLOG — BUKAN PEKERJAAN AKTIF.**
+> Dokumen ini hasil riset banding, disimpan sebagai referensi. Prioritas saat ini tetap
+> menuntaskan PerumNet CRM sesuai `PRD-PerumNet-CRM.md`. Perbandingan dan penambahan fitur
+> dikerjakan **setelah** PRD tuntas. Jangan mulai implementasi apapun dari dokumen ini
+> tanpa instruksi eksplisit.
+
 ## 1. Metode & Batasan
 
 Eksplorasi dilakukan **read-only**: hanya HTTP GET untuk membaca struktur halaman (judul, kolom tabel, label field, nama input, opsi dropdown, tombol). Tidak ada form yang di-submit, tidak ada create/edit/delete, tidak ada export/download, tidak ada trigger job.

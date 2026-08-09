@@ -4,6 +4,12 @@
 **Dasar:** [FEATURE-GAP-ANALYSIS-HELPDESK-V2.md](FEATURE-GAP-ANALYSIS-HELPDESK-V2.md)
 **Status:** rancangan untuk direview — belum ada kode yang ditulis
 
+> **STATUS: CATATAN / BACKLOG — BUKAN PEKERJAAN AKTIF.**
+> Fase 8–15 di sini **belum disetujui untuk dikerjakan**. Prioritas saat ini adalah
+> menuntaskan PerumNet CRM sesuai `PRD-PerumNet-CRM.md` (7 fase PRD sudah selesai;
+> sisanya keputusan PO & adapter eksternal). Rancangan ini baru dieksekusi setelah itu,
+> dan hanya atas instruksi eksplisit.
+
 ## 0. Prinsip Rancangan
 
 1. **Jangan tiru model data mereka yang menempel.** Di sistem lama 1 pelanggan = 1 langganan. Kita pertahankan `Customer` ⟷ `Subscription` terpisah — pelanggan bisa punya lebih dari satu layanan, dan riwayat langganan tidak hilang saat pelanggan ganti paket.
