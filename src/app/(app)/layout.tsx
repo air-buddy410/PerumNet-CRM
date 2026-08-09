@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { SidebarNav, type NavGroup } from "@/components/nav";
 import CrmAppShell from "@/components/app-shell";
+import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { logout } from "@/lib/auth";
 import { PERMISSIONS } from "@/lib/constants";
@@ -89,9 +90,12 @@ export default async function AppLayout({
       navigation={<SidebarNav groups={groups} />}
       user={{ name: user.name, email: user.email }}
       mustChangePassword={user.mustChangePassword}
-      footerAction={
+      profileMenuAction={
         <form action={logoutAction}>
-          <button type="submit" className="crm-signout-button">Keluar</button>
+          <button type="submit" role="menuitem" className="crm-signout-button">
+            <LogOut aria-hidden="true" />
+            Keluar
+          </button>
         </form>
       }
     >

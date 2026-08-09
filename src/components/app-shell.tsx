@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Menu, ShieldCheck, UserRound, X } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Menu, ShieldCheck, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/logo";
 import type { NavGroup } from "@/components/nav";
 
@@ -11,7 +11,7 @@ type CrmAppShellProps = {
   children: ReactNode;
   groups: NavGroup[];
   navigation: ReactNode;
-  footerAction: ReactNode;
+  profileMenuAction: ReactNode;
   user: { name: string; email?: string | null };
   mustChangePassword?: boolean;
 };
@@ -45,11 +45,13 @@ export default function CrmAppShell({
   children,
   groups,
   navigation,
-  footerAction,
+  profileMenuAction,
   user,
   mustChangePassword = false,
 }: CrmAppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const title = useMemo(() => pageTitle(groups, pathname), [groups, pathname]);
 
@@ -67,6 +69,29 @@ export default function CrmAppShell({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    setProfileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [profileMenuOpen]);
 
   return (
     <div className="crm-shell">
@@ -87,7 +112,7 @@ export default function CrmAppShell({
           <X aria-hidden="true" />
         </button>
         <Link href="/dashboard" className="crm-brand" onClick={() => setMenuOpen(false)}>
-          <Logo markClassName="h-8 w-8" textClassName="text-sm" />
+          <Logo markClassName="h-10 w-[34px]" textClassName="text-sm" />
           <strong>CRM</strong>
         </Link>
         <div className="crm-sidebar-rule" />
@@ -106,7 +131,6 @@ export default function CrmAppShell({
             <UserRound aria-hidden="true" />
           </Link>
         </div>
-        <div className="crm-sidebar-signout">{footerAction}</div>
       </aside>
 
       <div className="crm-workspace">
@@ -126,11 +150,29 @@ export default function CrmAppShell({
             <i>/</i>
             <strong>{title}</strong>
           </div>
-          <div className="crm-topbar-actions">
-            <Link href="/profile" aria-label="Buka profil" className="crm-topbar-profile">
+          <div className="crm-topbar-actions" ref={profileMenuRef}>
+            <button
+              type="button"
+              aria-label="Buka menu akun"
+              aria-expanded={profileMenuOpen}
+              aria-controls="crm-profile-menu"
+              className="crm-topbar-profile"
+              onClick={() => setProfileMenuOpen((value) => !value)}
+            >
               <UserRound aria-hidden="true" />
               <span>{user.name}</span>
-            </Link>
+              <ChevronDown className="crm-topbar-profile-chevron" aria-hidden="true" />
+            </button>
+            {profileMenuOpen && (
+              <div id="crm-profile-menu" className="crm-profile-menu" role="menu" aria-label="Menu akun">
+                <Link href="/profile" role="menuitem" className="crm-profile-menu-link" onClick={() => setProfileMenuOpen(false)}>
+                  <UserRound aria-hidden="true" />
+                  Profil saya
+                </Link>
+                <div className="crm-profile-menu-rule" />
+                <div className="crm-profile-menu-logout">{profileMenuAction}</div>
+              </div>
+            )}
           </div>
         </header>
         {mustChangePassword && (

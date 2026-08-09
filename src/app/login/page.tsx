@@ -15,7 +15,7 @@ export default async function LoginPage({
     <main className="crm-login-page">
       <div className="crm-login-wrap">
         <div className="crm-login-brand">
-          <Logo markClassName="h-14 w-14" textClassName="text-2xl" />
+          <Logo markClassName="h-12 w-10" textClassName="text-[22px]" />
           <span>CRM &amp; OPERATIONS</span>
         </div>
         <div className="crm-login-card">
@@ -42,7 +42,9 @@ export default async function LoginPage({
                 name="identifier"
                 className="input"
                 autoComplete="username"
+                inputMode="email"
                 autoFocus
+                placeholder="nama@email.com"
                 required
               />
             </div>
@@ -56,6 +58,7 @@ export default async function LoginPage({
                 type="password"
                 className="input"
                 autoComplete="current-password"
+                placeholder="Masukkan password"
                 required
               />
             </div>
@@ -65,7 +68,7 @@ export default async function LoginPage({
           </form>
         </div>
         <p className="crm-login-footer">
-          © {new Date().getFullYear()} PerumNet — Internet Service Provider
+          © 2026 PerumNet. All Rights Reserved.
         </p>
       </div>
     </main>
