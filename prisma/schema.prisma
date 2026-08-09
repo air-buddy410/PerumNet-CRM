@@ -49,6 +49,18 @@ model User {
   createdCustomers Customer[]     @relation("CustomerCreator")
   subscriptions    Subscription[] @relation("SubscriptionCreator")
   attachments      Attachment[]   @relation("AttachmentUploader")
+
+  custodyLevels    CustodyLevel[]     @relation("CustodyLevels")
+  txAsCustodian    StockTransaction[] @relation("TxCustodian")
+  txCreated        StockTransaction[] @relation("TxCreator")
+  txPosted         StockTransaction[] @relation("TxPoster")
+  devicesInCustody SerializedDevice[] @relation("DeviceCustodian")
+  deviceMovements  DeviceMovement[]   @relation("DeviceMover")
+  woAsTechnician   WorkOrder[]        @relation("WoTechnician")
+  woCreated        WorkOrder[]        @relation("WoCreator")
+  woClosed         WorkOrder[]        @relation("WoCloser")
+  materialUsages   MaterialUsage[]    @relation("MaterialUser")
+  opnamesCreated   OpnameSession[]    @relation("OpnameCreator")
 }
 
 model Division {
@@ -221,6 +233,8 @@ model Category {
   code     String  @unique
   name     String
   isActive Boolean @default(true)
+
+  items Item[]
 
   @@index([type])
 }
@@ -441,6 +455,8 @@ model Customer {
   createdBy     User           @relation("CustomerCreator", fields: [createdById], references: [id])
   subscriptions Subscription[]
   surveys       Survey[]
+  devices       SerializedDevice[]
+  workOrders    WorkOrder[]
 }
 
 model Subscription {
@@ -469,6 +485,8 @@ model Subscription {
   customer  Customer @relation(fields: [customerId], references: [id])
   package   Package  @relation(fields: [packageId], references: [id])
   createdBy User     @relation("SubscriptionCreator", fields: [createdById], references: [id])
+  devices    SerializedDevice[]
+  workOrders WorkOrder[]
 
   @@index([status])
 }
@@ -488,4 +506,246 @@ model Attachment {
   uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
 
   @@index([entityType, entityId])
+}
+
+// ── Phase 3: Inventory & Operational ────────────────────────────
+// Prinsip (PRD §7, §15–18, §21, §53):
+//  - Stock HANYA berubah lewat StockTransaction berstatus POSTED.
+//  - Transaksi POSTED immutable; koreksi = transaksi reversal baru.
+//  - Stock tidak boleh negatif; serial number unik.
+//  - Perangkat serialized punya tepat satu lokasi & satu custodian aktif.
+
+model Warehouse {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  address  String?
+  isActive Boolean @default(true)
+
+  stockLevels StockLevel[]
+  devices     SerializedDevice[]
+  txFrom      StockTransaction[] @relation("TxFrom")
+  txTo        StockTransaction[] @relation("TxTo")
+  opnames     OpnameSession[]
+}
+
+model Item {
+  id           String  @id @default(cuid())
+  code         String  @unique
+  name         String
+  categoryId   String?
+  brand        String?
+  model        String?
+  unit         String  @default("pcs") // pcs | meter | roll | box
+  trackingType String  @default("BULK") // SERIALIZED | BULK
+  minStock     Int     @default(0)
+  isActive     Boolean @default(true)
+
+  category    Category?              @relation(fields: [categoryId], references: [id])
+  stockLevels StockLevel[]
+  devices     SerializedDevice[]
+  txLines     StockTransactionLine[]
+  opnameLines OpnameLine[]
+  custodyLevels CustodyLevel[]
+}
+
+// Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
+model StockLevel {
+  id          String @id @default(cuid())
+  itemId      String
+  warehouseId String
+  qty         Int    @default(0)
+
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([itemId, warehouseId])
+}
+
+// Saldo material bulk yang dibawa teknisi (virtual inventory custody).
+model CustodyLevel {
+  id          String @id @default(cuid())
+  custodianId String
+  itemId      String
+  qty         Int    @default(0)
+
+  custodian User @relation("CustodyLevels", fields: [custodianId], references: [id])
+  item      Item @relation(fields: [itemId], references: [id])
+
+  @@unique([custodianId, itemId])
+}
+
+model StockTransaction {
+  id              String    @id @default(cuid())
+  txNumber        String    @unique // GR-/ISS-/RET-/TRF-/ADJ-YYYYMM-####
+  type            String // GOODS_RECEIPT|STOCK_ISSUE|STOCK_RETURN|STOCK_TRANSFER|STOCK_ADJUSTMENT
+  status          String    @default("DRAFT") // DRAFT | POSTED
+  warehouseFromId String?
+  warehouseToId   String?
+  custodianId     String? // teknisi penerima (issue) / pengembali (return)
+  workOrderId     String?
+  referenceNote   String? // PO, proyek, dsb.
+  purpose         String // tujuan wajib (PRD §16.2)
+  notes           String?
+  createdById     String
+  postedById      String?
+  postedAt        DateTime?
+  reversalOfId    String?   @unique // transaksi ini adalah reversal dari ...
+  reversedById    String?   @unique // transaksi ini telah di-reverse oleh ...
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  warehouseFrom Warehouse?             @relation("TxFrom", fields: [warehouseFromId], references: [id])
+  warehouseTo   Warehouse?             @relation("TxTo", fields: [warehouseToId], references: [id])
+  custodian     User?                  @relation("TxCustodian", fields: [custodianId], references: [id])
+  workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  createdBy     User                   @relation("TxCreator", fields: [createdById], references: [id])
+  postedBy      User?                  @relation("TxPoster", fields: [postedById], references: [id])
+  reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
+  reversedBy    StockTransaction?      @relation("TxReversal")
+  lines         StockTransactionLine[]
+
+  @@index([type, status])
+}
+
+model StockTransactionLine {
+  id       String  @id @default(cuid())
+  txId     String
+  itemId   String
+  qty      Int
+  deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
+  snInput  String? // SN yang akan dibuat saat posting goods receipt
+
+  tx     StockTransaction  @relation(fields: [txId], references: [id])
+  item   Item              @relation(fields: [itemId], references: [id])
+  device SerializedDevice? @relation(fields: [deviceId], references: [id])
+
+  @@index([txId])
+}
+
+model SerializedDevice {
+  id              String    @id @default(cuid())
+  serialNumber    String    @unique
+  macAddress      String?
+  itemId          String
+  condition       String    @default("GOOD") // GOOD | DAMAGED
+  status          String    @default("AVAILABLE") // AVAILABLE|IN_CUSTODY|INSTALLED|UNDER_INSPECTION|DAMAGED|LOST|SCRAPPED
+  warehouseId     String? // terisi saat berada di gudang
+  custodianId     String? // terisi saat dibawa teknisi
+  subscriptionId  String? // terisi saat terpasang di pelanggan
+  customerId      String?
+  acquisitionCost BigInt?
+  warrantyUntil   DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  item         Item              @relation(fields: [itemId], references: [id])
+  warehouse    Warehouse?        @relation(fields: [warehouseId], references: [id])
+  custodian    User?             @relation("DeviceCustodian", fields: [custodianId], references: [id])
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  customer     Customer?         @relation(fields: [customerId], references: [id])
+  txLines      StockTransactionLine[]
+  movements    DeviceMovement[]
+
+  @@index([status])
+  @@index([custodianId])
+}
+
+// Riwayat perangkat — append-only.
+model DeviceMovement {
+  id          String   @id @default(cuid())
+  deviceId    String
+  action      String // RECEIVED|ISSUED|RETURNED|TRANSFERRED|INSTALLED|WRITEOFF_REQUESTED|WRITTEN_OFF|REVERSED
+  fromNote    String?
+  toNote      String?
+  txId        String?
+  workOrderId String?
+  byUserId    String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  device    SerializedDevice @relation(fields: [deviceId], references: [id])
+  byUser    User             @relation("DeviceMover", fields: [byUserId], references: [id])
+  workOrder WorkOrder?       @relation(fields: [workOrderId], references: [id])
+
+  @@index([deviceId, createdAt])
+}
+
+model WorkOrder {
+  id                   String    @id @default(cuid())
+  woNumber             String    @unique // WO-YYYYMM-####
+  type                 String // NEW_INSTALLATION|TROUBLESHOOTING|DEVICE_REPLACEMENT|DEVICE_RETRIEVAL|MAINTENANCE
+  status               String    @default("OPEN") // OPEN|ASSIGNED|IN_PROGRESS|COMPLETED|CLOSED|CANCELLED
+  customerId           String?
+  subscriptionId       String?
+  address              String
+  description          String
+  scheduledAt          DateTime?
+  technicianId         String?
+  resultNotes          String?
+  customerConfirmation String? // nama pelanggan yang mengonfirmasi (PRD §18)
+  createdById          String
+  closedById           String?
+  closedAt             DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  customer     Customer?          @relation(fields: [customerId], references: [id])
+  subscription Subscription?      @relation(fields: [subscriptionId], references: [id])
+  technician   User?              @relation("WoTechnician", fields: [technicianId], references: [id])
+  createdBy    User               @relation("WoCreator", fields: [createdById], references: [id])
+  closedBy     User?              @relation("WoCloser", fields: [closedById], references: [id])
+  transactions StockTransaction[]
+  movements    DeviceMovement[]
+  materialUsages MaterialUsage[]
+
+  @@index([status])
+  @@index([technicianId])
+}
+
+// Pemakaian material bulk pada WO — mengurangi custody teknisi.
+model MaterialUsage {
+  id          String   @id @default(cuid())
+  workOrderId String
+  itemId      String
+  qty         Int
+  note        String?
+  byUserId    String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+  byUser    User      @relation("MaterialUser", fields: [byUserId], references: [id])
+}
+
+model OpnameSession {
+  id                String    @id @default(cuid())
+  opnameNumber      String    @unique // OPN-YYYYMM-####
+  warehouseId       String
+  status            String    @default("OPEN") // OPEN|WAITING_APPROVAL|POSTED|CANCELLED
+  notes             String?
+  createdById       String
+  approvalRequestId String?
+  adjustmentTxId    String?
+  postedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  warehouse Warehouse    @relation(fields: [warehouseId], references: [id])
+  createdBy User         @relation("OpnameCreator", fields: [createdById], references: [id])
+  lines     OpnameLine[]
+}
+
+model OpnameLine {
+  id         String  @id @default(cuid())
+  sessionId  String
+  itemId     String
+  systemQty  Int // snapshot saat sesi dibuat (cut-off)
+  countedQty Int?
+  reason     String? // wajib bila variance != 0
+
+  session OpnameSession @relation(fields: [sessionId], references: [id])
+  item    Item          @relation(fields: [itemId], references: [id])
+
+  @@unique([sessionId, itemId])
 }

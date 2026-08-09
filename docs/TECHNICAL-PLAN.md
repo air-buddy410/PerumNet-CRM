@@ -170,7 +170,7 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 |---|---|---|
 | **1. Foundation** | Auth, user/role/permission, approval engine + matrix, audit log, master data (cost center, kategori, area, paket), app shell + dashboard | ✅ selesai |
 | **2. Sales & CRM** | Campaign, lead, pipeline, activity, survey, quotation (versioned), customer, subscription | ✅ selesai (termasuk foto bukti survey + approval diskon quotation) |
-| 3. Inventory & Operational | Item master, warehouse, serialized device, GR, stock issue, custody, WO, instalasi, return, opname | |
+| **3. Inventory & Operational** | Item master, warehouse, serialized device, GR, stock issue, custody, WO, instalasi, return, opname | ✅ selesai (ledger immutable + reversal, custody bulk & serialized, gerbang penutupan WO, opname ber-approval, write-off ber-approval) |
 | 4. Finance & Project | Cashbook, expense, reimbursement, cash advance, settlement, closing, project + rekonsiliasi | |
 | 5. NOC | Site/device/link inventory, IPAM, alarm, incident, outage, maintenance, change mgmt, NOC dashboard | |
 | 6. IT/DevOps | Server/app inventory, IT ticket, access request, deployment, backup, domain/SSL, dashboard | |

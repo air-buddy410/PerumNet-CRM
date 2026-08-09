@@ -82,6 +82,19 @@ const STATUS_STYLES: Record<string, string> = {
   SUSPENDED: "is-pending",
   TERMINATED: "is-rejected",
   INACTIVE: "is-neutral",
+  // Inventory & Operational
+  POSTED: "is-approved",
+  REVERSED: "is-neutral",
+  AVAILABLE: "is-approved",
+  IN_CUSTODY: "is-pending",
+  INSTALLED: "is-approved",
+  UNDER_INSPECTION: "is-pending",
+  DAMAGED: "is-rejected",
+  SCRAPPED: "is-neutral",
+  OPEN: "is-pending",
+  CLOSED: "is-approved",
+  SERIALIZED: "is-pending",
+  BULK: "is-neutral",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

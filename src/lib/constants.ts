@@ -58,6 +58,20 @@ export const PERMISSIONS = {
   SUBSCRIPTIONS_CREATE: "subscriptions.create",
   SUBSCRIPTIONS_EDIT: "subscriptions.edit",
   SUBSCRIPTIONS_ACTIVATE: "subscriptions.activate", // TIDAK untuk Sales (rule 17)
+  // Phase 3 — Inventory & Operational
+  INVENTORY_VIEW: "inventory.view",
+  ITEMS_MANAGE: "items.manage", // item & warehouse master
+  STOCK_CREATE: "stock.create", // buat draft transaksi
+  STOCK_POST: "stock.post", // posting transaksi (mengubah saldo)
+  STOCK_REVERSE: "stock.reverse",
+  DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
+  CUSTODY_VIEW: "custody.view",
+  WORK_ORDERS_VIEW: "work_orders.view",
+  WORK_ORDERS_CREATE: "work_orders.create",
+  WORK_ORDERS_ASSIGN: "work_orders.assign",
+  WORK_ORDERS_EXECUTE: "work_orders.execute", // teknisi
+  WORK_ORDERS_CLOSE: "work_orders.close", // koordinator
+  OPNAME_MANAGE: "opname.manage",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -110,6 +124,18 @@ export const APPROVAL_MODULES: {
   {
     code: "quotation_discount",
     name: "Diskon Quotation",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "stock_opname",
+    name: "Adjustment Stock Opname",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "device_writeoff",
+    name: "Write-off Perangkat",
     subtypes: [],
     manual: false,
   },
@@ -263,6 +289,69 @@ export const SUBSCRIPTION_TRANSITIONS: Record<string, string[]> = {
   TERMINATED: [],
 };
 
+// ── Phase 3: Inventory & Operational ────────────────────────────
+
+export const TRACKING_TYPES = [
+  ["SERIALIZED", "Serialized (per unit, wajib SN)"],
+  ["BULK", "Bulk (kuantitas)"],
+] as const;
+
+export const ITEM_UNITS = ["pcs", "meter", "roll", "box", "set"] as const;
+
+export const TX_TYPES = {
+  GOODS_RECEIPT: "GOODS_RECEIPT",
+  STOCK_ISSUE: "STOCK_ISSUE",
+  STOCK_RETURN: "STOCK_RETURN",
+  STOCK_TRANSFER: "STOCK_TRANSFER",
+  STOCK_ADJUSTMENT: "STOCK_ADJUSTMENT",
+} as const;
+
+export const TX_TYPE_LABELS: Record<string, string> = {
+  GOODS_RECEIPT: "Penerimaan Barang",
+  STOCK_ISSUE: "Pengeluaran ke Teknisi",
+  STOCK_RETURN: "Pengembalian Barang",
+  STOCK_TRANSFER: "Transfer Antar Gudang",
+  STOCK_ADJUSTMENT: "Penyesuaian (Opname)",
+};
+
+export const TX_PREFIX: Record<string, string> = {
+  GOODS_RECEIPT: "GR",
+  STOCK_ISSUE: "ISS",
+  STOCK_RETURN: "RET",
+  STOCK_TRANSFER: "TRF",
+  STOCK_ADJUSTMENT: "ADJ",
+};
+
+export const DEVICE_STATUSES = [
+  "AVAILABLE",
+  "IN_CUSTODY",
+  "INSTALLED",
+  "UNDER_INSPECTION",
+  "DAMAGED",
+  "LOST",
+  "SCRAPPED",
+] as const;
+
+export const WO_TYPES = [
+  ["NEW_INSTALLATION", "Instalasi Baru"],
+  ["TROUBLESHOOTING", "Troubleshooting"],
+  ["DEVICE_REPLACEMENT", "Penggantian Perangkat"],
+  ["DEVICE_RETRIEVAL", "Penarikan Perangkat"],
+  ["MAINTENANCE", "Maintenance"],
+] as const;
+
+export const WO_STATUSES = [
+  "OPEN",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CLOSED",
+  "CANCELLED",
+] as const;
+
+// Custody dianggap overdue setelah N hari (PRD §17) — konfigurasi awal.
+export const CUSTODY_OVERDUE_DAYS = 7;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -308,6 +397,24 @@ export const STATUS_LABELS: Record<string, string> = {
   INACTIVE: "Nonaktif",
   CANCELLED: "Dibatalkan",
   REJECTED: "Ditolak",
+  // Phase 3
+  POSTED: "Posted",
+  REVERSED: "Di-reverse",
+  AVAILABLE: "Tersedia",
+  IN_CUSTODY: "Dibawa Teknisi",
+  INSTALLED: "Terpasang",
+  UNDER_INSPECTION: "Inspeksi Write-off",
+  DAMAGED: "Rusak",
+  SCRAPPED: "Scrap",
+  OPEN: "Terbuka",
+  CLOSED: "Ditutup",
+  SERIALIZED: "Serialized",
+  BULK: "Bulk",
+  NEW_INSTALLATION: "Instalasi Baru",
+  TROUBLESHOOTING: "Troubleshooting",
+  DEVICE_REPLACEMENT: "Penggantian Perangkat",
+  DEVICE_RETRIEVAL: "Penarikan Perangkat",
+  MAINTENANCE: "Maintenance",
 };
 
 export function statusLabel(code: string | null | undefined): string {

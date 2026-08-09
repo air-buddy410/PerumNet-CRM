@@ -31,6 +31,21 @@ CRM & Operations Management System untuk ISP PerumNet.
   Terminasi; aktivasi butuh izin khusus (bukan Sales — rule 17)
 - Service layer `src/lib/crm.ts` menegakkan seluruh business rules di server
 
+**Phase 3 — Inventory & Operational** ✅
+
+- Item master (serialized/bulk), multi-gudang, posisi stock dengan flag low-stock
+- Ledger transaksi stock **immutable**: GR (input SN, duplikat ditolak), issue ke
+  teknisi, return, transfer, adjustment — saldo hanya berubah saat posting;
+  koreksi via reversal (`src/lib/inventory.ts`)
+- Perangkat serialized: satu lokasi & satu custodian aktif, riwayat pergerakan
+  lengkap, write-off Lost/Damaged dengan kronologi + approval (Supervisor → Owner)
+- Technician custody (perangkat + material bulk) dengan flag overdue
+- Work order: assign → mulai → pasang/tarik perangkat → pemakaian material →
+  selesai (konfirmasi pelanggan) → tutup dengan gerbang PRD §18 (material
+  dipertanggungjawabkan, foto bukti, verifikator ≠ teknisi)
+- Stock opname: cut-off snapshot, variance wajib alasan, approval, posting
+  adjustment otomatis
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

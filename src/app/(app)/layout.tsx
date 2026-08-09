@@ -46,6 +46,29 @@ export default async function AppLayout({
     crmItems.push({ href: "/crm/subscriptions", label: "Subscriptions" });
   if (crmItems.length) groups.push({ title: "CRM", items: crmItems });
 
+  const inventoryItems = [];
+  if (can(PERMISSIONS.INVENTORY_VIEW)) {
+    inventoryItems.push(
+      { href: "/inventory/stock", label: "Posisi Stock" },
+      { href: "/inventory/transactions", label: "Transaksi Stock" },
+      { href: "/inventory/devices", label: "Perangkat" },
+      { href: "/inventory/items", label: "Item Master" },
+      { href: "/inventory/warehouses", label: "Gudang" },
+      { href: "/inventory/opname", label: "Stock Opname" }
+    );
+  }
+  if (can(PERMISSIONS.CUSTODY_VIEW))
+    inventoryItems.push({ href: "/inventory/custody", label: "Custody Teknisi" });
+  if (inventoryItems.length)
+    groups.push({ title: "Inventory", items: inventoryItems });
+
+  if (can(PERMISSIONS.WORK_ORDERS_VIEW)) {
+    groups.push({
+      title: "Operasional",
+      items: [{ href: "/operations/work-orders", label: "Work Orders" }],
+    });
+  }
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });
