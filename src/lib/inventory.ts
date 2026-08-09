@@ -45,6 +45,7 @@ interface DraftHeader {
   warehouseToId?: string;
   custodianId?: string;
   workOrderId?: string;
+  projectId?: string;
   purpose: string;
   referenceNote?: string;
   notes?: string;
@@ -152,6 +153,7 @@ export async function createDraftTransaction(
       warehouseToId: header.warehouseToId ?? null,
       custodianId: header.custodianId ?? null,
       workOrderId: header.workOrderId ?? null,
+      projectId: header.projectId ?? null,
       purpose: header.purpose,
       referenceNote: header.referenceNote,
       notes: header.notes,
@@ -447,6 +449,7 @@ export async function reverseTransaction(
           warehouseToId: tx.warehouseToId,
           custodianId: tx.custodianId,
           workOrderId: tx.workOrderId,
+          projectId: tx.projectId,
           purpose: `Reversal ${tx.txNumber}: ${reason}`,
           createdById: user.id,
           postedById: user.id,

@@ -69,6 +69,24 @@ export default async function AppLayout({
     });
   }
 
+  const financeItems = [];
+  if (can(PERMISSIONS.CASH_CREATE) || can(PERMISSIONS.FINANCE_VIEW))
+    financeItems.push({ href: "/finance/transactions", label: "Transaksi Kas" });
+  if (can(PERMISSIONS.FINANCE_VIEW)) {
+    financeItems.push(
+      { href: "/finance/cashbooks", label: "Cashbooks" },
+      { href: "/finance/closings", label: "Closing Kas" }
+    );
+  }
+  if (financeItems.length) groups.push({ title: "Finance", items: financeItems });
+
+  if (can(PERMISSIONS.PROJECTS_VIEW)) {
+    groups.push({
+      title: "Projects",
+      items: [{ href: "/projects", label: "Daftar Proyek" }],
+    });
+  }
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });

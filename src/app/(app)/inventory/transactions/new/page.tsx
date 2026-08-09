@@ -19,7 +19,7 @@ export default async function NewTransactionPage({
   const type = sp.type ?? "";
   if (!VALID_TYPES.includes(type)) notFound();
 
-  const [warehouses, bulkItems, serialItems, technicians, workOrders, availableDevices, custodyDevices] =
+  const [warehouses, bulkItems, serialItems, technicians, workOrders, projects, availableDevices, custodyDevices] =
     await Promise.all([
       db.warehouse.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
       db.item.findMany({
@@ -35,6 +35,10 @@ export default async function NewTransactionPage({
         where: { status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] } },
         orderBy: { createdAt: "desc" },
         take: 50,
+      }),
+      db.project.findMany({
+        where: { status: "OPEN" },
+        orderBy: { createdAt: "desc" },
       }),
       type === "STOCK_ISSUE" || type === "STOCK_TRANSFER"
         ? db.serializedDevice.findMany({
@@ -111,6 +115,15 @@ export default async function NewTransactionPage({
               <option value="">— tanpa WO —</option>
               {workOrders.map((wo) => (
                 <option key={wo.id} value={wo.id}>{wo.woNumber} — {wo.address}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="projectId">Proyek (referensi)</label>
+            <select id="projectId" name="projectId" className="input" defaultValue="">
+              <option value="">— tanpa proyek —</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.projectNumber} — {p.name}</option>
               ))}
             </select>
           </div>

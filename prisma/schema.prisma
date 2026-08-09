@@ -61,6 +61,14 @@ model User {
   woClosed         WorkOrder[]        @relation("WoCloser")
   materialUsages   MaterialUsage[]    @relation("MaterialUser")
   opnamesCreated   OpnameSession[]    @relation("OpnameCreator")
+
+  cashClaims      CashTransaction[] @relation("CashClaimant")
+  cashCreated     CashTransaction[] @relation("CashCreator")
+  cashPosted      CashTransaction[] @relation("CashPoster")
+  closingsCreated CashClosing[]     @relation("ClosingCreator")
+  projectsManaged Project[]         @relation("ProjectManager")
+  projectsClosed  Project[]         @relation("ProjectCloser")
+  projectsCreated Project[]         @relation("ProjectCreator")
 }
 
 model Division {
@@ -225,6 +233,8 @@ model CostCenter {
   name        String
   description String?
   isActive    Boolean @default(true)
+
+  cashTransactions CashTransaction[]
 }
 
 model Category {
@@ -234,7 +244,8 @@ model Category {
   name     String
   isActive Boolean @default(true)
 
-  items Item[]
+  items            Item[]
+  cashTransactions CashTransaction[]
 
   @@index([type])
 }
@@ -248,6 +259,7 @@ model Area {
 
   campaigns Campaign[]
   customers Customer[]
+  projects  Project[]
 }
 
 model Package {
@@ -457,6 +469,7 @@ model Customer {
   surveys       Survey[]
   devices       SerializedDevice[]
   workOrders    WorkOrder[]
+  projects      Project[]
 }
 
 model Subscription {
@@ -547,6 +560,7 @@ model Item {
   txLines     StockTransactionLine[]
   opnameLines OpnameLine[]
   custodyLevels CustodyLevel[]
+  bomLines      ProjectBomLine[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -584,6 +598,7 @@ model StockTransaction {
   warehouseToId   String?
   custodianId     String? // teknisi penerima (issue) / pengembali (return)
   workOrderId     String?
+  projectId       String? // material proyek (PRD §19)
   referenceNote   String? // PO, proyek, dsb.
   purpose         String // tujuan wajib (PRD §16.2)
   notes           String?
@@ -599,6 +614,7 @@ model StockTransaction {
   warehouseTo   Warehouse?             @relation("TxTo", fields: [warehouseToId], references: [id])
   custodian     User?                  @relation("TxCustodian", fields: [custodianId], references: [id])
   workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  project       Project?               @relation(fields: [projectId], references: [id])
   createdBy     User                   @relation("TxCreator", fields: [createdById], references: [id])
   postedBy      User?                  @relation("TxPoster", fields: [postedById], references: [id])
   reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
@@ -699,6 +715,7 @@ model WorkOrder {
   transactions StockTransaction[]
   movements    DeviceMovement[]
   materialUsages MaterialUsage[]
+  cashTransactions CashTransaction[]
 
   @@index([status])
   @@index([technicianId])
@@ -748,4 +765,137 @@ model OpnameLine {
   item    Item          @relation(fields: [itemId], references: [id])
 
   @@unique([sessionId, itemId])
+}
+
+// ── Phase 4: Finance & Project ──────────────────────────────────
+// Prinsip (PRD §22–27, §19, §53):
+//  - Saldo cashbook HANYA berubah lewat posting CashTransaction.
+//  - Transaksi posted immutable; koreksi = reversal.
+//  - Saldo tidak boleh negatif; expense wajib kategori + cost center + bukti.
+//  - Cash advance wajib due date; overdue memblokir pengajuan baru.
+//  - Monthly closing mengunci periode (reversal periode terkunci ditolak).
+
+model Cashbook {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  balance     BigInt    @default(0) // HANYA diubah engine posting
+  lockedUntil DateTime? // monthly closing lock
+  isActive    Boolean   @default(true)
+
+  transactions CashTransaction[] @relation("CashbookMain")
+  transfersIn  CashTransaction[] @relation("CashbookTo")
+  closings     CashClosing[]
+}
+
+model CashTransaction {
+  id               String    @id @default(cuid())
+  txNumber         String    @unique // CSH-/EXP-/RBM-/ADV-/STL-/CTF-YYYYMM-####
+  type             String // TOP_UP|EXPENSE|REIMBURSEMENT|CASH_ADVANCE|ADVANCE_SETTLEMENT|CASH_TRANSFER
+  status           String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|POSTED|REJECTED|CANCELLED
+  cashbookId       String
+  cashbookToId     String? // transfer
+  amount           BigInt // nominal utama (settlement: porsi expense)
+  cashReturnAmount BigInt    @default(0) // settlement: kas dikembalikan
+  categoryId       String?
+  costCenterId     String?
+  recipient        String? // penerima dana (wajib expense)
+  purpose          String // tujuan wajib (PRD §23)
+  receiptRef       String? // no. nota — deteksi duplikasi (PRD §24)
+  referenceNote    String?
+  workOrderId      String?
+  projectId        String?
+  advanceId        String? // settlement → advance induk
+  dueDate          DateTime? // cash advance
+  settledAmount    BigInt    @default(0) // advance: akumulasi pertanggungjawaban
+  settledAt        DateTime?
+  claimantId       String? // reimbursement
+  approvalRequestId String?
+  createdById      String
+  postedById       String?
+  postedAt         DateTime?
+  reversalOfId     String?   @unique
+  reversedById     String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  cashbook    Cashbook          @relation("CashbookMain", fields: [cashbookId], references: [id])
+  cashbookTo  Cashbook?         @relation("CashbookTo", fields: [cashbookToId], references: [id])
+  category    Category?         @relation(fields: [categoryId], references: [id])
+  costCenter  CostCenter?       @relation(fields: [costCenterId], references: [id])
+  workOrder   WorkOrder?        @relation(fields: [workOrderId], references: [id])
+  project     Project?          @relation(fields: [projectId], references: [id])
+  advance     CashTransaction?  @relation("AdvanceSettlements", fields: [advanceId], references: [id])
+  settlements CashTransaction[] @relation("AdvanceSettlements")
+  claimant    User?             @relation("CashClaimant", fields: [claimantId], references: [id])
+  createdBy   User              @relation("CashCreator", fields: [createdById], references: [id])
+  postedBy    User?             @relation("CashPoster", fields: [postedById], references: [id])
+  reversalOf  CashTransaction?  @relation("CashReversal", fields: [reversalOfId], references: [id])
+  reversedBy  CashTransaction?  @relation("CashReversal")
+
+  @@index([type, status])
+  @@index([cashbookId, postedAt])
+  @@index([createdById])
+}
+
+model CashClosing {
+  id              String   @id @default(cuid())
+  closingNumber   String   @unique // CLS-YYYYMM-####
+  cashbookId      String
+  type            String // DAILY | MONTHLY
+  closingDate     DateTime
+  systemBalance   BigInt
+  physicalBalance BigInt
+  variance        BigInt // physical - system (PRD §27)
+  reason          String? // wajib bila variance != 0
+  lockedUntil     DateTime? // monthly: batas periode terkunci
+  createdById     String
+  createdAt       DateTime @default(now())
+
+  cashbook  Cashbook @relation(fields: [cashbookId], references: [id])
+  createdBy User     @relation("ClosingCreator", fields: [createdById], references: [id])
+
+  @@index([cashbookId, closingDate])
+}
+
+model Project {
+  id            String    @id @default(cuid())
+  projectNumber String    @unique // PRJ-YYYY-####
+  name          String
+  customerId    String?
+  areaId        String?
+  managerId     String
+  budget        BigInt    @default(0)
+  status        String    @default("OPEN") // OPEN|CLOSED|CANCELLED
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  closedById    String?
+  closedAt      DateTime?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  customer          Customer?          @relation(fields: [customerId], references: [id])
+  area              Area?              @relation(fields: [areaId], references: [id])
+  manager           User               @relation("ProjectManager", fields: [managerId], references: [id])
+  closedBy          User?              @relation("ProjectCloser", fields: [closedById], references: [id])
+  createdBy         User               @relation("ProjectCreator", fields: [createdById], references: [id])
+  bomLines          ProjectBomLine[]
+  cashTransactions  CashTransaction[]
+  stockTransactions StockTransaction[]
+
+  @@index([status])
+}
+
+model ProjectBomLine {
+  id         String @id @default(cuid())
+  projectId  String
+  itemId     String
+  plannedQty Int
+
+  project Project @relation(fields: [projectId], references: [id])
+  item    Item    @relation(fields: [itemId], references: [id])
+
+  @@unique([projectId, itemId])
 }

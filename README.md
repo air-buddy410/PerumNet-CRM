@@ -46,6 +46,20 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Stock opname: cut-off snapshot, variance wajib alasan, approval, posting
   adjustment otomatis
 
+**Phase 4 — Finance & Project** ✅
+
+- Petty cash multi-cashbook (7 kas per divisi, PRD §22) — saldo **hanya**
+  berubah lewat posting; saldo negatif ditolak (`src/lib/finance.ts`)
+- Expense & reimbursement: kategori + cost center + bukti wajib, approval
+  matrix petty cash, nota terdeteksi duplikat (§23–24)
+- Cash advance: due date wajib, **overdue memblokir pengajuan baru** (rule 13),
+  settlement = pertanggungjawaban belanja + pengembalian kas (§25)
+- Reversal + closing harian (variance wajib alasan) & bulanan (kunci periode —
+  transaksi periode terkunci tidak bisa di-reverse) (§27)
+- Project: BoM vs realisasi material, biaya proyek tertaut, **gerbang
+  penutupan** — perangkat dipertanggungjawabkan, advance selesai, tidak ada
+  transaksi menggantung, dokumentasi ada (§19, rule 8)
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

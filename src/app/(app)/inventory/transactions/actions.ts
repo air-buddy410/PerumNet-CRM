@@ -68,6 +68,7 @@ export async function createTransactionAction(formData: FormData): Promise<void>
       warehouseToId: String(formData.get("warehouseToId") ?? "") || undefined,
       custodianId: String(formData.get("custodianId") ?? "") || undefined,
       workOrderId: String(formData.get("workOrderId") ?? "") || undefined,
+      projectId: String(formData.get("projectId") ?? "") || undefined,
       purpose: String(formData.get("purpose") ?? ""),
       referenceNote: String(formData.get("referenceNote") ?? "") || undefined,
       notes: String(formData.get("notes") ?? "") || undefined,

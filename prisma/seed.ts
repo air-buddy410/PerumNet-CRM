@@ -75,11 +75,22 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "work_orders.execute", module: "work_orders", action: "execute", description: "Melaksanakan WO (teknisi)" },
   { code: "work_orders.close", module: "work_orders", action: "close", description: "Memverifikasi & menutup WO" },
   { code: "opname.manage", module: "inventory", action: "opname", description: "Mengelola sesi stock opname" },
+  // Phase 4 — Finance & Project
+  { code: "finance.view", module: "finance", action: "view", description: "Melihat cashbook, transaksi kas, dan closing" },
+  { code: "cash.create", module: "finance", action: "create", description: "Membuat draft pengajuan kas (expense/reimbursement/advance)" },
+  { code: "cash.post", module: "finance", action: "post", description: "Posting transaksi kas (mengubah saldo)" },
+  { code: "cash.reverse", module: "finance", action: "reverse", description: "Reversal transaksi kas posted" },
+  { code: "cash.manage", module: "finance", action: "manage", description: "Top-up, transfer antar kas, master cashbook" },
+  { code: "closings.manage", module: "finance", action: "closing", description: "Closing harian & bulanan" },
+  { code: "projects.view", module: "projects", action: "view", description: "Melihat proyek" },
+  { code: "projects.manage", module: "projects", action: "manage", description: "Membuat & mengelola proyek + BoM" },
+  { code: "projects.close", module: "projects", action: "close", description: "Menutup proyek (setelah rekonsiliasi)" },
 ];
 
 // Pemetaan permission per role.
 const ALL = PERMISSIONS.map((p) => p.code);
-const BASE = ["dashboard.view", "approvals.view", "approvals.create"];
+// cash.create untuk semua role: seluruh divisi dapat mengajukan expense (PRD §22).
+const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create"];
 const CRM_VIEW = [
   "campaigns.view", "leads.view", "opportunities.view", "surveys.view",
   "quotations.view", "customers.view", "subscriptions.view",
@@ -97,13 +108,13 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW],
-  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view"],
+  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW],
   it_manager: [...BASE, "approvals.act"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
-  project_manager: [...BASE, "approvals.act", ...INV_VIEW],
+  project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
   sales: [...BASE, ...SALES_CORE],
   customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view"],
@@ -350,6 +361,20 @@ async function main() {
         minStock: it.minStock,
       },
     });
+  }
+
+  console.log("Seeding cashbooks...");
+  const CASHBOOKS: [string, string][] = [
+    ["KAS-KANTOR", "Petty Cash Kantor"],
+    ["KAS-OPS", "Petty Cash Operational"],
+    ["KAS-PRJ", "Petty Cash Project"],
+    ["KAS-SLS", "Petty Cash Sales"],
+    ["KAS-MKT", "Petty Cash Marketing"],
+    ["KAS-NOC", "Petty Cash NOC"],
+    ["KAS-IT", "Petty Cash IT/DevOps"],
+  ];
+  for (const [code, name] of CASHBOOKS) {
+    await db.cashbook.upsert({ where: { code }, update: { name }, create: { code, name } });
   }
 
   console.log("Seeding approval matrix...");

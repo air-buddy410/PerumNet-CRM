@@ -72,6 +72,16 @@ export const PERMISSIONS = {
   WORK_ORDERS_EXECUTE: "work_orders.execute", // teknisi
   WORK_ORDERS_CLOSE: "work_orders.close", // koordinator
   OPNAME_MANAGE: "opname.manage",
+  // Phase 4 — Finance & Project
+  FINANCE_VIEW: "finance.view",
+  CASH_CREATE: "cash.create", // buat draft pengajuan kas (semua divisi)
+  CASH_POST: "cash.post", // posting (mengubah saldo) — Finance
+  CASH_REVERSE: "cash.reverse",
+  CASH_MANAGE: "cash.manage", // top-up, transfer, master cashbook
+  CLOSINGS_MANAGE: "closings.manage",
+  PROJECTS_VIEW: "projects.view",
+  PROJECTS_MANAGE: "projects.manage",
+  PROJECTS_CLOSE: "projects.close",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -352,6 +362,47 @@ export const WO_STATUSES = [
 // Custody dianggap overdue setelah N hari (PRD §17) — konfigurasi awal.
 export const CUSTODY_OVERDUE_DAYS = 7;
 
+// ── Phase 4: Finance & Project ──────────────────────────────────
+
+export const CASH_TX_TYPES = {
+  TOP_UP: "TOP_UP",
+  EXPENSE: "EXPENSE",
+  REIMBURSEMENT: "REIMBURSEMENT",
+  CASH_ADVANCE: "CASH_ADVANCE",
+  ADVANCE_SETTLEMENT: "ADVANCE_SETTLEMENT",
+  CASH_TRANSFER: "CASH_TRANSFER",
+} as const;
+
+export const CASH_TX_LABELS: Record<string, string> = {
+  TOP_UP: "Top-up Kas",
+  EXPENSE: "Pengeluaran Langsung",
+  REIMBURSEMENT: "Reimbursement",
+  CASH_ADVANCE: "Cash Advance",
+  ADVANCE_SETTLEMENT: "Settlement Advance",
+  CASH_TRANSFER: "Transfer Antar Kas",
+};
+
+export const CASH_TX_PREFIX: Record<string, string> = {
+  TOP_UP: "CSH",
+  EXPENSE: "EXP",
+  REIMBURSEMENT: "RBM",
+  CASH_ADVANCE: "ADV",
+  ADVANCE_SETTLEMENT: "STL",
+  CASH_TRANSFER: "CTF",
+};
+
+// Tipe yang wajib melewati approval matrix petty_cash sebelum posting.
+export const CASH_TYPES_NEED_APPROVAL = [
+  "EXPENSE",
+  "REIMBURSEMENT",
+  "CASH_ADVANCE",
+] as const;
+
+// Tipe yang wajib memiliki bukti (attachment) sebelum diajukan/diposting.
+export const CASH_TYPES_NEED_EVIDENCE = ["EXPENSE", "REIMBURSEMENT"] as const;
+
+export const PROJECT_STATUSES = ["OPEN", "CLOSED", "CANCELLED"] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -415,6 +466,12 @@ export const STATUS_LABELS: Record<string, string> = {
   DEVICE_REPLACEMENT: "Penggantian Perangkat",
   DEVICE_RETRIEVAL: "Penarikan Perangkat",
   MAINTENANCE: "Maintenance",
+  // Phase 4
+  SETTLED: "Selesai Dipertanggungjawabkan",
+  OUTSTANDING: "Belum Selesai",
+  OVERDUE: "Jatuh Tempo",
+  DAILY: "Harian",
+  MONTHLY: "Bulanan",
 };
 
 export function statusLabel(code: string | null | undefined): string {
