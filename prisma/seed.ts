@@ -138,6 +138,9 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "hrd.view", module: "hrd", action: "view", description: "Melihat data karyawan, jadwal, absensi, dan rekap" },
   { code: "hrd.manage", module: "hrd", action: "manage", description: "Mengelola karyawan, shift, lokasi absen, jadwal" },
   { code: "attendance.self", module: "hrd", action: "self", description: "Absen mandiri & mengajukan izin/lembur" },
+  // Phase 15 — Kanal Pelanggan
+  { code: "channels.view", module: "channels", action: "view", description: "Melihat template pesan, antrian kirim, dan pengumuman" },
+  { code: "channels.manage", module: "channels", action: "manage", description: "Mengelola template, blast pesan, pengumuman, dan antrian" },
 ];
 
 // Pemetaan permission per role.
@@ -164,16 +167,16 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
-  marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
+  marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign", "channels.view", "channels.manage"],
   sales: [...BASE, ...SALES_CORE],
-  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage"],
+  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage", "channels.view", "channels.manage"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
   noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement", "ftth.manage"],
@@ -558,6 +561,33 @@ async function main() {
       where: { name: c.name },
       update: { slaHours: c.slaHours ?? null, workflowId: c.workflowId ?? null },
       create: { name: c.name, slaHours: c.slaHours ?? null, workflowId: c.workflowId ?? null },
+    });
+  }
+
+  console.log("Seeding message templates...");
+  const TEMPLATES: { code: string; name: string; channel: string; subject?: string; body: string }[] = [
+    {
+      code: "INVOICE_TERBIT", name: "Tagihan Terbit", channel: "WHATSAPP",
+      body: "Halo {{nama}}, tagihan {{periode}} sebesar {{jumlah}} telah terbit dan jatuh tempo {{jatuh_tempo}}. Terima kasih.",
+    },
+    {
+      code: "TAGIHAN_JATUH_TEMPO", name: "Pengingat Jatuh Tempo", channel: "WHATSAPP",
+      body: "Halo {{nama}}, tagihan {{nomor_invoice}} sebesar {{jumlah}} jatuh tempo {{jatuh_tempo}}. Mohon segera diselesaikan.",
+    },
+    {
+      code: "GANGGUAN_INFO", name: "Info Gangguan", channel: "WHATSAPP",
+      body: "Pelanggan yth {{nama}}, saat ini terjadi gangguan di area Anda. {{keterangan}} Estimasi pemulihan {{eta}}. Mohon maaf atas ketidaknyamanannya.",
+    },
+    {
+      code: "TIKET_SELESAI", name: "Tiket Selesai", channel: "WHATSAPP",
+      body: "Halo {{nama}}, laporan Anda ({{nomor_tiket}}) telah kami selesaikan. {{resolusi}} Terima kasih.",
+    },
+  ];
+  for (const t of TEMPLATES) {
+    await db.messageTemplate.upsert({
+      where: { code: t.code },
+      update: { name: t.name, channel: t.channel, body: t.body, subject: t.subject ?? null },
+      create: { code: t.code, name: t.name, channel: t.channel, body: t.body, subject: t.subject ?? null },
     });
   }
 

@@ -177,6 +177,18 @@ export default async function AppLayout({
       groups.push({ title: "IT Support", items: supportItems });
   }
 
+  if (can(PERMISSIONS.CHANNELS_VIEW)) {
+    groups.push({
+      title: "Kanal Pelanggan",
+      items: [
+        { href: "/channels/outbox", label: "Antrian Pesan" },
+        { href: "/channels/templates", label: "Template Pesan" },
+        { href: "/channels/preferences", label: "Preferensi Notifikasi" },
+        { href: "/channels/announcements", label: "Pengumuman & Promo" },
+      ],
+    });
+  }
+
   const hrdItems = [];
   if (can(PERMISSIONS.ATTENDANCE_SELF))
     hrdItems.push({ href: "/hrd/my-attendance", label: "Absensi Saya" });

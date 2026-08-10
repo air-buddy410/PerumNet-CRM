@@ -134,6 +134,9 @@ export const PERMISSIONS = {
   HRD_VIEW: "hrd.view", // data karyawan, rekap, jadwal
   HRD_MANAGE: "hrd.manage", // master karyawan, shift, lokasi, jadwal
   ATTENDANCE_SELF: "attendance.self", // absen mandiri + ajukan izin/lembur
+  // Phase 15 — Kanal Pelanggan
+  CHANNELS_VIEW: "channels.view",
+  CHANNELS_MANAGE: "channels.manage", // template, blast, pengumuman, antrian
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -730,6 +733,25 @@ export const GATEWAY_TX_STATUSES = [
   "FAILED",
 ] as const;
 
+// ── Phase 15: Kanal Pelanggan ───────────────────────────────────
+
+// Preferensi notifikasi pelanggan (meniru sistem lama: None|WA|Email|App).
+export const CUSTOMER_CHANNELS = [
+  ["NONE", "Tidak menerima"],
+  ["WHATSAPP", "WhatsApp"],
+  ["EMAIL", "Email"],
+  ["APP", "Aplikasi Pelanggan"],
+] as const;
+
+// Kanal yang bisa dikirimi pesan (NONE bukan kanal kirim).
+export const MESSAGE_CHANNELS = [
+  ["WHATSAPP", "WhatsApp"],
+  ["EMAIL", "Email"],
+  ["APP", "Aplikasi Pelanggan"],
+] as const;
+
+export const OUTBOUND_STATUSES = ["QUEUED", "SENDING", "SENT", "FAILED", "SKIPPED"] as const;
+
 // ── Phase 14: HRD & Absensi ─────────────────────────────────────
 
 export const EMPLOYEE_TYPES = [
@@ -967,6 +989,12 @@ export const STATUS_LABELS: Record<string, string> = {
   CONTRACT: "Kontrak",
   PROBATION: "Probation",
   ANNUAL: "Cuti Tahunan",
+  // Phase 15
+  WHATSAPP: "WhatsApp",
+  EMAIL: "Email",
+  APP: "Aplikasi",
+  NONE: "Tidak menerima",
+  SENDING: "Mengirim",
   ENABLE: "Aktifkan",
   DISABLE: "Blokir",
   SYNC: "Sinkronisasi",

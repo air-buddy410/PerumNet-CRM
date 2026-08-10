@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BookOpenCheck, Boxes, CalendarClock, ChevronDown, ClipboardCheck, Contact, FolderKanban, Headphones, LayoutDashboard, LifeBuoy, Megaphone, RadioTower, Receipt, Server, Settings, UsersRound, Wallet, Wrench } from "lucide-react";
+import { Activity, BookOpenCheck, Boxes, CalendarClock, MessagesSquare, ChevronDown, ClipboardCheck, Contact, FolderKanban, Headphones, LayoutDashboard, LifeBuoy, Megaphone, RadioTower, Receipt, Server, Settings, UsersRound, Wallet, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCrmMenu } from "@/components/app-shell";
 
@@ -58,6 +58,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
     if (group === "NOC") return RadioTower;
     if (group === "IT/DevOps") return Server;
     if (group === "IT Support") return LifeBuoy;
+    if (group === "Kanal Pelanggan") return MessagesSquare;
     if (group === "HRD") return CalendarClock;
     if (group === "Approval") return ClipboardCheck;
     if (group === "Pengawasan") return Activity;

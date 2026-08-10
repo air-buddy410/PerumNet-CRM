@@ -282,6 +282,29 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Service layer `src/lib/hrd.ts`; teruji 44 skenario positif + negatif
 - *Penggajian/payroll di luar lingkup fase ini*
 
+**Phase 15 — Kanal Pelanggan** ✅
+
+- **Template pesan** berkode (`{{nama}}`, `{{nomor}}`, dst.) per kanal
+  WhatsApp/Email/App — template email wajib bersubjek; 4 template bawaan
+  (invoice terbit, jatuh tempo, info gangguan, tiket selesai)
+- **Preferensi notifikasi pelanggan** (G12) ditegakkan di engine: pelanggan
+  bisa memilih **tidak menerima** dan pesan ke mereka ditolak sejak
+  antrian; kanal tanpa kontak (WA tanpa telepon, email tanpa alamat) juga
+  ditolak — bukan dikirim lalu gagal
+- **Antrian pesan keluar** auditable & retryable seperti antrian MikroTik
+  Fase 10: status QUEUED → SENDING → SENT/FAILED, `attempts`, `lastError`,
+  **rate limit** per eksekusi, tombol ulangi hanya untuk pesan gagal
+- **Blast** menghormati preferensi tiap pelanggan satu per satu dan
+  melaporkan berapa yang dilewati beserta alasannya
+- **Pengumuman & promo** dengan periode tayang + status terbit — sumber
+  konten untuk portal/app pelanggan
+- **Adapter gateway pluggable**: pengirim default sengaja menggagalkan job
+  dengan pesan jelas *"menunggu kredensial WhatsApp/SMTP (§11.7)"*, jadi
+  seluruh alur bisa diuji sekarang dan tinggal menyambung adapter nanti
+- Service layer `src/lib/channels.ts`; teruji 80 skenario positif + negatif
+- *Portal self-service pelanggan (login pelanggan) menunggu keputusan PO
+  soal autentikasi pelanggan — lihat §11 dokumen desain*
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs
