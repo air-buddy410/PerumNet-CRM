@@ -593,6 +593,36 @@ async function main() {
     });
   }
 
+  console.log("Seeding kategori material FTTH...");
+  const FTTH_CATEGORIES: [string, string, string][] = [
+    ["ADP", "Adapter", "Connector"],
+    ["CLS", "Closure", "Passive Device"],
+    ["CSM", "Consumable", "Consumable"],
+    ["DRP", "Dropcore", "Cable"],
+    ["FOC", "Kabel Fiber Optic", "Cable"],
+    ["FSC", "Fast Connector", "Connector"],
+    ["ODC", "ODC", "Passive Device"],
+    ["ODP", "ODP", "Passive Device"],
+    ["OLT", "OLT", "Network Device"],
+    ["ONT", "ONU / ONT", "Network Device"],
+    ["PCH", "Patchcord", "Cable"],
+    ["PGT", "Pigtail", "Cable"],
+    ["PWR", "Power Supply", "Power"],
+    ["RTR", "Router", "Network Device"],
+    ["SFP", "SFP", "Network Device"],
+    ["SPL", "Splitter", "Passive Device"],
+    ["SWT", "Switch", "Network Device"],
+    ["TLS", "Tools", "Tools"],
+    ["OTH", "Lainnya", "Other"],
+  ];
+  for (const [code, name, materialType] of FTTH_CATEGORIES) {
+    await db.category.upsert({
+      where: { code },
+      update: { name, materialType },
+      create: { code, name, materialType, type: "ITEM" },
+    });
+  }
+
   console.log("Seeding tipe slot stock...");
   const SLOT_TYPES = [
     ["UNALLOC", "Belum Dialokasikan", true],

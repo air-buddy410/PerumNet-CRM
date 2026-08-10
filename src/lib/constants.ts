@@ -413,6 +413,18 @@ export const TX_PREFIX: Record<string, string> = {
   STOCK_ADJUSTMENT: "ADJ",
 };
 
+/// Pengelompokan tingkat kedua di atas kategori, mengikuti kebutuhan FTTH.
+export const MATERIAL_TYPES = [
+  "Cable",
+  "Connector",
+  "Network Device",
+  "Passive Device",
+  "Power",
+  "Consumable",
+  "Tools",
+  "Other",
+] as const;
+
 export const DEVICE_STATUSES = [
   "AVAILABLE",
   "IN_TRANSIT", // Fase 17: dikirim antar gudang, belum diterima

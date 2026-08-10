@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
 import { PERMISSIONS, TX_PREFIX, statusLabel } from "@/lib/constants";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
+import { assertWarehouseInScope } from "@/lib/slots";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Inventory Engine ────────────────────────────────────────────
@@ -158,6 +159,13 @@ export async function createDraftTransaction(
       return { ok: false, error: "Gudang asal dan tujuan tidak boleh sama." };
     }
   }
+
+  // Fase 21 (F12): user yang dibatasi scope tidak boleh menyentuh gudang lain.
+  const scopeError = await assertWarehouseInScope(user.id, [
+    header.warehouseFromId,
+    header.warehouseToId,
+  ]);
+  if (scopeError) return { ok: false, error: scopeError };
 
   const built = await buildLines(type, lines);
   if (!built.ok) return built;

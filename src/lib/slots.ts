@@ -205,3 +205,31 @@ export async function deactivateSlot(user: CurrentUser, slotId: string): Promise
   });
   return { ok: true, id: slotId };
 }
+
+// ── Scope gudang per user (Fase 21, F12) ────────────────────────
+// Bila seorang user punya minimal satu baris scope, ia hanya boleh menyentuh
+// gudang yang terdaftar. Tanpa baris scope, aksesnya tidak dibatasi — sehingga
+// fitur ini bisa diaktifkan bertahap per user tanpa mengunci semua orang.
+
+export async function scopedWarehouseIds(userId: string): Promise<string[] | null> {
+  const rows = await db.userWarehouseScope.findMany({
+    where: { userId },
+    select: { warehouseId: true },
+  });
+  return rows.length ? rows.map((r) => r.warehouseId) : null;
+}
+
+export async function assertWarehouseInScope(
+  userId: string,
+  warehouseIds: (string | null | undefined)[]
+): Promise<string | null> {
+  const scope = await scopedWarehouseIds(userId);
+  if (!scope) return null;
+  for (const id of warehouseIds) {
+    if (id && !scope.includes(id)) {
+      const wh = await db.warehouse.findUnique({ where: { id }, select: { code: true } });
+      return `Anda tidak punya akses ke gudang ${wh?.code ?? id}.`;
+    }
+  }
+  return null;
+}
