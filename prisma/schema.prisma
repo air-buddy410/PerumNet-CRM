@@ -117,6 +117,8 @@ model User {
   cticketPauses     TicketPause[]        @relation("CTicketPauser")
   cticketStepsDone  TicketStepProgress[] @relation("CTicketStepDoer")
   employee          Employee?            @relation("EmployeeUser")
+  outboundCreated   OutboundMessage[]    @relation("OutboundCreator")
+  announcements     Announcement[]       @relation("AnnouncementCreator")
 }
 
 model Division {
@@ -502,6 +504,7 @@ model Customer {
   latitude       Float?
   longitude      Float?
   customerType   String   @default("RESIDENTIAL")
+  notifyChannel  String   @default("NONE") // NONE|WHATSAPP|EMAIL|APP
   areaId         String?
   salesOwnerId   String?
   source         String?
@@ -525,6 +528,7 @@ model Customer {
   payments      Payment[]
   gatewayTxs    PaymentGatewayTx[]
   customerTickets CustomerTicket[]
+  outboundMessages OutboundMessage[]
 }
 
 model Subscription {
@@ -1503,6 +1507,7 @@ model Integration {
 
   events           IntegrationEvent[]
   gatewayTxs       PaymentGatewayTx[]
+  outboundMessages OutboundMessage[]
 }
 
 // Log lalu lintas integrasi (inbound webhook / outbound call).
@@ -2206,4 +2211,68 @@ model OvertimeRequest {
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId, status])
+}
+
+// ═══════════════ Phase 15: Kanal Pelanggan (DESIGN-PHASE-8 §9) ═══════════════
+// WA gateway sebagai adapter Integration (bukan modul terpisah): template
+// pesan, antrian kirim, status terkirim/gagal, dan rate limit. Adapter
+// pengirim live menunggu kredensial gateway (§11.7) — executor pluggable
+// seperti NetworkAccessJob Fase 10.
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  channel   String // WHATSAPP|EMAIL|APP|IN_APP
+  subject   String? // untuk EMAIL
+  body      String // mendukung placeholder {{nama}}, {{nomor}}, dst.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages OutboundMessage[]
+}
+
+model OutboundMessage {
+  id            String    @id @default(cuid())
+  templateId    String?
+  integrationId String? // adapter pengirim (WA gateway, SMTP)
+  customerId    String?
+  channel       String // WHATSAPP|EMAIL|APP
+  recipient     String // nomor / email tujuan
+  subject       String?
+  body          String
+  status        String    @default("QUEUED") // QUEUED|SENDING|SENT|FAILED|SKIPPED
+  attempts      Int       @default(0)
+  lastError     String?
+  sentAt        DateTime?
+  relatedType   String? // Invoice|CustomerTicket|Incident|Announcement
+  relatedId     String?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  template    MessageTemplate? @relation(fields: [templateId], references: [id])
+  integration Integration?     @relation(fields: [integrationId], references: [id])
+  customer    Customer?        @relation(fields: [customerId], references: [id])
+  createdBy   User?            @relation("OutboundCreator", fields: [createdById], references: [id])
+
+  @@index([status, channel])
+  @@index([customerId, createdAt])
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  badge       String? // "PROMO", "INFO", dst.
+  body        String
+  startAt     DateTime
+  endAt       DateTime?
+  isPublished Boolean   @default(false)
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User @relation("AnnouncementCreator", fields: [createdById], references: [id])
+
+  @@index([isPublished, startAt])
 }

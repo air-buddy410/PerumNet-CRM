@@ -161,6 +161,12 @@ const STATUS_STYLES: Record<string, string> = {
   // FTTH port
   FREE: "is-approved",
   USED: "is-pending",
+  // Kanal pelanggan
+  SENDING: "is-pending",
+  NONE: "is-neutral",
+  WHATSAPP: "is-approved",
+  EMAIL: "is-pending",
+  APP: "is-pending",
   // HRD & absensi
   PRESENT: "is-approved",
   LATE: "is-pending",
