@@ -263,6 +263,25 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Service layer `src/lib/ftth.ts`; teruji 48 skenario positif + negatif
 - *Monitoring probe & PPPoE realtime (G9) menunggu kredensial perangkat*
 
+**Phase 14 — HRD & Absensi** ✅
+
+- **Karyawan** menempel pada `User` yang sudah ada (bukan tabel orang
+  paralel): NIK unik, jabatan, tipe kerja, atasan langsung — hierarki
+  atasan dijaga **bebas siklus** dan dipakai approval `SUPERVISOR`
+- **Shift & jadwal**: shift jam masuk/pulang + toleransi keterlambatan;
+  jadwal per karyawan per tanggal (WORK wajib punya shift, OFF tidak)
+- **Absensi ber-geofence** (G16): `AttendanceLocation` titik + radius
+  10–5000 m, jarak dihitung haversine di service layer — clock-in di luar
+  radius **ditolak engine**, bukan sekadar disembunyikan UI; keterlambatan
+  dihitung dari shift + toleransi, `workMinutes` dari clock-out
+- **Izin/cuti & lembur lewat approval engine yang sama** — berjenjang
+  atasan → HRD (§8), bukan satu tingkat; tumpang tindih tanggal ditolak;
+  keputusan approval disinkronkan balik ke absensi (LEAVE/SICK)
+- **Rekap bulanan** hadir/terlambat/absen/izin + total menit lembur
+- Halaman **Absensi Saya** untuk semua staf (`attendance.self`)
+- Service layer `src/lib/hrd.ts`; teruji 44 skenario positif + negatif
+- *Penggajian/payroll di luar lingkup fase ini*
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

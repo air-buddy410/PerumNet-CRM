@@ -130,6 +130,10 @@ export const PERMISSIONS = {
   CTICKETS_MANAGE: "ctickets.manage", // assign, kategori, workflow, close
   // Phase 13 — FTTH Port Management
   FTTH_MANAGE: "ftth.manage", // OLT, PON, ODP, alokasi port
+  // Phase 14 — HRD & Absensi
+  HRD_VIEW: "hrd.view", // data karyawan, rekap, jadwal
+  HRD_MANAGE: "hrd.manage", // master karyawan, shift, lokasi, jadwal
+  ATTENDANCE_SELF: "attendance.self", // absen mandiri + ajukan izin/lembur
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -207,6 +211,18 @@ export const APPROVAL_MODULES: {
     code: "access_request",
     name: "Access Request Production",
     subtypes: ["production"],
+    manual: false,
+  },
+  {
+    code: "leave_request",
+    name: "Izin / Cuti Karyawan",
+    subtypes: [],
+    manual: false,
+  },
+  {
+    code: "overtime_request",
+    name: "Lembur Karyawan",
+    subtypes: [],
     manual: false,
   },
   { code: "general", name: "Umum / Lainnya", subtypes: [] },
@@ -714,6 +730,29 @@ export const GATEWAY_TX_STATUSES = [
   "FAILED",
 ] as const;
 
+// ── Phase 14: HRD & Absensi ─────────────────────────────────────
+
+export const EMPLOYEE_TYPES = [
+  ["FULL_TIME", "Full Time"],
+  ["PART_TIME", "Part Time"],
+  ["CONTRACT", "Kontrak"],
+  ["PROBATION", "Probation"],
+] as const;
+
+export const DAY_TYPES = [
+  ["WORK", "Kerja"],
+  ["OFF", "Libur"],
+  ["HOLIDAY", "Hari Besar"],
+] as const;
+
+export const ATTENDANCE_STATUSES = ["PRESENT", "LATE", "ABSENT", "LEAVE", "SICK", "HOLIDAY"] as const;
+
+export const LEAVE_TYPES = [
+  ["ANNUAL", "Cuti Tahunan"],
+  ["SICK", "Sakit"],
+  ["OTHER", "Izin Lainnya"],
+] as const;
+
 // ── Phase 13: FTTH Port Management ──────────────────────────────
 
 export const OLT_VENDORS = [
@@ -914,6 +953,20 @@ export const STATUS_LABELS: Record<string, string> = {
   FREE: "Kosong",
   USED: "Terpakai",
   RESERVED: "Dicadangkan",
+  // Phase 14 — HRD
+  PRESENT: "Hadir",
+  LATE: "Terlambat",
+  ABSENT: "Tanpa Keterangan",
+  LEAVE: "Cuti/Izin",
+  SICK: "Sakit",
+  HOLIDAY: "Libur",
+  WORK: "Kerja",
+  OFF: "Libur",
+  FULL_TIME: "Full Time",
+  PART_TIME: "Part Time",
+  CONTRACT: "Kontrak",
+  PROBATION: "Probation",
+  ANNUAL: "Cuti Tahunan",
   ENABLE: "Aktifkan",
   DISABLE: "Blokir",
   SYNC: "Sinkronisasi",

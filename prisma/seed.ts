@@ -22,6 +22,7 @@ const ROLES: { code: string; name: string; description: string }[] = [
   { code: "developer", name: "Developer", description: "Pengembangan aplikasi, PR, testing, release note, migration." },
   { code: "devops_engineer", name: "DevOps Engineer", description: "CI/CD, deployment, container, monitoring aplikasi, backup, rollback." },
   { code: "it_support", name: "IT Support", description: "Perangkat kerja, akun internal, ticket IT, onboarding/offboarding." },
+  { code: "hrd", name: "HRD", description: "Karyawan, shift & jadwal, absensi, approval izin/cuti/lembur." },
 ];
 
 const PERMISSIONS: { code: string; module: string; action: string; description: string }[] = [
@@ -133,6 +134,10 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "ctickets.manage", module: "helpdesk", action: "manage", description: "Assign, kategori, workflow, pause, solve, close tiket pelanggan" },
   // Phase 13 — FTTH Port Management
   { code: "ftth.manage", module: "noc", action: "ftth", description: "Mengelola OLT, PON port, ODP, dan alokasi port pelanggan" },
+  // Phase 14 — HRD & Absensi
+  { code: "hrd.view", module: "hrd", action: "view", description: "Melihat data karyawan, jadwal, absensi, dan rekap" },
+  { code: "hrd.manage", module: "hrd", action: "manage", description: "Mengelola karyawan, shift, lokasi absen, jadwal" },
+  { code: "attendance.self", module: "hrd", action: "self", description: "Absen mandiri & mengajukan izin/lembur" },
 ];
 
 // Pemetaan permission per role.
@@ -141,7 +146,7 @@ const ALL = PERMISSIONS.map((p) => p.code);
 // it_tickets.create & access.request untuk semua role: service desk terbuka
 // bagi seluruh staff (PRD §39–40). outages.view: seluruh staff boleh melihat
 // status gangguan yang telah disetujui untuk komunikasi (§33).
-const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create", "it_tickets.create", "access.request", "outages.view"];
+const BASE = ["dashboard.view", "approvals.view", "approvals.create", "cash.create", "it_tickets.create", "access.request", "outages.view", "attendance.self"];
 const CRM_VIEW = [
   "campaigns.view", "leads.view", "opportunities.view", "surveys.view",
   "quotations.view", "customers.view", "subscriptions.view",
@@ -159,7 +164,7 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage"],
@@ -175,6 +180,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
   it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],
+  hrd: [...BASE, "approvals.act", "hrd.view", "hrd.manage", "users.view"],
 };
 
 // Struktur organisasi: staff -> supervisor -> owner; staff & supervisor per divisi.
@@ -272,6 +278,9 @@ const APPROVAL_RULES: {
   { module: "network_maintenance", subtype: null, name: "Network Maintenance", min: 0, max: null, steps: [R("noc_manager")] },
   // Phase 6: akses production wajib approval IT Manager (rule 28).
   { module: "access_request", subtype: "production", name: "Akses Production", min: 0, max: null, steps: [R("it_manager")] },
+  // Phase 14: berjenjang — atasan (supervisor divisi pengaju) lalu HRD.
+  { module: "leave_request", subtype: null, name: "Izin / Cuti Karyawan", min: 0, max: null, steps: [SUP, R("hrd")] },
+  { module: "overtime_request", subtype: null, name: "Lembur Karyawan", min: 0, max: null, steps: [SUP] },
 ];
 
 async function main() {
