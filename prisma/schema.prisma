@@ -128,6 +128,7 @@ model User {
   returnVerified   ReturnRequest[] @relation("ReturnVerifier")
   materialRequests MaterialRequest[] @relation("MrqRequester")
   materialDecided  MaterialRequest[] @relation("MrqDecider")
+  slotLedgerEntries SlotLedger[] @relation("SlotLedgerCreator")
 }
 
 model Division {
@@ -613,6 +614,11 @@ model Warehouse {
   code     String  @unique
   name     String
   address  String?
+  /// Fase 20 (F10) — CENTRAL|BRANCH|MINI_STOCK|PROJECT_STOCK.
+  /// Stok teknisi TIDAK dijadikan tipe gudang; tetap memakai CustodyLevel.
+  type      String  @default("CENTRAL")
+  latitude  Float?
+  longitude Float?
   isActive Boolean @default(true)
 
   stockLevels StockLevel[]
@@ -622,6 +628,8 @@ model Warehouse {
   opnames     OpnameSession[]
   returnRequests ReturnRequest[] @relation("ReturnWarehouse")
   materialRequests MaterialRequest[] @relation("MrqWarehouse")
+  racks      Rack[]
+  stockSlots StockSlot[]
 }
 
 model Item {
@@ -647,6 +655,8 @@ model Item {
   deliveryOrderLines DeliveryOrderLine[]
   returnRequestLines ReturnRequestLine[]
   materialRequestLines MaterialRequestLine[]
+  slotAllocations SlotAllocation[]
+  slotLedger      SlotLedger[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -2511,4 +2521,98 @@ model MaterialRequestLine {
   item    Item            @relation(fields: [itemId], references: [id])
 
   @@index([requestId])
+}
+
+/// Fase 20 (F10) — lokasi fisik dalam gudang: rak lalu bin.
+model Rack {
+  id          String  @id @default(cuid())
+  warehouseId String
+  code        String
+  name        String?
+  isActive    Boolean @default(true)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  bins      Bin[]
+
+  @@unique([warehouseId, code])
+}
+
+model Bin {
+  id       String  @id @default(cuid())
+  rackId   String
+  code     String
+  isActive Boolean @default(true)
+
+  rack Rack @relation(fields: [rackId], references: [id])
+
+  @@unique([rackId, code])
+}
+
+/// Fase 20 (F9) — slot peruntukan stock. UNALLOC bersifat sistem: sisa yang
+/// belum dialokasikan dihitung sebagai onHand dikurangi seluruh alokasi
+/// bernama, jadi tidak pernah bisa menyimpang dari saldo gudang.
+model StockSlotType {
+  id       String  @id @default(cuid())
+  code     String  @unique // INST|MNT|MKT|PRJ|EMG|SPR|RMA|DEMO|OTHER
+  name     String
+  isSystem Boolean @default(false)
+  isActive Boolean @default(true)
+
+  slots StockSlot[]
+}
+
+model StockSlot {
+  id          String  @id @default(cuid())
+  warehouseId String
+  typeId      String
+  code        String
+  name        String?
+  isActive    Boolean @default(true)
+
+  warehouse   Warehouse        @relation(fields: [warehouseId], references: [id])
+  type        StockSlotType    @relation(fields: [typeId], references: [id])
+  allocations SlotAllocation[]
+  ledger      SlotLedger[]
+
+  @@unique([warehouseId, code])
+}
+
+/// Saldo alokasi per (slot × item). Total alokasi seluruh slot dalam satu
+/// gudang tidak boleh melebihi onHand item tersebut.
+model SlotAllocation {
+  id     String @id @default(cuid())
+  slotId String
+  itemId String
+  qty    Int    @default(0)
+
+  slot StockSlot @relation(fields: [slotId], references: [id])
+  item Item      @relation(fields: [itemId], references: [id])
+
+  @@unique([slotId, itemId])
+}
+
+/// Jejak mutasi alokasi — append-only, tidak pernah diedit.
+model SlotLedger {
+  id          String   @id @default(cuid())
+  slotId      String
+  itemId      String
+  qty         Int // bertanda: positif masuk slot, negatif keluar slot
+  reason      String // ALLOCATE|RELEASE|SLOT_TRANSFER
+  note        String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  slot      StockSlot @relation(fields: [slotId], references: [id])
+  item      Item      @relation(fields: [itemId], references: [id])
+  createdBy User      @relation("SlotLedgerCreator", fields: [createdById], references: [id])
+
+  @@index([slotId, itemId])
+}
+
+/// Ambang nilai/jumlah yang membuat perpindahan slot butuh persetujuan.
+model SlotTransferPolicy {
+  id        String  @id @default(cuid())
+  name      String
+  maxQty    Int // di atas ini butuh izin slot.approve
+  isActive  Boolean @default(true)
 }

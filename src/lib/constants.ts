@@ -65,6 +65,7 @@ export const PERMISSIONS = {
   STOCK_POST: "stock.post", // posting transaksi (mengubah saldo)
   STOCK_REVERSE: "stock.reverse",
   STOCK_RECEIVE: "stock.receive", // menerima transfer antar gudang (Fase 17)
+  SLOT_APPROVE: "slot.approve", // perpindahan alokasi di atas ambang (Fase 20)
   DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
   CUSTODY_VIEW: "custody.view",
   WORK_ORDERS_VIEW: "work_orders.view",
