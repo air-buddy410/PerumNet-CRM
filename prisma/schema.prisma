@@ -634,11 +634,17 @@ model Item {
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
+/// Saldo stock per (item × gudang), berdimensi — Fase 16 (PRD-WAREHOUSE-ENHANCEMENT F1).
+/// available = onHand − reserved, SELALU turunan; tidak pernah disimpan sebagai kolom.
+/// Keempat angka hanya berubah lewat transaksi yang diposting (inventory.ts).
 model StockLevel {
   id          String @id @default(cuid())
   itemId      String
   warehouseId String
-  qty         Int    @default(0)
+  onHand      Int    @default(0) // fisik ada di gudang
+  reserved    Int    @default(0) // ditahan draft issue/transfer yang belum diposting
+  damaged     Int    @default(0) // rusak, tidak bisa dipakai
+  inTransit   Int    @default(0) // dalam perjalanan antar gudang (dipakai Fase 17)
 
   item      Item      @relation(fields: [itemId], references: [id])
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
@@ -2275,4 +2281,17 @@ model Announcement {
   createdBy User @relation("AnnouncementCreator", fields: [createdById], references: [id])
 
   @@index([isPublished, startAt])
+}
+
+/// Penomoran dokumen atomik per (tipe, periode) — Fase 16 (PRD-WAREHOUSE-ENHANCEMENT F4).
+/// Menggantikan pola count()+1 yang tidak aman saat dua proses berjalan bersamaan.
+/// Nomor diambil di dalam transaksi lewat lib/documents.ts.
+model DocumentSequence {
+  id         String   @id @default(cuid())
+  docType    String // INV | GR | ISS | RET | TRF | ADJ | OPN | DO | IRF | STO | RCV
+  periodKey  String // "202608" (bulanan) atau "20260810" (harian)
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([docType, periodKey])
 }

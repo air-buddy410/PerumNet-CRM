@@ -61,7 +61,8 @@ export default async function ItemsPage({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((item) => {
-                  const total = item.stockLevels.reduce((s, l) => s + l.qty, 0);
+                  // Tersedia = fisik − ditahan draft (PRD-WAREHOUSE-ENHANCEMENT F1).
+                  const total = item.stockLevels.reduce((s, l) => s + l.onHand - l.reserved, 0);
                   const low = total < item.minStock;
                   return (
                     <tr key={item.id} className="hover:bg-slate-50">

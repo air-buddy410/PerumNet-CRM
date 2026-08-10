@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
 import { PERMISSIONS, TX_PREFIX, statusLabel } from "@/lib/constants";
+import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Inventory Engine ────────────────────────────────────────────
@@ -15,22 +16,38 @@ import type { CurrentUser } from "@/lib/rbac";
 //  - Lost/Damaged wajib alasan + approval (PRD §16.5): perangkat masuk
 //    UNDER_INSPECTION sampai approval selesai, lalu difinalisasi.
 //  - Variance opname wajib alasan + approval Supervisor → Owner (PRD §21).
+//
+// Fase 16 (PRD-WAREHOUSE-ENHANCEMENT F1/F2/F4):
+//  - Saldo berdimensi: onHand / reserved / damaged / inTransit.
+//    available = onHand − reserved, SELALU dihitung, tidak pernah disimpan.
+//  - Draft STOCK_ISSUE & STOCK_TRANSFER MERESERVASI stock di gudang asal, jadi
+//    dua draft tidak bisa menjanjikan unit yang sama. Reservasi dilepas saat
+//    draft dibatalkan, dan dikonversi menjadi pengeluaran saat diposting.
+//  - Nomor dokumen diambil dari DocumentSequence (atomik), bukan count()+1.
 
 type Result<T = undefined> =
   | { ok: true; id: string; data?: T }
   | { ok: false; error: string };
 
-function monthPrefix(base: string): string {
-  const now = new Date();
-  return `${base}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
+type TxClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
-async function nextTxNumber(type: string): Promise<string> {
-  const prefix = monthPrefix(TX_PREFIX[type] ?? "TX");
-  const count = await db.stockTransaction.count({
-    where: { txNumber: { startsWith: prefix } },
+/** Tipe transaksi yang menahan stock gudang asal selama masih berstatus draft. */
+const RESERVING_TYPES = new Set(["STOCK_ISSUE", "STOCK_TRANSFER"]);
+
+async function nextTxNumber(prisma: TxClient, type: string): Promise<string> {
+  const code = TX_PREFIX[type] ?? "TX";
+  return nextDocumentNumber(prisma, {
+    docType: code,
+    period: "MONTHLY",
+    // Transaksi yang dibuat sebelum sistem sequence ada tetap dihormati.
+    backfill: async (periodKey) => {
+      const rows = await prisma.stockTransaction.findMany({
+        where: { txNumber: { startsWith: `${code}-${periodKey}-` } },
+        select: { txNumber: true },
+      });
+      return highestSuffix(rows.map((r) => r.txNumber));
+    },
   });
-  return `${prefix}-${String(count + 1).padStart(4, "0")}`;
 }
 
 export interface DraftLineInput {
@@ -145,52 +162,180 @@ export async function createDraftTransaction(
   const built = await buildLines(type, lines);
   if (!built.ok) return built;
 
-  const tx = await db.stockTransaction.create({
-    data: {
-      txNumber: await nextTxNumber(type),
-      type,
-      warehouseFromId: header.warehouseFromId ?? null,
-      warehouseToId: header.warehouseToId ?? null,
-      custodianId: header.custodianId ?? null,
-      workOrderId: header.workOrderId ?? null,
-      projectId: header.projectId ?? null,
-      purpose: header.purpose,
-      referenceNote: header.referenceNote,
-      notes: header.notes,
-      createdById: user.id,
-      lines: { create: built.rows },
-    },
-  });
+  // Nomor dokumen, pembuatan draft, dan reservasi stock harus satu kesatuan:
+  // kalau reservasi gagal, draft tidak boleh tertinggal separuh jadi.
+  let txId = "";
+  let txNumber = "";
+  try {
+    await db.$transaction(async (prisma) => {
+      txNumber = await nextTxNumber(prisma, type);
+      const tx = await prisma.stockTransaction.create({
+        data: {
+          txNumber,
+          type,
+          warehouseFromId: header.warehouseFromId ?? null,
+          warehouseToId: header.warehouseToId ?? null,
+          custodianId: header.custodianId ?? null,
+          workOrderId: header.workOrderId ?? null,
+          projectId: header.projectId ?? null,
+          purpose: header.purpose,
+          referenceNote: header.referenceNote,
+          notes: header.notes,
+          createdById: user.id,
+          lines: { create: built.rows },
+        },
+        include: { lines: { include: { item: { select: { name: true } } } } },
+      });
+      txId = tx.id;
+
+      if (RESERVING_TYPES.has(type) && header.warehouseFromId) {
+        const err = await applyReservation(prisma, header.warehouseFromId, tx.lines, 1, tx.id);
+        if (err) throw new Error(err);
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Gagal membuat draft transaksi." };
+  }
+
   await logAudit({
     userId: user.id,
     action: "TX_CREATE",
     module: "inventory",
     entityType: "StockTransaction",
-    entityId: tx.id,
-    description: `Membuat draft ${tx.txNumber} (${statusLabel(type)})`,
+    entityId: txId,
+    description: `Membuat draft ${txNumber} (${statusLabel(type)})${
+      RESERVING_TYPES.has(type) ? " — stock direservasi" : ""
+    }`,
   });
-  return { ok: true, id: tx.id };
+  return { ok: true, id: txId };
 }
 
-async function adjustLevel(
-  prisma: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+interface BalanceDelta {
+  onHand?: number;
+  reserved?: number;
+  damaged?: number;
+  inTransit?: number;
+}
+
+// Satu-satunya penulis saldo. Menegakkan seluruh invarian di satu tempat:
+// tidak ada dimensi yang boleh negatif, dan reservasi tidak boleh melebihi fisik.
+async function adjustBalance(
+  prisma: TxClient,
   itemId: string,
   warehouseId: string,
-  delta: number,
+  delta: BalanceDelta,
   itemName: string
 ): Promise<string | null> {
   const level = await prisma.stockLevel.findUnique({
     where: { itemId_warehouseId: { itemId, warehouseId } },
   });
-  const next = (level?.qty ?? 0) + delta;
-  if (next < 0) {
-    return `Stock "${itemName}" tidak mencukupi (sisa ${level?.qty ?? 0}, butuh ${-delta}). Stock negatif ditolak.`;
+  const current = {
+    onHand: level?.onHand ?? 0,
+    reserved: level?.reserved ?? 0,
+    damaged: level?.damaged ?? 0,
+    inTransit: level?.inTransit ?? 0,
+  };
+  const next = {
+    onHand: current.onHand + (delta.onHand ?? 0),
+    reserved: current.reserved + (delta.reserved ?? 0),
+    damaged: current.damaged + (delta.damaged ?? 0),
+    inTransit: current.inTransit + (delta.inTransit ?? 0),
+  };
+
+  if (next.onHand < 0) {
+    return `Stock "${itemName}" tidak mencukupi (fisik ${current.onHand}, butuh ${-(delta.onHand ?? 0)}). Stock negatif ditolak.`;
   }
+  if (next.reserved < 0) {
+    return `Reservasi "${itemName}" tidak konsisten — pelepasan melebihi yang ditahan.`;
+  }
+  if (next.damaged < 0 || next.inTransit < 0) {
+    return `Saldo "${itemName}" tidak konsisten (damaged/in-transit negatif).`;
+  }
+  if (next.reserved > next.onHand) {
+    return `Reservasi "${itemName}" melebihi stock fisik (fisik ${next.onHand}, ditahan ${next.reserved}).`;
+  }
+
   await prisma.stockLevel.upsert({
     where: { itemId_warehouseId: { itemId, warehouseId } },
-    update: { qty: next },
-    create: { itemId, warehouseId, qty: next },
+    update: next,
+    create: { itemId, warehouseId, ...next },
   });
+  return null;
+}
+
+// Perubahan fisik murni (penerimaan, pengembalian, penyesuaian opname).
+async function adjustLevel(
+  prisma: TxClient,
+  itemId: string,
+  warehouseId: string,
+  delta: number,
+  itemName: string
+): Promise<string | null> {
+  return adjustBalance(prisma, itemId, warehouseId, { onHand: delta }, itemName);
+}
+
+// Pengeluaran barang: fisik berkurang DAN reservasinya dilepas bersamaan,
+// sehingga invarian reserved ≤ onHand tetap terjaga di setiap titik.
+async function consumeReserved(
+  prisma: TxClient,
+  itemId: string,
+  warehouseId: string,
+  qty: number,
+  itemName: string
+): Promise<string | null> {
+  return adjustBalance(
+    prisma,
+    itemId,
+    warehouseId,
+    { onHand: -qty, reserved: -qty },
+    itemName
+  );
+}
+
+type ReservationLine = { itemId: string; qty: number; deviceId?: string | null; item: { name: string } };
+
+// Menahan (sign +1) atau melepas (sign -1) stock untuk draft.
+async function applyReservation(
+  prisma: TxClient,
+  warehouseId: string,
+  lines: ReservationLine[],
+  sign: 1 | -1,
+  excludeTxId?: string
+): Promise<string | null> {
+  for (const line of lines) {
+    if (sign === 1) {
+      const level = await prisma.stockLevel.findUnique({
+        where: { itemId_warehouseId: { itemId: line.itemId, warehouseId } },
+      });
+      const onHand = level?.onHand ?? 0;
+      const reserved = level?.reserved ?? 0;
+      const available = onHand - reserved;
+      if (line.qty > available) {
+        return `Stock "${line.item.name}" tidak mencukupi: tersedia ${available} (fisik ${onHand}, ditahan draft lain ${reserved}), diminta ${line.qty}.`;
+      }
+      // Perangkat serial tidak boleh ditahan oleh dua draft sekaligus.
+      if (line.deviceId) {
+        const clash = await prisma.stockTransactionLine.findFirst({
+          where: {
+            deviceId: line.deviceId,
+            tx: { status: "DRAFT", ...(excludeTxId ? { id: { not: excludeTxId } } : {}) },
+          },
+          include: { tx: { select: { txNumber: true } } },
+        });
+        if (clash) {
+          return `Perangkat pada baris "${line.item.name}" sudah ditahan draft ${clash.tx.txNumber}.`;
+        }
+      }
+    }
+    const err = await adjustBalance(
+      prisma,
+      line.itemId,
+      warehouseId,
+      { reserved: sign * line.qty },
+      line.item.name
+    );
+    if (err) return err;
+  }
   return null;
 }
 
@@ -300,7 +445,8 @@ export async function postTransaction(
             const errC = await adjustCustody(prisma, tx.custodianId!, line.itemId, line.qty, line.item.name);
             if (errC) throw new Error(errC);
           }
-          const err = await adjustLevel(prisma, line.itemId, tx.warehouseFromId!, -line.qty, line.item.name);
+          // Fisik berkurang sekaligus melepas reservasi yang dibuat saat draft.
+          const err = await consumeReserved(prisma, line.itemId, tx.warehouseFromId!, line.qty, line.item.name);
           if (err) throw new Error(err);
         } else if (tx.type === "STOCK_RETURN") {
           if (isSerialized) {
@@ -358,7 +504,7 @@ export async function postTransaction(
               },
             });
           }
-          const errFrom = await adjustLevel(prisma, line.itemId, tx.warehouseFromId!, -line.qty, line.item.name);
+          const errFrom = await consumeReserved(prisma, line.itemId, tx.warehouseFromId!, line.qty, line.item.name);
           if (errFrom) throw new Error(errFrom);
           const errTo = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, line.qty, line.item.name);
           if (errTo) throw new Error(errTo);
@@ -395,15 +541,29 @@ export async function cancelDraftTransaction(
   user: CurrentUser,
   txId: string
 ): Promise<Result> {
-  const tx = await db.stockTransaction.findUnique({ where: { id: txId } });
+  const tx = await db.stockTransaction.findUnique({
+    where: { id: txId },
+    include: { lines: { include: { item: { select: { name: true } } } } },
+  });
   if (!tx) return { ok: false, error: "Transaksi tidak ditemukan." };
   if (tx.status !== "DRAFT") {
     return { ok: false, error: "Hanya draft yang bisa dibatalkan." };
   }
-  await db.stockTransaction.update({
-    where: { id: txId },
-    data: { status: "CANCELLED" },
-  });
+  try {
+    await db.$transaction(async (prisma) => {
+      // Reservasi wajib dilepas agar stock kembali tersedia untuk draft lain.
+      if (RESERVING_TYPES.has(tx.type) && tx.warehouseFromId) {
+        const err = await applyReservation(prisma, tx.warehouseFromId, tx.lines, -1);
+        if (err) throw new Error(err);
+      }
+      await prisma.stockTransaction.update({
+        where: { id: txId },
+        data: { status: "CANCELLED" },
+      });
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Pembatalan draft gagal." };
+  }
   await logAudit({
     userId: user.id,
     action: "TX_CANCEL",
@@ -436,10 +596,11 @@ export async function reverseTransaction(
   if (tx.reversedById) return { ok: false, error: "Transaksi ini sudah pernah di-reverse." };
   if (tx.reversalOfId) return { ok: false, error: "Transaksi reversal tidak bisa di-reverse lagi." };
 
-  const revNumber = await nextTxNumber(tx.type);
   let revId = "";
+  let revNumber = "";
   try {
     await db.$transaction(async (prisma) => {
+      revNumber = await nextTxNumber(prisma, tx.type);
       const rev = await prisma.stockTransaction.create({
         data: {
           txNumber: revNumber,
@@ -715,15 +876,23 @@ export async function createOpnameSession(
   if (!items.length) return { ok: false, error: "Belum ada item bulk aktif." };
 
   const levels = await db.stockLevel.findMany({ where: { warehouseId } });
-  const levelMap = new Map(levels.map((l) => [l.itemId, l.qty]));
+  // Opname menghitung stock FISIK; reservasi tidak mengurangi yang harus ada di rak.
+  const levelMap = new Map(levels.map((l) => [l.itemId, l.onHand]));
 
-  const prefix = monthPrefix("OPN");
-  const count = await db.opnameSession.count({
-    where: { opnameNumber: { startsWith: prefix } },
+  const opnameNumber = await nextDocumentNumber(db, {
+    docType: "OPN",
+    period: "MONTHLY",
+    backfill: async (periodKey) => {
+      const rows = await db.opnameSession.findMany({
+        where: { opnameNumber: { startsWith: `OPN-${periodKey}-` } },
+        select: { opnameNumber: true },
+      });
+      return highestSuffix(rows.map((r) => r.opnameNumber));
+    },
   });
   const session = await db.opnameSession.create({
     data: {
-      opnameNumber: `${prefix}-${String(count + 1).padStart(4, "0")}`,
+      opnameNumber,
       warehouseId,
       notes,
       createdById: user.id,
@@ -876,9 +1045,10 @@ export async function postOpname(
     .filter((l) => (l.countedQty ?? 0) !== l.systemQty)
     .map((l) => ({ itemId: l.itemId, qty: (l.countedQty ?? 0) - l.systemQty }));
 
-  const txNumber = await nextTxNumber("STOCK_ADJUSTMENT");
+  let txNumber = "";
   try {
     await db.$transaction(async (prisma) => {
+      txNumber = await nextTxNumber(prisma, "STOCK_ADJUSTMENT");
       const adjTx = await prisma.stockTransaction.create({
         data: {
           txNumber,
@@ -915,4 +1085,105 @@ export async function postOpname(
     description: `Posting adjustment opname ${session.opnameNumber} (${txNumber})`,
   });
   return { ok: true, id: sessionId };
+}
+
+// ── Rekonsiliasi saldo (PRD-WAREHOUSE-ENHANCEMENT F1) ────────────
+// Menghitung ulang saldo dari transaksi dan membandingkannya dengan StockLevel.
+// SENGAJA hanya melaporkan, tidak memperbaiki: saldo tidak boleh diubah di luar
+// transaksi berposting. Selisih apa pun berarti ada bug yang harus dicari
+// sumbernya, bukan ditutup dengan menulis ulang angkanya.
+
+export interface BalanceDiscrepancy {
+  itemId: string;
+  itemName: string;
+  warehouseId: string;
+  warehouseCode: string;
+  field: "onHand" | "reserved";
+  stored: number;
+  expected: number;
+}
+
+export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
+  const [transactions, levels, warehouses, items] = await Promise.all([
+    db.stockTransaction.findMany({
+      where: { status: { in: ["DRAFT", "POSTED"] } },
+      include: { lines: true },
+    }),
+    db.stockLevel.findMany(),
+    db.warehouse.findMany({ select: { id: true, code: true } }),
+    db.item.findMany({ select: { id: true, name: true } }),
+  ]);
+
+  const onHand = new Map<string, number>();
+  const reserved = new Map<string, number>();
+  const bump = (map: Map<string, number>, itemId: string, warehouseId: string, delta: number) => {
+    const key = `${itemId}::${warehouseId}`;
+    map.set(key, (map.get(key) ?? 0) + delta);
+  };
+
+  for (const tx of transactions) {
+    for (const line of tx.lines) {
+      if (tx.status === "DRAFT") {
+        if (RESERVING_TYPES.has(tx.type) && tx.warehouseFromId) {
+          bump(reserved, line.itemId, tx.warehouseFromId, line.qty);
+        }
+        continue;
+      }
+      switch (tx.type) {
+        case "GOODS_RECEIPT":
+        case "STOCK_RETURN":
+        case "STOCK_ADJUSTMENT":
+          if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, line.qty);
+          break;
+        case "STOCK_ISSUE":
+          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -line.qty);
+          break;
+        case "STOCK_TRANSFER":
+          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -line.qty);
+          if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, line.qty);
+          break;
+      }
+    }
+  }
+
+  const itemName = new Map(items.map((i) => [i.id, i.name]));
+  const warehouseCode = new Map(warehouses.map((w) => [w.id, w.code]));
+  const out: BalanceDiscrepancy[] = [];
+
+  const seen = new Set<string>();
+  for (const level of levels) {
+    const key = `${level.itemId}::${level.warehouseId}`;
+    seen.add(key);
+    const base = {
+      itemId: level.itemId,
+      itemName: itemName.get(level.itemId) ?? "?",
+      warehouseId: level.warehouseId,
+      warehouseCode: warehouseCode.get(level.warehouseId) ?? "?",
+    };
+    const expectedOnHand = onHand.get(key) ?? 0;
+    const expectedReserved = reserved.get(key) ?? 0;
+    if (level.onHand !== expectedOnHand) {
+      out.push({ ...base, field: "onHand", stored: level.onHand, expected: expectedOnHand });
+    }
+    if (level.reserved !== expectedReserved) {
+      out.push({ ...base, field: "reserved", stored: level.reserved, expected: expectedReserved });
+    }
+  }
+
+  // Kombinasi yang punya transaksi tapi belum punya baris saldo sama sekali.
+  for (const [key, expected] of [...onHand, ...reserved]) {
+    if (expected === 0 || seen.has(key)) continue;
+    const [itemId, warehouseId] = key.split("::");
+    out.push({
+      itemId,
+      itemName: itemName.get(itemId) ?? "?",
+      warehouseId,
+      warehouseCode: warehouseCode.get(warehouseId) ?? "?",
+      field: onHand.has(key) ? "onHand" : "reserved",
+      stored: 0,
+      expected,
+    });
+  }
+
+  return out;
 }
