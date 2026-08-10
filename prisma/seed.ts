@@ -127,6 +127,10 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "gl.view", module: "gl", action: "view", description: "Melihat jurnal, buku besar, dan laporan keuangan" },
   { code: "gl.manage", module: "gl", action: "manage", description: "Mengelola Chart of Accounts & posting rules" },
   { code: "gl.post", module: "gl", action: "post", description: "Jurnal manual & reversal jurnal" },
+  // Phase 12 — Helpdesk Pelanggan
+  { code: "ctickets.view", module: "helpdesk", action: "view", description: "Melihat tiket pelanggan & dispatch board" },
+  { code: "ctickets.create", module: "helpdesk", action: "create", description: "Membuat tiket pelanggan" },
+  { code: "ctickets.manage", module: "helpdesk", action: "manage", description: "Assign, kategori, workflow, pause, solve, close tiket pelanggan" },
 ];
 
 // Pemetaan permission per role.
@@ -153,18 +157,18 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
-  operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
+  operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
   sales: [...BASE, ...SALES_CORE],
-  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create"],
+  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
-  technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view"],
+  technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
   noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement"],
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
@@ -505,6 +509,44 @@ async function main() {
         debitAccountId: r.debit ? accountMap.get(r.debit)! : null,
         creditAccountId: r.credit ? accountMap.get(r.credit)! : null,
       },
+    });
+  }
+
+  // Phase 12 — kategori tiket pelanggan + workflow contoh
+  console.log("Seeding helpdesk categories...");
+  const wfInstall = await db.workflowTemplate.upsert({
+    where: { name: "Instalasi Pelanggan Baru" },
+    update: {},
+    create: { kind: "TICKET", name: "Instalasi Pelanggan Baru" },
+  });
+  const WF_STEPS: [number, string, boolean][] = [
+    [1, "Survey lokasi & cek jalur", true],
+    [2, "Tarik kabel & pasang perangkat", true],
+    [3, "Aktivasi & tes kecepatan", true],
+    [4, "Edukasi pelanggan", false],
+  ];
+  for (const [order, name, isRequired] of WF_STEPS) {
+    await db.workflowStep.upsert({
+      where: { templateId_order: { templateId: wfInstall.id, order } },
+      update: { name, isRequired },
+      create: { templateId: wfInstall.id, order, name, isRequired },
+    });
+  }
+  const TICKET_CATS: { name: string; slaHours?: number; workflowId?: string }[] = [
+    { name: "Router Problem", slaHours: 12 },
+    { name: "Weak Signal", slaHours: 24 },
+    { name: "Fiber Problem", slaHours: 24 },
+    { name: "Billing", slaHours: 48 },
+    { name: "New Client Installation", slaHours: 72, workflowId: wfInstall.id },
+    { name: "Change Wifi Password", slaHours: 6 },
+    { name: "Customer Relocation", slaHours: 72 },
+    { name: "Complaint Non-Teknis", slaHours: 48 },
+  ];
+  for (const c of TICKET_CATS) {
+    await db.ticketCategory.upsert({
+      where: { name: c.name },
+      update: { slaHours: c.slaHours ?? null, workflowId: c.workflowId ?? null },
+      create: { name: c.name, slaHours: c.slaHours ?? null, workflowId: c.workflowId ?? null },
     });
   }
 

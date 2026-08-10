@@ -220,6 +220,28 @@ CRM & Operations Management System untuk ISP PerumNet.
   menyusul; jurnal kas petty cash menyusul (butuh pemetaan kategori→akun)*
 - Service layer `src/lib/gl.ts`; teruji 46 skenario positif + negatif
 
+**Phase 12 — Helpdesk Pelanggan & Dispatch** ✅
+
+- **Tiket pelanggan** (G16) — terpisah dari `ItTicket` (internal) dan
+  `Incident` (NOC): kategori ber-SLA, prioritas, tags, jadwal kunjungan,
+  sub-tiket (maks. 1 tingkat, parent tidak bisa ditutup sebelum semua
+  sub-tiket CLOSED), multi-member, tautan **WorkOrder** — pemakaian
+  material gudang ikut tercatat (tidak bisa dilakukan sistem lama)
+- **Workflow per kategori** (G17): template + step berurutan (wajib/
+  opsional) yang dipakai bersama; **solve digerbang** — kategori
+  ber-workflow menolak solve sebelum seluruh step wajib selesai
+- **"Hentikan Sementara"** dengan alasan wajib — dan **MTTR dihitung
+  bersih dari total jeda pause** (nilai tambah vs sistem lama); SLA
+  breach dari MTTR bersih; solve ditolak selama dijeda
+- **Hak kerja di engine**: hanya assignee/member/koordinator yang bisa
+  mengerjakan; teknisi hanya melihat tiket yang ditugaskan padanya
+- **Dispatch board / TV Wall** (G15): papan kerja hari ini per petugas —
+  tiket aktif + work order terjadwal, murni view tanpa model baru
+- Seed 8 kategori khas ISP + contoh workflow "Instalasi Pelanggan Baru";
+  notifikasi internal via engine notify; *notifikasi ke pelanggan
+  (WA/email/app) menyusul Fase 15*
+- Service layer `src/lib/helpdesk.ts`; teruji 42 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

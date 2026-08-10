@@ -124,6 +124,10 @@ export const PERMISSIONS = {
   GL_VIEW: "gl.view", // laporan & jurnal
   GL_MANAGE: "gl.manage", // CoA & posting rules
   GL_POST: "gl.post", // jurnal manual & reversal
+  // Phase 12 — Helpdesk Pelanggan
+  CTICKETS_VIEW: "ctickets.view",
+  CTICKETS_CREATE: "ctickets.create",
+  CTICKETS_MANAGE: "ctickets.manage", // assign, kategori, workflow, close
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -708,6 +712,11 @@ export const GATEWAY_TX_STATUSES = [
   "FAILED",
 ] as const;
 
+// ── Phase 12: Helpdesk Pelanggan ────────────────────────────────
+
+export const CTICKET_STATUSES = ["OPEN", "IN_PROGRESS", "PENDING", "SOLVED", "CLOSED"] as const;
+export const CTICKET_PRIORITIES = ["LOW", "NORMAL", "HIGH", "URGENT"] as const;
+
 // ── Phase 11: General Ledger ────────────────────────────────────
 
 // Kategori akun (§3.3 sistem lama) + sisi normal saldonya.
@@ -884,6 +893,7 @@ export const STATUS_LABELS: Record<string, string> = {
   QUEUED: "Antri",
   RUNNING: "Berjalan",
   SKIPPED: "Dilewati",
+  SOLVED: "Terselesaikan",
   ENABLE: "Aktifkan",
   DISABLE: "Blokir",
   SYNC: "Sinkronisasi",

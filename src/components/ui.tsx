@@ -156,6 +156,8 @@ const STATUS_STYLES: Record<string, string> = {
   QUEUED: "is-pending",
   RUNNING: "is-pending",
   SKIPPED: "is-neutral",
+  // Helpdesk pelanggan
+  SOLVED: "is-approved",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {
