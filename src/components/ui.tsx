@@ -152,6 +152,10 @@ const STATUS_STYLES: Record<string, string> = {
   VOID: "is-neutral",
   WRITTEN_OFF: "is-neutral",
   PREVIEW: "is-pending",
+  // Isolir & antrian router
+  QUEUED: "is-pending",
+  RUNNING: "is-pending",
+  SKIPPED: "is-neutral",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

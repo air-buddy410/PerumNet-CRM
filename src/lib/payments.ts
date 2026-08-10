@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { autoRestoreAfterPayment } from "@/lib/dunning";
 import { PAYMENT_METHODS, GATEWAY_PROVIDERS } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -276,6 +277,8 @@ export async function postPayment(user: CurrentUser, paymentId: string): Promise
     entityId: paymentId,
     description: `Posting pembayaran ${payment.paymentNumber} (${payment.allocations.length} invoice)`,
   });
+  // Fase 10: buka isolir otomatis bila tunggakan sudah lunas (tidak melempar).
+  await autoRestoreAfterPayment(payment.customerId);
   return { ok: true, id: paymentId };
 }
 
@@ -552,6 +555,8 @@ export async function ingestGatewayEvent(
     entityId: payment.id,
     description: `Pembayaran gateway ${paymentNumber} dari webhook ${integration.code}: Rp${total} (${allocations.length} invoice)`,
   });
+  // Fase 10: buka isolir otomatis bila tunggakan sudah lunas (tidak melempar).
+  await autoRestoreAfterPayment(bundle.customerId);
   return { ok: true, id: payment.id, data: { action: "PAID", paymentNumber } };
 }
 

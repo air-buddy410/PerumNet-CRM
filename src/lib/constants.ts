@@ -118,6 +118,8 @@ export const PERMISSIONS = {
   PAYMENTS_CREATE: "payments.create", // catat pembayaran & bundle gateway
   PAYMENTS_POST: "payments.post", // posting pembayaran (mengubah piutang)
   PAYMENTS_REVERSE: "payments.reverse",
+  // Phase 10 — Isolir & Dunning
+  DUNNING_MANAGE: "dunning.manage", // kebijakan, evaluasi, isolir/restore
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -702,6 +704,19 @@ export const GATEWAY_TX_STATUSES = [
   "FAILED",
 ] as const;
 
+// ── Phase 10: Isolir & Dunning ──────────────────────────────────
+
+export const SUSPENSION_REASONS = [
+  ["OVERDUE", "Tunggakan"],
+  ["REQUEST", "Permintaan Pelanggan"],
+  ["ABUSE", "Penyalahgunaan"],
+  ["MAINTENANCE", "Maintenance"],
+] as const;
+
+export const ACCESS_JOB_ACTIONS = ["ENABLE", "DISABLE", "CREATE", "UPDATE", "DELETE", "SYNC"] as const;
+
+export const ACCESS_JOB_STATUSES = ["QUEUED", "RUNNING", "SUCCESS", "FAILED", "SKIPPED"] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -822,6 +837,13 @@ export const STATUS_LABELS: Record<string, string> = {
   WRITTEN_OFF: "Dihapusbukukan",
   PREVIEW: "Preview",
   PENDING: "Menunggu",
+  // Phase 10
+  QUEUED: "Antri",
+  RUNNING: "Berjalan",
+  SKIPPED: "Dilewati",
+  ENABLE: "Aktifkan",
+  DISABLE: "Blokir",
+  SYNC: "Sinkronisasi",
   // (MONTHLY sudah ada di atas — label invoice memakai INVOICE_TYPES)
 };
 
