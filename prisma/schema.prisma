@@ -106,6 +106,9 @@ model User {
 
   invoiceRuns     InvoiceRun[] @relation("InvoiceRunCreator")
   invoicesCreated Invoice[]    @relation("InvoiceCreator")
+  paymentsReceived Payment[]          @relation("PaymentReceiver")
+  paymentsCreated  Payment[]          @relation("PaymentCreator")
+  gatewayTxCreated PaymentGatewayTx[] @relation("GatewayTxCreator")
 }
 
 model Division {
@@ -510,6 +513,8 @@ model Customer {
   workOrders    WorkOrder[]
   projects      Project[]
   invoices      Invoice[]
+  payments      Payment[]
+  gatewayTxs    PaymentGatewayTx[]
 }
 
 model Subscription {
@@ -1475,7 +1480,8 @@ model Integration {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  events IntegrationEvent[]
+  events     IntegrationEvent[]
+  gatewayTxs PaymentGatewayTx[]
 }
 
 // Log lalu lintas integrasi (inbound webhook / outbound call).
@@ -1587,6 +1593,8 @@ model Invoice {
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
   createdBy    User          @relation("InvoiceCreator", fields: [createdById], references: [id])
   lines        InvoiceLine[]
+  allocations  PaymentAllocation[]
+  gatewayTxs   PaymentGatewayTxInvoice[]
 
   // Kunci idempotensi generator bulanan (§2.2).
   @@unique([subscriptionId, period, type])
@@ -1605,4 +1613,113 @@ model InvoiceLine {
   amount      BigInt
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+// ═══════════════ Phase 9: Payment & Merchant/Kolektor (DESIGN-PHASE-8 §3) ═══════════════
+// Adaptasi dari rancangan: feePercent Float (SQLite tanpa Decimal);
+// cashAccountId/feePayableAccountId (CoA) menyusul Fase 11 — sementara
+// merchant ditautkan ke Cashbook; invoiceIds gateway memakai tabel relasi
+// (SQLite tanpa scalar list); Payment.receivedById nullable untuk pembayaran
+// gateway (tanpa kasir). Cashbook.balance TIDAK diubah modul ini — jurnal
+// kas/piutang terpadu menyusul di GL Fase 11.
+
+// Unit penagih / mitra kolektor (BUMDES) — keputusan §11.1: entitas baru.
+model Merchant {
+  id             String  @id @default(cuid())
+  code           String  @unique
+  name           String
+  contactName    String?
+  phone          String?
+  address        String?
+  latitude       Float?
+  longitude      Float?
+  isPaymentPoint Boolean @default(false)
+  cashbookId     String? // kas setoran mitra (jembatan ke CoA di Fase 11)
+  feePercent     Float   @default(0) // §11.3: komisi persen per merchant
+  isActive       Boolean @default(true)
+
+  payments Payment[]
+}
+
+model Payment {
+  id             String    @id @default(cuid())
+  paymentNumber  String    @unique // PAY-YYYYMM-####
+  customerId     String
+  merchantId     String?
+  receivedById   String? // kasir/kolektor — null untuk pembayaran gateway
+  method         String // CASH|TRANSFER|GATEWAY
+  cashbookId     String? // kas tujuan setoran (CASH/TRANSFER)
+  gatewayTxId    String? // untuk GATEWAY
+  amount         BigInt
+  feeAmount      BigInt    @default(0) // biaya gateway / komisi kolektor
+  netAmount      BigInt
+  paidAt         DateTime
+  status         String    @default("DRAFT") // DRAFT|POSTED|REVERSED
+  journalEntryId String?   @unique // diisi GL Fase 11
+  reversalOfId   String?   @unique
+  notes          String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer    Customer            @relation(fields: [customerId], references: [id])
+  merchant    Merchant?           @relation(fields: [merchantId], references: [id])
+  receivedBy  User?               @relation("PaymentReceiver", fields: [receivedById], references: [id])
+  gatewayTx   PaymentGatewayTx?   @relation(fields: [gatewayTxId], references: [id])
+  reversalOf  Payment?            @relation("PaymentReversal", fields: [reversalOfId], references: [id])
+  reversal    Payment?            @relation("PaymentReversal")
+  createdBy   User                @relation("PaymentCreator", fields: [createdById], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([status, paidAt])
+  @@index([customerId])
+}
+
+// Alokasi eksplisit: 1 pembayaran → banyak invoice (§3.2).
+model PaymentAllocation {
+  id        String @id @default(cuid())
+  paymentId String
+  invoiceId String
+  amount    BigInt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@unique([paymentId, invoiceId])
+}
+
+// Bundle pembayaran multi-invoice via payment gateway (padanan "Bundle Payment").
+model PaymentGatewayTx {
+  id            String    @id @default(cuid())
+  bundleRef     String    @unique // GTX-YYYYMM-####
+  provider      String // WINPAY|DUITKU|TRIPAY|OTHER
+  integrationId String? // adapter Integration (webhook & kredensial)
+  customerId    String
+  totalAmount   BigInt
+  paidAmount    BigInt    @default(0)
+  paymentUrl    String? // diisi saat adapter gateway live
+  expiresAt     DateTime?
+  status        String    @default("PENDING") // PENDING|PAID|EXPIRED|CANCELLED|FAILED
+  rawPayload    String? // JSON string payload webhook terakhir
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  integration Integration?              @relation(fields: [integrationId], references: [id])
+  customer    Customer                  @relation(fields: [customerId], references: [id])
+  createdBy   User                      @relation("GatewayTxCreator", fields: [createdById], references: [id])
+  invoices    PaymentGatewayTxInvoice[]
+  payments    Payment[]
+
+  @@index([status])
+}
+
+model PaymentGatewayTxInvoice {
+  gatewayTxId String
+  invoiceId   String
+
+  gatewayTx PaymentGatewayTx @relation(fields: [gatewayTxId], references: [id])
+  invoice   Invoice          @relation(fields: [invoiceId], references: [id])
+
+  @@id([gatewayTxId, invoiceId])
 }

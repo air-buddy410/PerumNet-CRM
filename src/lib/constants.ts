@@ -113,6 +113,11 @@ export const PERMISSIONS = {
   BILLING_MANAGE: "billing.manage", // addon, billing profile
   INVOICES_CREATE: "invoices.create", // invoice manual & invoice run
   INVOICES_POST: "invoices.post", // posting run, void invoice
+  // Phase 9 — Payment & Merchant/Kolektor
+  MERCHANTS_MANAGE: "merchants.manage",
+  PAYMENTS_CREATE: "payments.create", // catat pembayaran & bundle gateway
+  PAYMENTS_POST: "payments.post", // posting pembayaran (mengubah piutang)
+  PAYMENTS_REVERSE: "payments.reverse",
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -674,6 +679,29 @@ export const INVOICE_LINE_KINDS = [
   ["ADJUSTMENT", "Penyesuaian"],
 ] as const;
 
+// ── Phase 9: Payment & Merchant ─────────────────────────────────
+
+export const PAYMENT_METHODS = [
+  ["CASH", "Tunai"],
+  ["TRANSFER", "Transfer Bank"],
+  ["GATEWAY", "Payment Gateway"],
+] as const;
+
+export const GATEWAY_PROVIDERS = [
+  ["WINPAY", "Winpay"],
+  ["DUITKU", "Duitku"],
+  ["TRIPAY", "Tripay"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const GATEWAY_TX_STATUSES = [
+  "PENDING",
+  "PAID",
+  "EXPIRED",
+  "CANCELLED",
+  "FAILED",
+] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -793,6 +821,7 @@ export const STATUS_LABELS: Record<string, string> = {
   VOID: "Void",
   WRITTEN_OFF: "Dihapusbukukan",
   PREVIEW: "Preview",
+  PENDING: "Menunggu",
   // (MONTHLY sudah ada di atas — label invoice memakai INVOICE_TYPES)
 };
 

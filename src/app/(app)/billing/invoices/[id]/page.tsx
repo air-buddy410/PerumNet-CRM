@@ -27,6 +27,10 @@ export default async function InvoiceDetailPage({
       invoiceRun: true,
       createdBy: true,
       lines: true,
+      allocations: {
+        include: { payment: true },
+        orderBy: { payment: { paidAt: "asc" } },
+      },
     },
   });
   if (!inv) notFound();
@@ -141,6 +145,25 @@ export default async function InvoiceDetailPage({
               )}
             </dl>
           </div>
+
+          {inv.allocations.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 text-sm font-medium">Riwayat Pembayaran</h2>
+              <ul className="space-y-2 text-sm">
+                {inv.allocations.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/billing/payments/${a.paymentId}`} className="font-mono text-xs text-brand-600 hover:underline">
+                      {a.payment.paymentNumber}
+                    </Link>
+                    <span className={`text-xs ${a.payment.status === "REVERSED" ? "text-slate-400 line-through" : ""}`}>
+                      {formatRupiah(a.amount)}
+                      {a.payment.reversalOfId ? " (reversal)" : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {canPost && ["OPEN", "DRAFT"].includes(inv.status) && inv.paidAmount === 0n && (
             <div className="card p-5">
