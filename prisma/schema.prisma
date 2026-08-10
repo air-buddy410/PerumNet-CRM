@@ -120,6 +120,12 @@ model User {
   outboundCreated   OutboundMessage[]    @relation("OutboundCreator")
   announcements     Announcement[]       @relation("AnnouncementCreator")
   transferReceipts TransferReceipt[] @relation("TransferReceiver")
+  doCreated        DeliveryOrder[] @relation("DoCreator")
+  doApproved       DeliveryOrder[] @relation("DoApprover")
+  irfCreated       InventoryRequestForm[] @relation("IrfCreator")
+  signatures       DocumentSignature[] @relation("SignatureSigner")
+  returnRequested  ReturnRequest[] @relation("ReturnRequester")
+  returnVerified   ReturnRequest[] @relation("ReturnVerifier")
 }
 
 model Division {
@@ -590,6 +596,7 @@ model Attachment {
   uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
 
   @@index([entityType, entityId])
+  signatures DocumentSignature[]
 }
 
 // ── Phase 3: Inventory & Operational ────────────────────────────
@@ -611,6 +618,7 @@ model Warehouse {
   txFrom      StockTransaction[] @relation("TxFrom")
   txTo        StockTransaction[] @relation("TxTo")
   opnames     OpnameSession[]
+  returnRequests ReturnRequest[] @relation("ReturnWarehouse")
 }
 
 model Item {
@@ -633,6 +641,8 @@ model Item {
   custodyLevels CustodyLevel[]
   bomLines      ProjectBomLine[]
   transferReceiptLines TransferReceiptLine[]
+  deliveryOrderLines DeliveryOrderLine[]
+  returnRequestLines ReturnRequestLine[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -702,6 +712,9 @@ model StockTransaction {
   reversedBy    StockTransaction?      @relation("TxReversal")
   lines         StockTransactionLine[]
   receipts      TransferReceipt[]
+  deliveryOrders DeliveryOrder[]
+  irf            InventoryRequestForm?
+  returnRequest  ReturnRequest?
 
   @@index([type, status])
 }
@@ -713,6 +726,9 @@ model StockTransactionLine {
   qty      Int
   deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
   snInput  String? // SN yang akan dibuat saat posting goods receipt
+  /// Fase 18 — kondisi barang saat dikembalikan: GOOD|USED|DAMAGED|RMA.
+  /// GOOD/USED masuk onHand, DAMAGED/RMA masuk dimensi damaged.
+  condition String?
 
   tx           StockTransaction      @relation(fields: [txId], references: [id])
   item         Item                  @relation(fields: [itemId], references: [id])
@@ -720,6 +736,7 @@ model StockTransactionLine {
   receiptLines TransferReceiptLine[]
 
   @@index([txId])
+  deliveryOrderLines DeliveryOrderLine[]
 }
 
 model SerializedDevice {
@@ -749,6 +766,7 @@ model SerializedDevice {
 
   @@index([status])
   @@index([custodianId])
+  returnRequestLines ReturnRequestLine[]
 }
 
 // Riwayat perangkat — append-only.
@@ -2337,4 +2355,112 @@ model TransferReceiptLine {
 
   @@index([receiptId])
   @@index([txLineId])
+}
+
+/// Fase 18 (PRD-WAREHOUSE-ENHANCEMENT F5) — surat jalan atas transaksi
+/// pengeluaran/transfer. Maksimal satu DO aktif per transaksi.
+model DeliveryOrder {
+  id          String    @id @default(cuid())
+  doNumber    String    @unique // DO-YYYYMM-####
+  txId        String
+  status      String    @default("DRAFT") // DRAFT|APPROVED|CANCELLED
+  notes       String?
+  createdById String
+  approvedById String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  tx         StockTransaction    @relation(fields: [txId], references: [id])
+  createdBy  User                @relation("DoCreator", fields: [createdById], references: [id])
+  approvedBy User?               @relation("DoApprover", fields: [approvedById], references: [id])
+  lines      DeliveryOrderLine[]
+
+  @@index([txId, status])
+}
+
+model DeliveryOrderLine {
+  id       String @id @default(cuid())
+  doId     String
+  txLineId String
+  itemId   String
+  qty      Int
+
+  deliveryOrder DeliveryOrder        @relation(fields: [doId], references: [id])
+  txLine        StockTransactionLine @relation(fields: [txLineId], references: [id])
+  item          Item                 @relation(fields: [itemId], references: [id])
+
+  @@index([doId])
+}
+
+/// Fase 18 (F6) — Inventory Request Form: satu IRF per sesi pengeluaran barang,
+/// dibuat otomatis saat posting dan wajib memuat dua tanda tangan.
+model InventoryRequestForm {
+  id          String   @id @default(cuid())
+  irfNumber   String   @unique // IRF-YYYYMM-####
+  txId        String   @unique
+  status      String   @default("SIGNED") // DRAFT|SIGNED|CANCELLED
+  createdById String
+  createdAt   DateTime @default(now())
+
+  tx        StockTransaction @relation(fields: [txId], references: [id])
+  createdBy User             @relation("IrfCreator", fields: [createdById], references: [id])
+}
+
+/// Tanda tangan dokumen — diambil SEBELUM transaksi database dijalankan,
+/// sehingga tidak pernah ada tanda tangan yatim yang seolah mengesahkan
+/// serah-terima yang tidak terjadi.
+model DocumentSignature {
+  id           String   @id @default(cuid())
+  docType      String // IRF|DO|RECEIPT
+  docId        String
+  role         String // REQUESTOR|WAREHOUSE_ADMIN|RECEIVED_BY|RELEASED_BY
+  signerName   String
+  signerUserId String?
+  attachmentId String? // gambar tanda tangan (model Attachment)
+  signedAt     DateTime @default(now())
+
+  signerUser User?       @relation("SignatureSigner", fields: [signerUserId], references: [id])
+  attachment Attachment? @relation(fields: [attachmentId], references: [id])
+
+  @@unique([docType, docId, role])
+  @@index([docType, docId])
+}
+
+/// Fase 18 (F8) — pengajuan pengembalian material oleh pemegang barang.
+/// Jalur kedua (verifikasi admin) menghasilkan transaksi STOCK_RETURN.
+model ReturnRequest {
+  id            String    @id @default(cuid())
+  returnNumber  String    @unique // RET-YYYYMM-####
+  requesterId   String
+  warehouseToId String
+  status        String    @default("PENDING") // PENDING|ACCEPTED|REJECTED
+  note          String?
+  verifiedById  String?
+  verifiedAt    DateTime?
+  verifyNote    String?
+  txId          String?   @unique
+  createdAt     DateTime  @default(now())
+
+  requester   User                @relation("ReturnRequester", fields: [requesterId], references: [id])
+  warehouseTo Warehouse           @relation("ReturnWarehouse", fields: [warehouseToId], references: [id])
+  verifiedBy  User?               @relation("ReturnVerifier", fields: [verifiedById], references: [id])
+  tx          StockTransaction?   @relation(fields: [txId], references: [id])
+  lines       ReturnRequestLine[]
+
+  @@index([status])
+}
+
+model ReturnRequestLine {
+  id        String  @id @default(cuid())
+  requestId String
+  itemId    String
+  qty       Int
+  deviceId  String?
+  condition String // GOOD|USED|DAMAGED|RMA
+
+  request ReturnRequest     @relation(fields: [requestId], references: [id])
+  item    Item              @relation(fields: [itemId], references: [id])
+  device  SerializedDevice? @relation(fields: [deviceId], references: [id])
+
+  @@index([requestId])
 }

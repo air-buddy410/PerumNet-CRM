@@ -57,6 +57,7 @@ export default async function AppLayout({
     inventoryItems.push(
       { href: "/inventory/stock", label: "Posisi Stock" },
       { href: "/inventory/transactions", label: "Transaksi Stock" },
+      { href: "/inventory/returns", label: "Pengembalian" },
       { href: "/inventory/devices", label: "Perangkat" },
       { href: "/inventory/items", label: "Item Master" },
       { href: "/inventory/warehouses", label: "Gudang" },

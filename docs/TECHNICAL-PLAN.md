@@ -189,6 +189,8 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 
 | **17. Transfer Tiga Langkah** | Posting transfer = pengiriman, `inTransit` gudang tujuan, dokumen penerimaan bertahap | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F3; barang selalu terlihat di salah satu dari tiga tempat — gudang asal, perjalanan, gudang tujuan; `TransferReceipt` mendukung penerimaan bertahap sehingga transfer tetap PARTIAL sampai lengkap; reversal ditolak begitu ada yang diterima — koreksinya lewat transfer balik; perbaikan: rekonsiliasi kini membalik tanda untuk transaksi reversal, sebelumnya terhitung ganda) |
 
+| **18. Surat Jalan, IRF & Return** | DeliveryOrder, InventoryRequestForm + tanda tangan dua pihak, pengembalian dua jalur | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F5/F6/F8; maks satu DO aktif per transaksi, pembuat DO tidak boleh menyetujui sendiri; IRF + dua tanda tangan terbit di dalam transaksi posting yang sama sehingga tidak ada dokumen yatim; pengembalian diajukan pemegang barang & diverifikasi orang lain, kondisi DAMAGED/RMA masuk dimensi `damaged` bukan stock siap pakai) |
+
 Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dari riset banding terhadap sistem helpdesk lama — lihat `FEATURE-GAP-ANALYSIS-HELPDESK-V2.md` (gap G1–G23) dan `DESIGN-PHASE-8-BILLING-AND-BEYOND.md`. Keputusan desain §11 yang diambil selama implementasi tercatat di `DECISIONS-PHASE-8.md`, termasuk satu yang masih menunggu pemilik proyek: **retensi data identitas (foto selfie & jejak lokasi absensi)**.
 
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
