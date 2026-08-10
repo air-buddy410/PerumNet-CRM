@@ -4,11 +4,10 @@
 **Sistem pembanding:** PERUMNET Helpdesk System v2.0.1 (Laravel, vendor "lubax"), sistem produksi pihak lain
 **Sistem kita:** PerumNet-CRM (Next.js + Prisma, 60 model, branch `feat/phase-2-sales-crm`)
 
-> **STATUS: CATATAN / BACKLOG — BUKAN PEKERJAAN AKTIF.**
-> Dokumen ini hasil riset banding, disimpan sebagai referensi. Prioritas saat ini tetap
-> menuntaskan PerumNet CRM sesuai `PRD-PerumNet-CRM.md`. Perbandingan dan penambahan fitur
-> dikerjakan **setelah** PRD tuntas. Jangan mulai implementasi apapun dari dokumen ini
-> tanpa instruksi eksplisit.
+> **STATUS: SUDAH DIEKSEKUSI (2026-08-10).**
+> Gap G1–G23 di dokumen ini ditutup lewat Fase 8–15, semuanya sudah ter-merge ke `main`.
+> Dokumen ini kini berfungsi sebagai **rujukan riset**, bukan backlog. Keputusan yang diambil
+> selama implementasi tercatat di [DECISIONS-PHASE-8.md](DECISIONS-PHASE-8.md).
 
 ## 1. Metode & Batasan
 
@@ -205,6 +204,43 @@ G12 App pelanggan · G17 Workflow konfigurabel · G18 Sales master · G19 Trash 
 - Halaman detail pelanggan & detail invoice — sengaja tidak dibuka untuk menghindari membaca data pribadi
 - Perilaku dinamis: apa yang terjadi saat invoice dibayar, bagaimana isolir dieksekusi, isi payload webhook gateway
 - Struktur database sebenarnya — semua di sini disimpulkan dari lapisan UI
+
+## 6b. Sisa Gap Setelah Fase 8–15 (banding ulang 2026-08-10)
+
+Diperiksa langsung terhadap kode di `main` setelah PR #2–#9 ter-merge. Gap G1–G23 sebagian besar tertutup; yang berikut **masih terbuka**.
+
+### Menunggu kredensial / keputusan PO — bukan pekerjaan koding
+| Sisa | Catatan |
+|---|---|
+| Adapter MikroTik live | Executor sudah pluggable, antrian job siap; tinggal kredensial |
+| Adapter WhatsApp/SMTP live | Sama — pengirim default sengaja menggagalkan job dengan pesan jelas |
+| Monitoring PPPoE & probe realtime (G9) | Butuh akses OLT/router |
+| Payment gateway live + payment URL | Provider belum dipilih (§11.7) |
+| Portal self-service pelanggan (G12) | Menunggu keputusan autentikasi pelanggan |
+
+### Benar-benar belum dibangun
+| Sisa | Ada di sistem lama | Dampak |
+|---|---|---|
+| **Laporan arus kas** (langsung & tidak langsung) | ya | Neraca, laba rugi, buku besar, neraca saldo sudah ada — tiga laporan ini belum |
+| **Laporan perubahan modal** | ya | idem |
+| **Laporan rasio keuangan** (11 rasio) | ya | idem |
+| **Export tabel (CSV/Excel/PDF/Print)** — G22 | ya, di hampir semua list | Tidak ada satupun utilitas export di kode; operasional sehari-hari sangat bergantung ini |
+| **Laporan analitik tiket** (MTTR & SLA per kategori/agen, resolution rate, ranking pelanggan) | ya | Field `slaBreached` & `mttrMinutes` sudah terisi, halaman laporannya belum ada |
+| **Dashboard HRD** | ya | Halaman ringkasan kehadiran/pengajuan belum ada |
+| **UI master lokasi absen (geofence)** | ya | Model `AttendanceLocation` ada dan dipakai engine, tapi tidak ada halaman untuk mengelolanya — titik geofence hanya bisa dibuat lewat seed |
+| **Peta ODP + import/export KML** | ya | Tidak ada kode KML sama sekali |
+| **Master Contact/Supplier** — G20 | ya | Belum ada |
+| **Soft delete + Trash/restore** — G19 | ya | Tidak ada `deletedAt` di manapun |
+| **Workflow lead yang dapat dikonfigurasi** — G17 (sisi lead) | ya | Workflow tiket sudah konfiguratif; pipeline lead belum |
+| **Rekap transaksi milik kasir sendiri** | ya (`My Transaction`) | Kasir belum bisa melihat rekap penerimaannya sendiri |
+
+### Prioritas yang aku sarankan
+1. **Export tabel** — paling sering dipakai harian, dan ketiadaannya paling terasa saat migrasi.
+2. **UI lokasi absen** — modul HRD sudah jalan tapi masternya tidak bisa dikelola dari aplikasi.
+3. **Tiga laporan keuangan sisa** — melengkapi GL yang sudah terlanjur lengkap.
+4. **Laporan analitik tiket** — datanya sudah ada, tinggal disajikan.
+
+Sisanya (KML, contact, trash, workflow lead, rekap kasir) bisa menyusul sesuai kebutuhan lapangan.
 
 ## 7. Pemetaan Lengkap (Ronde 2)
 

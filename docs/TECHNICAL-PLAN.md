@@ -185,6 +185,8 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 | **14. HRD & Absensi** | Karyawan (menempel User), shift & jadwal, absensi ber-geofence, izin/cuti & lembur, rekap bulanan | ✅ selesai (karyawan = profil di atas `User` yang sudah ada, bukan tabel orang paralel; hierarki atasan dijaga bebas siklus dan menjadi sumber step `SUPERVISOR`; geofence ditegakkan di service layer via haversine — clock-in di luar radius ditolak engine; izin/cuti & lembur memakai approval engine yang sama, berjenjang atasan → HRD (§8), keputusan disinkronkan balik ke catatan absensi; **payroll di luar lingkup**) |
 | **15. Kanal Pelanggan** | Template pesan, preferensi notifikasi, antrian pesan keluar + rate limit & retry, blast, pengumuman/promo | ✅ selesai (menutup gap G11/G12; preferensi pelanggan ditegakkan di engine — `NONE` ditolak sejak antrian, begitu pula kanal tanpa kontak; antrian auditable & retryable meniru NetworkAccessJob Fase 10 dengan status/attempts/lastError + rate limit per eksekusi; blast menghormati preferensi per pelanggan dan melaporkan alasan yang dilewati; **adapter WhatsApp/SMTP live menunggu kredensial §11.7 — executor pluggable sudah siap, pengirim default menggagalkan job dengan pesan jelas**; *portal self-service pelanggan menunggu keputusan PO soal autentikasi pelanggan*) |
 
+Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dari riset banding terhadap sistem helpdesk lama — lihat `FEATURE-GAP-ANALYSIS-HELPDESK-V2.md` (gap G1–G23) dan `DESIGN-PHASE-8-BILLING-AND-BEYOND.md`. Keputusan desain §11 yang diambil selama implementasi tercatat di `DECISIONS-PHASE-8.md`, termasuk satu yang masih menunggu pemilik proyek: **retensi data identitas (foto selfie & jejak lokasi absensi)**.
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 ---
@@ -194,7 +196,7 @@ Setiap fase: schema → service (business rules) → UI → seed → verifikasi 
 ### Ambiguitas requirement (butuh keputusan Product Owner)
 
 1. ~~**"Supervisor" pada approval matrix petty cash**~~ — **DIPUTUSKAN (2026-08-06):** struktur organisasi `staff → supervisor → owner`; staff & supervisor melekat per divisi; owner = super admin penuh. Implementasi: entitas `Division`, field `User.level` (STAFF/SUPERVISOR/OWNER) + `User.divisionId`, dan step approval bertipe `ROLE` / `SUPERVISOR` (supervisor divisi pengaju, di-resolve saat submit) / `OWNER`. Owner dapat memutus semua jenis step, tetap terikat SoD (tidak bisa memutus request sendiri, tidak bisa memutus dua step pada satu request).
-2. **Billing & pembayaran** — PRD menyebut verifikasi pembayaran & MRR tetapi billing ada di "integrasi potensial". Apakah invoice/billing dibangun internal atau integrasi sistem eksisting?
+2. ~~**Billing & pembayaran**~~ — **DIPUTUSKAN (2026-08-10):** dibangun **internal**, bukan integrasi ke sistem eksisting. Alasan: isolir otomatis menuntut billing dan status layanan berada di satu sistem; riset banding menunjukkan sistem sejenis juga membangunnya internal dan menjahitnya ke GL. Implementasi di Fase 8–11.
 3. **Batas diskon per level** (§6.4 "sesuai limit") — nilai limit belum didefinisikan.
 4. **SLA konkret** (follow-up lead, incident per severity) — angka target belum ada; dibuat konfigurasi.
 5. **Komisi Sales** — formula belum didefinisikan (persen? flat? per paket?).
