@@ -53,7 +53,7 @@ export default async function WarehousesPage({
                     <td className="td font-mono text-xs">{w.code}</td>
                     <td className="td font-medium">{w.name}</td>
                     <td className="td text-xs">{w.address ?? "-"}</td>
-                    <td className="td">{w.stockLevels.filter((l) => l.qty > 0).length}</td>
+                    <td className="td">{w.stockLevels.filter((l) => l.onHand > 0).length}</td>
                     <td className="td">{w._count.devices}</td>
                     <td className="td"><ActiveBadge isActive={w.isActive} /></td>
                     {canManage && (

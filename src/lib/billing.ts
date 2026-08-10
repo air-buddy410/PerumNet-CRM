@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { postInvoiceJournal, reverseInvoiceJournal } from "@/lib/gl";
 import { INVOICE_TYPES, INVOICE_LINE_KINDS } from "@/lib/constants";
+import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Billing Engine (DESIGN-PHASE-8 §2, gap G1/G4/G5/G13/G23) ────
@@ -45,14 +46,30 @@ export function taxOf(subtotal: bigint, taxPercent: number): bigint {
   return (subtotal * basisPoints + 5000n) / 10000n;
 }
 
-async function nextInvoiceNumber(period?: string | null): Promise<string> {
-  const now = new Date();
-  const compact = period
-    ? period.replace("-", "")
-    : `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = `INV-${compact}`;
-  const n = await db.invoice.count({ where: { invoiceNumber: { startsWith: prefix } } });
-  return `${prefix}-${String(n + 1).padStart(4, "0")}`;
+// Fase 16: pindah dari count()+1 ke DocumentSequence yang atomik.
+// Pola lama membuat dua proses yang berjalan bersamaan menghasilkan nomor
+// identik, lalu salah satunya gagal kena unique constraint di tengah run
+// (tercatat di DECISIONS-PHASE-8.md §5). Format nomor tidak berubah.
+async function nextInvoiceNumber(
+  prisma: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  period?: string | null
+): Promise<string> {
+  const at = period
+    ? new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)) - 1, 1)
+    : new Date();
+  return nextDocumentNumber(prisma, {
+    docType: "INV",
+    period: "MONTHLY",
+    at,
+    // Invoice yang terbit sebelum sistem sequence ada tetap dihormati.
+    backfill: async (periodKey) => {
+      const rows = await prisma.invoice.findMany({
+        where: { invoiceNumber: { startsWith: `INV-${periodKey}-` } },
+        select: { invoiceNumber: true },
+      });
+      return highestSuffix(rows.map((r) => r.invoiceNumber));
+    },
+  });
 }
 
 // ── Addon service (G13) ─────────────────────────────────────────
@@ -269,7 +286,7 @@ export async function generateInvoiceRun(
     const issuedAt = new Date(y, m - 1, profile.invoiceDay);
     const dueAt = new Date(issuedAt.getTime() + profile.dueDays * 86400e3);
 
-    const invoiceNumber = await nextInvoiceNumber(run.period);
+    const invoiceNumber = await nextInvoiceNumber(db, run.period);
     await db.invoice.create({
       data: {
         invoiceNumber,
@@ -466,7 +483,7 @@ export async function createManualInvoice(
     return { ok: false, error: "Total invoice harus lebih dari nol." };
   }
   const taxAmount = taxOf(subtotal, data.taxPercent);
-  const invoiceNumber = await nextInvoiceNumber(null);
+  const invoiceNumber = await nextInvoiceNumber(db, null);
   const invoice = await db.invoice.create({
     data: {
       invoiceNumber,
