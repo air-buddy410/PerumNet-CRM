@@ -4,11 +4,10 @@
 **Sistem pembanding:** PERUMNET Helpdesk System v2.0.1 (Laravel, vendor "lubax"), sistem produksi pihak lain
 **Sistem kita:** PerumNet-CRM (Next.js + Prisma, 60 model, branch `feat/phase-2-sales-crm`)
 
-> **STATUS: CATATAN / BACKLOG — BUKAN PEKERJAAN AKTIF.**
-> Dokumen ini hasil riset banding, disimpan sebagai referensi. Prioritas saat ini tetap
-> menuntaskan PerumNet CRM sesuai `PRD-PerumNet-CRM.md`. Perbandingan dan penambahan fitur
-> dikerjakan **setelah** PRD tuntas. Jangan mulai implementasi apapun dari dokumen ini
-> tanpa instruksi eksplisit.
+> **STATUS: SUDAH DIEKSEKUSI (2026-08-10).**
+> Gap G1–G23 di dokumen ini ditutup lewat Fase 8–15, semuanya sudah ter-merge ke `main`.
+> Dokumen ini kini berfungsi sebagai **rujukan riset**, bukan backlog. Keputusan yang diambil
+> selama implementasi tercatat di [DECISIONS-PHASE-8.md](DECISIONS-PHASE-8.md).
 
 ## 1. Metode & Batasan
 

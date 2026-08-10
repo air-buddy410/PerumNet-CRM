@@ -4,11 +4,10 @@
 **Dasar:** [FEATURE-GAP-ANALYSIS-HELPDESK-V2.md](FEATURE-GAP-ANALYSIS-HELPDESK-V2.md)
 **Status:** rancangan untuk direview — belum ada kode yang ditulis
 
-> **STATUS: CATATAN / BACKLOG — BUKAN PEKERJAAN AKTIF.**
-> Fase 8–15 di sini **belum disetujui untuk dikerjakan**. Prioritas saat ini adalah
-> menuntaskan PerumNet CRM sesuai `PRD-PerumNet-CRM.md` (7 fase PRD sudah selesai;
-> sisanya keputusan PO & adapter eksternal). Rancangan ini baru dieksekusi setelah itu,
-> dan hanya atas instruksi eksplisit.
+> **STATUS: SUDAH DIIMPLEMENTASI (2026-08-10).**
+> Fase 8–15 sudah dibangun dan ter-merge ke `main` (PR #2–#9).
+> Delapan keputusan di §11 sudah diambil — lihat [DECISIONS-PHASE-8.md](DECISIONS-PHASE-8.md);
+> satu di antaranya (retensi data identitas) masih menunggu keputusan pemilik proyek.
 
 ## 0. Prinsip Rancangan
 
