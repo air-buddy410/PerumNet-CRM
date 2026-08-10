@@ -10,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge } from "@/components/ui";
+import { tracePath } from "@/lib/ftth";
 import {
   updateSubscriptionTechAction,
   changeSubscriptionStatusAction,
@@ -38,6 +39,8 @@ export default async function SubscriptionDetailPage({
     where: { deviceType: { in: ["ROUTER", "CORE_ROUTER"] }, status: "ACTIVE" },
     orderBy: { hostname: "asc" },
   });
+  // Fase 13: penelusuran jalur FTTH (port → ODP kaskade → PON → OLT).
+  const ftthPath = await tracePath(id);
 
   const canEdit = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_EDIT);
   const canActivate = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_ACTIVATE);
@@ -135,6 +138,31 @@ export default async function SubscriptionDetailPage({
             </div>
             {canEdit && <button type="submit" className="btn-primary">Simpan Data Teknis</button>}
           </form>
+
+          {ftthPath && ftthPath.port && (
+            <div className="card p-6">
+              <h2 className="mb-3 font-medium">Jalur FTTH</h2>
+              <p className="mb-2 text-sm">
+                Port <strong>#{ftthPath.port.number}</strong>
+                {ftthPath.odpChain.length > 0 && (
+                  <>
+                    {" "}pada{" "}
+                    {ftthPath.odpChain.map((o, i) => (
+                      <span key={o.code}>
+                        {i > 0 && " ← "}
+                        <span className="font-mono">{o.code}</span>
+                        <span className="text-xs text-slate-400"> ({o.portUsed}/{o.portCapacity})</span>
+                      </span>
+                    ))}
+                  </>
+                )}
+              </p>
+              <p className="text-sm text-slate-500">
+                {ftthPath.pon ? `PON ${ftthPath.pon}` : "PON belum tertaut"}
+                {ftthPath.olt ? ` · OLT ${ftthPath.olt}` : ""}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">

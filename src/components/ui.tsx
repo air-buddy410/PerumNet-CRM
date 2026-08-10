@@ -158,6 +158,9 @@ const STATUS_STYLES: Record<string, string> = {
   SKIPPED: "is-neutral",
   // Helpdesk pelanggan
   SOLVED: "is-approved",
+  // FTTH port
+  FREE: "is-approved",
+  USED: "is-pending",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

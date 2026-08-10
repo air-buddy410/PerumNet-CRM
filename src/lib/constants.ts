@@ -128,6 +128,8 @@ export const PERMISSIONS = {
   CTICKETS_VIEW: "ctickets.view",
   CTICKETS_CREATE: "ctickets.create",
   CTICKETS_MANAGE: "ctickets.manage", // assign, kategori, workflow, close
+  // Phase 13 — FTTH Port Management
+  FTTH_MANAGE: "ftth.manage", // OLT, PON, ODP, alokasi port
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -712,6 +714,21 @@ export const GATEWAY_TX_STATUSES = [
   "FAILED",
 ] as const;
 
+// ── Phase 13: FTTH Port Management ──────────────────────────────
+
+export const OLT_VENDORS = [
+  ["ZTE", "ZTE"],
+  ["HUAWEI", "Huawei"],
+  ["CDATA", "C-Data"],
+  ["HSGQ", "HSGQ"],
+  ["FIBERHOME", "Fiberhome"],
+  ["VSOL", "VSOL"],
+  ["HIOSO", "HIOSO"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const ODP_PORT_STATUSES = ["FREE", "USED", "RESERVED", "DAMAGED"] as const;
+
 // ── Phase 12: Helpdesk Pelanggan ────────────────────────────────
 
 export const CTICKET_STATUSES = ["OPEN", "IN_PROGRESS", "PENDING", "SOLVED", "CLOSED"] as const;
@@ -894,6 +911,9 @@ export const STATUS_LABELS: Record<string, string> = {
   RUNNING: "Berjalan",
   SKIPPED: "Dilewati",
   SOLVED: "Terselesaikan",
+  FREE: "Kosong",
+  USED: "Terpakai",
+  RESERVED: "Dicadangkan",
   ENABLE: "Aktifkan",
   DISABLE: "Blokir",
   SYNC: "Sinkronisasi",
