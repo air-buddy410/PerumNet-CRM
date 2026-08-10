@@ -80,8 +80,11 @@ export default async function AppLayout({
       title: "Billing",
       items: [
         { href: "/billing/invoices", label: "Invoices" },
+        { href: "/billing/payments", label: "Payments" },
         { href: "/billing/runs", label: "Invoice Runs" },
         { href: "/billing/receivables", label: "Aging Piutang" },
+        { href: "/billing/gateway", label: "Gateway Bundles" },
+        { href: "/billing/merchants", label: "Merchants" },
         { href: "/billing/profiles", label: "Billing Profiles" },
         { href: "/billing/addons", label: "Addon Services" },
       ],

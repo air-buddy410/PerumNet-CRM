@@ -216,3 +216,112 @@ export async function voidInvoiceAction(formData: FormData): Promise<void> {
       (result.ok ? "ok=" + encodeURIComponent("Invoice di-void.") : "error=" + encodeURIComponent(result.error))
   );
 }
+
+// ═══════════════ Phase 9: Payment & Merchant ═══════════════
+
+import {
+  saveMerchant,
+  createPayment,
+  postPayment,
+  reversePayment,
+  createGatewayTx,
+} from "@/lib/payments";
+
+export async function saveMerchantAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.MERCHANTS_MANAGE);
+  const result = await saveMerchant(user, {
+    id: String(formData.get("id") ?? "") || undefined,
+    code: String(formData.get("code") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    contactName: String(formData.get("contactName") ?? "") || undefined,
+    phone: String(formData.get("phone") ?? "") || undefined,
+    address: String(formData.get("address") ?? "") || undefined,
+    isPaymentPoint: formData.get("isPaymentPoint") === "on",
+    cashbookId: String(formData.get("cashbookId") ?? "") || null,
+    feePercent: Number(formData.get("feePercent") ?? 0),
+    isActive: formData.get("isActive") === "on",
+  });
+  revalidatePath("/billing/merchants");
+  redirect(
+    "/billing/merchants?" +
+      (result.ok ? "ok=" + encodeURIComponent("Merchant tersimpan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+function parseAllocations(formData: FormData): { invoiceId: string; amount: bigint }[] {
+  const allocations: { invoiceId: string; amount: bigint }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("alloc_")) continue;
+    const amount = parseRupiah(value);
+    if (amount > 0n) allocations.push({ invoiceId: key.slice(6), amount });
+  }
+  return allocations;
+}
+
+export async function createPaymentAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.PAYMENTS_CREATE);
+  const customerId = String(formData.get("customerId") ?? "");
+  const paidAt = String(formData.get("paidAt") ?? "");
+  const fee = String(formData.get("feeAmount") ?? "").trim();
+  const result = await createPayment(user, {
+    customerId,
+    merchantId: String(formData.get("merchantId") ?? "") || null,
+    method: String(formData.get("method") ?? ""),
+    cashbookId: String(formData.get("cashbookId") ?? "") || null,
+    amount: parseRupiah(formData.get("amount")),
+    feeAmount: fee ? parseRupiah(fee) : null,
+    paidAt: paidAt ? new Date(paidAt) : new Date(),
+    notes: String(formData.get("notes") ?? "") || undefined,
+    allocations: parseAllocations(formData),
+  });
+  revalidatePath("/billing/payments");
+  if (!result.ok) {
+    redirect(
+      `/billing/payments/new?customerId=${customerId}&error=` + encodeURIComponent(result.error)
+    );
+  }
+  redirect(`/billing/payments/${result.id}?ok=` + encodeURIComponent("Draft pembayaran dibuat — posting untuk menerapkan ke piutang."));
+}
+
+export async function postPaymentAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.PAYMENTS_POST);
+  const id = String(formData.get("paymentId") ?? "");
+  const result = await postPayment(user, id);
+  revalidatePath("/billing/payments");
+  revalidatePath("/billing/invoices");
+  redirect(
+    `/billing/payments/${id}?` +
+      (result.ok ? "ok=" + encodeURIComponent("Pembayaran diposting — piutang diperbarui.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function reversePaymentAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.PAYMENTS_REVERSE);
+  const id = String(formData.get("paymentId") ?? "");
+  const result = await reversePayment(user, id, String(formData.get("reason") ?? ""));
+  revalidatePath("/billing/payments");
+  revalidatePath("/billing/invoices");
+  redirect(
+    `/billing/payments/${id}?` +
+      (result.ok ? "ok=" + encodeURIComponent("Pembayaran di-reverse — piutang dikembalikan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function createGatewayTxAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.PAYMENTS_CREATE);
+  const customerId = String(formData.get("customerId") ?? "");
+  const invoiceIds = formData.getAll("invoiceIds").map(String).filter(Boolean);
+  const expires = String(formData.get("expiresAt") ?? "");
+  const result = await createGatewayTx(user, {
+    customerId,
+    invoiceIds,
+    provider: String(formData.get("provider") ?? ""),
+    integrationId: String(formData.get("integrationId") ?? "") || null,
+    expiresAt: expires ? new Date(expires) : null,
+  });
+  revalidatePath("/billing/gateway");
+  if (!result.ok) {
+    redirect(`/billing/gateway/new?customerId=${customerId}&error=` + encodeURIComponent(result.error));
+  }
+  redirect("/billing/gateway?ok=" + encodeURIComponent("Bundle dibuat — menunggu pembayaran via gateway."));
+}

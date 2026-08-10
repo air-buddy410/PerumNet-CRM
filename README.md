@@ -152,6 +152,28 @@ CRM & Operations Management System untuk ISP PerumNet.
   Payment (Fase 9) dan GL (Fase 11)
 - Service layer `src/lib/billing.ts`; teruji 53 skenario positif + negatif
 
+**Phase 9 — Payment & Merchant/Kolektor** ✅
+
+- **Merchant / mitra kolektor** (G14, keputusan §11.1): unit penagih BUMDES
+  dengan fee % (komisi), payment point, kas setoran; rekap fee tertagih per
+  merchant = basis Hutang Fee di GL Fase 11
+- **Payment dengan alokasi eksplisit** (G2, §3.2): satu pembayaran →
+  banyak invoice; jumlah alokasi **wajib sama** dengan nominal; tiap
+  alokasi ≤ sisa tagihan; piutang & status invoice (OPEN→PARTIAL→PAID)
+  **hanya** berubah lewat posting; draft basi divalidasi ulang saat posting
+- **Reversal, bukan edit**: pembayaran posted dibatalkan lewat pembayaran
+  cermin (`reversalOfId`) — piutang dikembalikan, riwayat utuh, cermin
+  tidak bisa di-reverse lagi; rekap fee otomatis mengecualikan yang
+  di-reverse
+- **Bundle gateway** (padanan "Bundle Payment"): gabungan multi-invoice,
+  satu invoice tidak bisa di dua bundle pending; webhook
+  `POST /api/integrations/[kode]/webhook` (dispatch per kategori integrasi:
+  NETWORK → alarm, CRM_CUSTOMER → gateway) — event PAID otomatis membuat &
+  memposting pembayaran GATEWAY, PAID ganda diabaikan; *payment URL & 
+  signature per-provider menyusul saat kredensial gateway tersedia (§11.7)*
+- Service layer `src/lib/payments.ts`; teruji 45 skenario + webhook
+  end-to-end via HTTP
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs
