@@ -176,6 +176,10 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 | **6. IT/DevOps** | Server/app inventory, IT ticket, access request, deployment, backup, domain/SSL | ✅ selesai (service desk terbuka semua staff, akses production ber-approval + offboarding cabut semua akses, deployment production dengan gerbang §42 lengkap [change record, rollback plan, testing, backup terverifikasi, window] + SoD pengaju≠approver, backup production wajib terenkripsi + verifikasi backup kritikal, tracking expiry domain/SSL/license) |
 | **7. Integrasi** | Notification engine, integration adapter layer, webhook monitoring, outage communication | ✅ selesai (notifikasi event-based di-hook ke approval engine + event kunci semua modul; registry integrasi §56 dengan secret via env var — bukan plaintext; webhook inbound `/api/integrations/[code]/webhook` → alarm otomatis dengan dedup anti-flooding §31 + auto-clear; halaman Status Gangguan §33 khusus info yang disetujui NOC). **Adapter eksternal live (billing, WhatsApp send, MikroTik API, GitHub, accounting, customer portal) menunggu keputusan PO & kredensial — registry sudah siap menampung konfigurasinya.** |
 
+| **8. Billing & Invoice** | Addon service, billing profile, invoice run bulanan idempoten, invoice/lines, void, aging piutang | ✅ selesai (lihat `DESIGN-PHASE-8-BILLING-AND-BEYOND.md` — menutup gap G1/G4/G5/G13/G23; PPN snapshot per invoice, void + alasan tanpa hapus, generator aman dijalankan ulang via kunci unik subscription+period+type; jurnal GL menyusul Fase 11, kolom `journalEntryId` sudah disiapkan) |
+| 9. Payment & Merchant/Kolektor | Payment + alokasi multi-invoice, merchant/kolektor, gateway (Winpay/Duitku/Tripay) | rancangan siap — menunggu keputusan §11 (merchant, skema komisi, gateway) |
+| 10–15 | Isolir+MikroTik, GL, Helpdesk pelanggan, FTTH port, HRD, kanal pelanggan | rancangan di `DESIGN-PHASE-8-BILLING-AND-BEYOND.md` |
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 ---

@@ -103,6 +103,9 @@ model User {
   itAssetsOwned    ItAsset[]       @relation("ItAssetOwner")
 
   notifications Notification[]
+
+  invoiceRuns     InvoiceRun[] @relation("InvoiceRunCreator")
+  invoicesCreated Invoice[]    @relation("InvoiceCreator")
 }
 
 model Division {
@@ -506,6 +509,7 @@ model Customer {
   devices       SerializedDevice[]
   workOrders    WorkOrder[]
   projects      Project[]
+  invoices      Invoice[]
 }
 
 model Subscription {
@@ -538,6 +542,9 @@ model Subscription {
   workOrders      WorkOrder[]
   ips             IPAddress[]
   incidentImpacts IncidentSubscription[]
+  addons          SubscriptionAddon[]
+  billingProfile  BillingProfile?
+  invoices        Invoice[]
 
   @@index([status])
 }
@@ -1485,4 +1492,117 @@ model IntegrationEvent {
   integration Integration @relation(fields: [integrationId], references: [id])
 
   @@index([integrationId, createdAt])
+}
+
+// ═══════════════ Phase 8: Billing & Invoice (DESIGN-PHASE-8 §2) ═══════════════
+// Catatan adaptasi dari rancangan: taxPercent memakai Float (Prisma tidak
+// mendukung Decimal di SQLite); merchantId menyusul di Fase 9 (entitas
+// Merchant menunggu keputusan §11.1).
+
+// Layanan tambahan berbayar di luar paket (G13).
+model AddonService {
+  id            String              @id @default(cuid())
+  code          String              @unique
+  name          String
+  monthlyPrice  BigInt
+  description   String?
+  isActive      Boolean             @default(true)
+  subscriptions SubscriptionAddon[]
+}
+
+model SubscriptionAddon {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  addonId        String
+  priceOverride  BigInt? // null = pakai harga master addon
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime? // null = masih aktif
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  addon        AddonService @relation(fields: [addonId], references: [id])
+
+  @@unique([subscriptionId, addonId, startedAt])
+  @@index([subscriptionId, endedAt])
+}
+
+// Profil penagihan per langganan — kapan terbit, jatuh tempo, PPN (G23).
+model BillingProfile {
+  id             String   @id @default(cuid())
+  subscriptionId String   @unique
+  billingStartAt DateTime // mulai ditagih
+  invoiceDay     Int // tanggal terbit dalam bulan (1–28)
+  dueDays        Int      @default(20)
+  isolirDay      Int? // tanggal pemutusan bila belum bayar (dipakai Fase 10)
+  taxPercent     Float    @default(0) // PPN % — snapshot ke invoice saat terbit
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+}
+
+// Batch tagihan bulanan — idempoten (G4).
+model InvoiceRun {
+  id          String    @id @default(cuid())
+  period      String // "2026-08"
+  scope       String    @default("ALL")
+  status      String    @default("DRAFT") // DRAFT|PREVIEW|POSTED|CANCELLED
+  totalCount  Int       @default(0)
+  totalAmount BigInt    @default(0)
+  createdById String
+  postedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  createdBy User      @relation("InvoiceRunCreator", fields: [createdById], references: [id])
+  invoices  Invoice[]
+
+  @@unique([period, scope])
+}
+
+model Invoice {
+  id             String    @id @default(cuid())
+  invoiceNumber  String    @unique // INV-YYYYMM-####
+  invoiceRunId   String?
+  customerId     String
+  subscriptionId String?
+  type           String    @default("MONTHLY") // MONTHLY|INSTALLATION|ADDON|ADJUSTMENT|MANUAL
+  period         String? // "2026-08" untuk MONTHLY
+  issuedAt       DateTime
+  dueAt          DateTime
+  subtotal       BigInt
+  taxPercent     Float     @default(0) // snapshot — tidak berubah saat tarif PPN ganti
+  taxAmount      BigInt    @default(0)
+  totalAmount    BigInt
+  paidAmount     BigInt    @default(0) // diisi modul Payment (Fase 9)
+  status         String    @default("DRAFT") // DRAFT|OPEN|PARTIAL|PAID|VOID|WRITTEN_OFF
+  voidReason     String?
+  journalEntryId String?   @unique // diisi modul GL (Fase 11)
+  notes          String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  invoiceRun   InvoiceRun?   @relation(fields: [invoiceRunId], references: [id])
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  createdBy    User          @relation("InvoiceCreator", fields: [createdById], references: [id])
+  lines        InvoiceLine[]
+
+  // Kunci idempotensi generator bulanan (§2.2).
+  @@unique([subscriptionId, period, type])
+  @@index([status, dueAt])
+  @@index([customerId, status])
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  kind        String // PACKAGE|ADDON|INSTALLATION|DISCOUNT|ADJUSTMENT
+  refId       String? // id paket/addon terkait
+  description String
+  quantity    Int     @default(1)
+  unitPrice   BigInt
+  amount      BigInt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
 }

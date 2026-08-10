@@ -132,6 +132,26 @@ CRM & Operations Management System untuk ISP PerumNet.
   customer portal) menunggu keputusan Product Owner & kredensial — lihat
   `docs/TECHNICAL-PLAN.md` §9.*
 
+**Phase 8 — Billing & Invoice** ✅ *(rancangan: `docs/DESIGN-PHASE-8-BILLING-AND-BEYOND.md`)*
+
+- **Addon services** (gap G13): layanan tambahan berbayar per langganan
+  dengan harga override, riwayat pasang/lepas utuh
+- **Billing profile** per langganan (G23): mulai ditagih, tanggal terbit
+  (1–28), jangka jatuh tempo, tanggal isolir (dipakai Fase 10), **PPN %**
+- **Invoice run bulanan idempoten** (G4): buat → generate preview → periksa
+  → posting; kunci unik `(subscription, period, type)` membuat generate
+  ulang **tidak menggandakan invoice**; langganan ACTIVE & ISOLATED ditagih,
+  tanpa-profil/terminated dilewati
+- **Invoice & lines** (G1): PPN di-snapshot per invoice (tarif berubah ≠
+  invoice lama berubah), pembulatan half-up, nomor `INV-YYYYMM-####`;
+  invoice terbit hanya bisa **VOID + alasan** — tidak pernah dihapus;
+  invoice manual (instalasi/penyesuaian) dengan baris diskon
+- **Aging piutang** (G5): penunggak per pelanggan + jumlah invoice lewat
+  tempo — basis penentuan isolir Fase 10
+- Kolom `journalEntryId` & `paidAmount` sudah disiapkan untuk modul
+  Payment (Fase 9) dan GL (Fase 11)
+- Service layer `src/lib/billing.ts`; teruji 53 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

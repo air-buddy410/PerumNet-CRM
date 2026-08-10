@@ -146,6 +146,12 @@ const STATUS_STYLES: Record<string, string> = {
   READY: "is-pending",
   ROLLED_BACK: "is-rejected",
   SUCCESS: "is-approved",
+  // Billing
+  PARTIAL: "is-pending",
+  PAID: "is-approved",
+  VOID: "is-neutral",
+  WRITTEN_OFF: "is-neutral",
+  PREVIEW: "is-pending",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {

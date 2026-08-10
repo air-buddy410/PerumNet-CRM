@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Boxes, ChevronDown, ClipboardCheck, Contact, FolderKanban, LayoutDashboard, LifeBuoy, Megaphone, RadioTower, Server, Settings, UsersRound, Wallet, Wrench } from "lucide-react";
+import { Activity, Boxes, ChevronDown, ClipboardCheck, Contact, FolderKanban, LayoutDashboard, LifeBuoy, Megaphone, RadioTower, Receipt, Server, Settings, UsersRound, Wallet, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCrmMenu } from "@/components/app-shell";
 
@@ -50,6 +50,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
     if (group === "CRM") return Contact;
     if (group === "Inventory") return Boxes;
     if (group === "Operasional") return Wrench;
+    if (group === "Billing") return Receipt;
     if (group === "Finance") return Wallet;
     if (group === "Projects") return FolderKanban;
     if (group === "NOC") return RadioTower;

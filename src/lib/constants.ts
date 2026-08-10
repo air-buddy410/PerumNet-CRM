@@ -108,6 +108,11 @@ export const PERMISSIONS = {
   // Phase 7 — Integrasi
   INTEGRATIONS_MANAGE: "integrations.manage", // registry integrasi & webhook
   OUTAGES_VIEW: "outages.view", // status gangguan yang disetujui (§33)
+  // Phase 8 — Billing & Invoice
+  BILLING_VIEW: "billing.view",
+  BILLING_MANAGE: "billing.manage", // addon, billing profile
+  INVOICES_CREATE: "invoices.create", // invoice manual & invoice run
+  INVOICES_POST: "invoices.post", // posting run, void invoice
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -640,6 +645,35 @@ export const INTEGRATION_PROVIDERS = [
 
 export const INTEGRATION_AUTH_TYPES = ["NONE", "API_KEY", "BASIC", "TOKEN"] as const;
 
+// ── Phase 8: Billing & Invoice ──────────────────────────────────
+
+export const INVOICE_TYPES = [
+  ["MONTHLY", "Tagihan Bulanan"],
+  ["INSTALLATION", "Biaya Instalasi"],
+  ["ADDON", "Add-on"],
+  ["ADJUSTMENT", "Penyesuaian"],
+  ["MANUAL", "Manual"],
+] as const;
+
+export const INVOICE_STATUSES = [
+  "DRAFT",
+  "OPEN",
+  "PARTIAL",
+  "PAID",
+  "VOID",
+  "WRITTEN_OFF",
+] as const;
+
+export const INVOICE_RUN_STATUSES = ["DRAFT", "PREVIEW", "POSTED", "CANCELLED"] as const;
+
+export const INVOICE_LINE_KINDS = [
+  ["PACKAGE", "Paket Internet"],
+  ["ADDON", "Add-on"],
+  ["INSTALLATION", "Instalasi"],
+  ["DISCOUNT", "Diskon"],
+  ["ADJUSTMENT", "Penyesuaian"],
+] as const;
+
 // Label ringkas untuk badge/status (fallback: kode apa adanya)
 export const STATUS_LABELS: Record<string, string> = {
   NEW: "Baru",
@@ -752,6 +786,14 @@ export const STATUS_LABELS: Record<string, string> = {
   READY: "Siap Dieksekusi",
   ROLLED_BACK: "Di-rollback",
   SUCCESS: "Sukses",
+  // Phase 8 — Billing
+  OPEN_INVOICE: "Belum Dibayar", // alias tampilan (kode OPEN dipakai WO)
+  PARTIAL: "Dibayar Sebagian",
+  PAID: "Lunas",
+  VOID: "Void",
+  WRITTEN_OFF: "Dihapusbukukan",
+  PREVIEW: "Preview",
+  // (MONTHLY sudah ada di atas — label invoice memakai INVOICE_TYPES)
 };
 
 export function statusLabel(code: string | null | undefined): string {

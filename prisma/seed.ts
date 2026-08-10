@@ -111,6 +111,11 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   // Phase 7 — Integrasi
   { code: "integrations.manage", module: "integrations", action: "manage", description: "Registry integrasi eksternal, webhook token, log event" },
   { code: "outages.view", module: "noc", action: "outage_view", description: "Melihat status gangguan yang disetujui untuk komunikasi (§33)" },
+  // Phase 8 — Billing & Invoice
+  { code: "billing.view", module: "billing", action: "view", description: "Melihat invoice, invoice run, addon, aging piutang" },
+  { code: "billing.manage", module: "billing", action: "manage", description: "Mengelola addon service & billing profile langganan" },
+  { code: "invoices.create", module: "billing", action: "invoice_create", description: "Membuat invoice manual & invoice run bulanan" },
+  { code: "invoices.post", module: "billing", action: "invoice_post", description: "Posting invoice run & void invoice" },
 ];
 
 // Pemetaan permission per role.
@@ -137,8 +142,8 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view"],
-  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view"],
+  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
@@ -146,7 +151,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign"],
   sales: [...BASE, ...SALES_CORE],
-  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view"],
+  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view"],
   noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement"],
