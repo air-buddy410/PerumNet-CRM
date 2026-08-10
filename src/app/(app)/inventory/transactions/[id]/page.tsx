@@ -13,6 +13,7 @@ import {
   postTransactionAction,
   cancelTransactionAction,
   reverseTransactionAction,
+  receiveTransferAction,
 } from "../actions";
 
 export const metadata = { title: "Detail Transaksi" };
@@ -39,7 +40,8 @@ export default async function TransactionDetailPage({
       postedBy: true,
       reversalOf: true,
       reversedBy: true,
-      lines: { include: { item: true, device: true } },
+      lines: { include: { item: true, device: true, receiptLines: true } },
+      receipts: { include: { receivedBy: true, lines: true }, orderBy: { receivedAt: "asc" } },
     },
   });
   if (!tx) notFound();
@@ -47,6 +49,14 @@ export default async function TransactionDetailPage({
   const canPost = user.permissions.has(PERMISSIONS.STOCK_POST);
   const canReverse = user.permissions.has(PERMISSIONS.STOCK_REVERSE);
   const canCreate = user.permissions.has(PERMISSIONS.STOCK_CREATE);
+  const canReceive = user.permissions.has(PERMISSIONS.STOCK_RECEIVE);
+
+  // Fase 17: sisa kiriman yang belum diterima gudang tujuan, per baris.
+  const remainingOf = (line: (typeof tx.lines)[number]) =>
+    line.qty - line.receiptLines.reduce((sum, r) => sum + r.qty, 0);
+  const isTransfer = tx.type === "STOCK_TRANSFER";
+  const awaitingReceipt =
+    isTransfer && tx.status === "POSTED" && !tx.reversedById && tx.receiveStatus !== "RECEIVED";
 
   return (
     <div className="max-w-4xl">
@@ -196,6 +206,64 @@ export default async function TransactionDetailPage({
                   Batalkan
                 </button>
               </form>
+            </div>
+          )}
+          {awaitingReceipt && canReceive && (
+            <div className="card p-5">
+              <h2 className="mb-1 text-sm font-medium">Terima Barang</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Barang sedang dalam perjalanan ke {tx.warehouseTo?.name ?? "gudang tujuan"}.
+                Isi jumlah yang benar-benar diterima — boleh sebagian, sisanya tetap tercatat
+                sebagai dalam perjalanan.
+              </p>
+              <form action={receiveTransferAction} className="space-y-3">
+                <input type="hidden" name="txId" value={tx.id} />
+                {tx.lines.map((line) => {
+                  const remaining = remainingOf(line);
+                  if (remaining <= 0) return null;
+                  return (
+                    <div key={line.id} className="flex items-center gap-2">
+                      <span className="flex-1 text-xs">
+                        {line.item.name}
+                        {line.device ? ` · ${line.device.serialNumber}` : ""}
+                        <span className="ml-1 text-slate-400">sisa {remaining}</span>
+                      </span>
+                      <input
+                        type="number"
+                        name={`qty_${line.id}`}
+                        min={0}
+                        max={remaining}
+                        defaultValue={remaining}
+                        className="input w-20 text-right"
+                      />
+                    </div>
+                  );
+                })}
+                <input
+                  type="text"
+                  name="notes"
+                  placeholder="Catatan penerimaan (opsional)"
+                  className="input w-full"
+                />
+                <button type="submit" className="btn-primary w-full justify-center">
+                  Catat Penerimaan
+                </button>
+              </form>
+            </div>
+          )}
+          {isTransfer && tx.receipts.length > 0 && (
+            <div className="card p-5">
+              <h2 className="mb-3 text-sm font-medium">Riwayat Penerimaan</h2>
+              <ul className="space-y-2 text-xs">
+                {tx.receipts.map((r) => (
+                  <li key={r.id} className="flex justify-between gap-2">
+                    <span className="font-mono">{r.receiptNumber}</span>
+                    <span className="text-slate-500">
+                      {r.lines.reduce((sum, l) => sum + l.qty, 0)} unit · {r.receivedBy.name}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {tx.status === "POSTED" && !tx.reversedById && !tx.reversalOfId && canReverse && (

@@ -187,6 +187,8 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 
 | **16. Saldo Berdimensi & Reservasi** | `StockLevel` onHand/reserved/damaged/inTransit, reservasi via draft, `DocumentSequence` atomik | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F1/F2/F4; `available = onHand − reserved` selalu turunan; draft STOCK_ISSUE/STOCK_TRANSFER menahan stock sehingga dua draft tidak bisa menjanjikan unit yang sama; penomoran pindah dari `count()+1` ke sequence atomik — sekaligus menutup celah konkurensi nomor invoice DECISIONS-PHASE-8 §5; `inTransit` disiapkan tapi baru dipakai Fase 17) |
 
+| **17. Transfer Tiga Langkah** | Posting transfer = pengiriman, `inTransit` gudang tujuan, dokumen penerimaan bertahap | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F3; barang selalu terlihat di salah satu dari tiga tempat — gudang asal, perjalanan, gudang tujuan; `TransferReceipt` mendukung penerimaan bertahap sehingga transfer tetap PARTIAL sampai lengkap; reversal ditolak begitu ada yang diterima — koreksinya lewat transfer balik; perbaikan: rekonsiliasi kini membalik tanda untuk transaksi reversal, sebelumnya terhitung ganda) |
+
 Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dari riset banding terhadap sistem helpdesk lama — lihat `FEATURE-GAP-ANALYSIS-HELPDESK-V2.md` (gap G1–G23) dan `DESIGN-PHASE-8-BILLING-AND-BEYOND.md`. Keputusan desain §11 yang diambil selama implementasi tercatat di `DECISIONS-PHASE-8.md`, termasuk satu yang masih menunggu pemilik proyek: **retensi data identitas (foto selfie & jejak lokasi absensi)**.
 
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.

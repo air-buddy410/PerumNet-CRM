@@ -119,6 +119,7 @@ model User {
   employee          Employee?            @relation("EmployeeUser")
   outboundCreated   OutboundMessage[]    @relation("OutboundCreator")
   announcements     Announcement[]       @relation("AnnouncementCreator")
+  transferReceipts TransferReceipt[] @relation("TransferReceiver")
 }
 
 model Division {
@@ -631,6 +632,7 @@ model Item {
   opnameLines OpnameLine[]
   custodyLevels CustodyLevel[]
   bomLines      ProjectBomLine[]
+  transferReceiptLines TransferReceiptLine[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -683,6 +685,9 @@ model StockTransaction {
   postedAt        DateTime?
   reversalOfId    String?   @unique // transaksi ini adalah reversal dari ...
   reversedById    String?   @unique // transaksi ini telah di-reverse oleh ...
+  // Fase 17 — hanya untuk STOCK_TRANSFER. Posting = pengiriman; barang masuk
+  // inTransit gudang tujuan sampai diterima. PENDING|PARTIAL|RECEIVED.
+  receiveStatus   String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -696,6 +701,7 @@ model StockTransaction {
   reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
   reversedBy    StockTransaction?      @relation("TxReversal")
   lines         StockTransactionLine[]
+  receipts      TransferReceipt[]
 
   @@index([type, status])
 }
@@ -708,9 +714,10 @@ model StockTransactionLine {
   deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
   snInput  String? // SN yang akan dibuat saat posting goods receipt
 
-  tx     StockTransaction  @relation(fields: [txId], references: [id])
-  item   Item              @relation(fields: [itemId], references: [id])
-  device SerializedDevice? @relation(fields: [deviceId], references: [id])
+  tx           StockTransaction      @relation(fields: [txId], references: [id])
+  item         Item                  @relation(fields: [itemId], references: [id])
+  device       SerializedDevice?     @relation(fields: [deviceId], references: [id])
+  receiptLines TransferReceiptLine[]
 
   @@index([txId])
 }
@@ -2294,4 +2301,40 @@ model DocumentSequence {
   updatedAt  DateTime @updatedAt
 
   @@unique([docType, periodKey])
+}
+
+/// Penerimaan transfer antar gudang — Fase 17 (PRD-WAREHOUSE-ENHANCEMENT F3).
+/// Satu transfer bisa punya beberapa penerimaan (penerimaan bertahap), sehingga
+/// barang tidak pernah hilang dari pembukuan: selalu ada di gudang asal,
+/// perjalanan (inTransit), atau gudang tujuan.
+model TransferReceipt {
+  id            String   @id @default(cuid())
+  receiptNumber String   @unique // RCV-YYYYMM-####
+  txId          String
+  receivedById  String
+  receivedAt    DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  tx         StockTransaction      @relation(fields: [txId], references: [id])
+  receivedBy User                  @relation("TransferReceiver", fields: [receivedById], references: [id])
+  lines      TransferReceiptLine[]
+
+  @@index([txId])
+}
+
+model TransferReceiptLine {
+  id        String  @id @default(cuid())
+  receiptId String
+  txLineId  String
+  itemId    String
+  qty       Int
+  deviceId  String?
+
+  receipt TransferReceipt      @relation(fields: [receiptId], references: [id])
+  txLine  StockTransactionLine @relation(fields: [txLineId], references: [id])
+  item    Item                 @relation(fields: [itemId], references: [id])
+
+  @@index([receiptId])
+  @@index([txLineId])
 }

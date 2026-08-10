@@ -9,7 +9,9 @@ import {
   postTransaction,
   cancelDraftTransaction,
   reverseTransaction,
+  receiveTransfer,
   type DraftLineInput,
+  type ReceiveLineInput,
 } from "@/lib/inventory";
 
 const MAX_BULK_ROWS = 5;
@@ -123,5 +125,31 @@ export async function reverseTransactionAction(formData: FormData): Promise<void
   redirect(
     `/inventory/transactions/${result.id}?ok=` +
       encodeURIComponent("Reversal diposting sebagai transaksi baru.")
+  );
+}
+
+// Fase 17: menerima transfer antar gudang. Qty per baris boleh sebagian —
+// transfer tetap terbuka sampai seluruh kiriman diterima.
+export async function receiveTransferAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.STOCK_RECEIVE);
+  const txId = String(formData.get("txId") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+
+  const lines: ReceiveLineInput[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("qty_")) continue;
+    const qty = Number(value);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    lines.push({ txLineId: key.slice(4), qty: Math.floor(qty) });
+  }
+
+  const result = await receiveTransfer(user, txId, lines, notes);
+  revalidatePath("/inventory/transactions");
+  revalidatePath("/inventory/stock");
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Penerimaan dicatat — stock gudang tujuan bertambah.")
+        : "error=" + encodeURIComponent(result.error))
   );
 }
