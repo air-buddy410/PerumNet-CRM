@@ -103,6 +103,20 @@ export default async function AppLayout({
   }
   if (financeItems.length) groups.push({ title: "Finance", items: financeItems });
 
+  if (can(PERMISSIONS.GL_VIEW)) {
+    groups.push({
+      title: "Akuntansi",
+      items: [
+        { href: "/finance/gl/journal", label: "Jurnal Umum" },
+        { href: "/finance/gl/ledger", label: "Buku Besar" },
+        { href: "/finance/gl/trial-balance", label: "Neraca Saldo" },
+        { href: "/finance/gl/income", label: "Laba Rugi" },
+        { href: "/finance/gl/balance", label: "Neraca" },
+        { href: "/finance/gl/accounts", label: "Chart of Accounts" },
+      ],
+    });
+  }
+
   if (can(PERMISSIONS.PROJECTS_VIEW)) {
     groups.push({
       title: "Projects",

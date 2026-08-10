@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { postInvoiceJournal, reverseInvoiceJournal } from "@/lib/gl";
 import { INVOICE_TYPES, INVOICE_LINE_KINDS } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -324,6 +325,18 @@ export async function postInvoiceRun(user: CurrentUser, runId: string): Promise<
   if (run._count.invoices === 0) {
     return { ok: false, error: "Run tidak memiliki invoice — tidak ada yang diposting." };
   }
+  // Fase 11: jurnal DULU, baru terbitkan (§0.2 — tidak ada invoice terbit
+  // tanpa jurnal saat GL aktif). Idempoten: retry melewati yang terjurnal.
+  const draftInvoices = await db.invoice.findMany({
+    where: { invoiceRunId: runId, status: "DRAFT" },
+    select: { id: true, invoiceNumber: true },
+  });
+  for (const inv of draftInvoices) {
+    const journal = await postInvoiceJournal(inv.id);
+    if (!journal.ok) {
+      return { ok: false, error: `Jurnal ${inv.invoiceNumber} gagal: ${journal.error} — run tetap Preview, perbaiki lalu posting ulang.` };
+    }
+  }
   const now = new Date();
   await db.$transaction([
     db.invoice.updateMany({
@@ -359,6 +372,18 @@ export async function cancelInvoiceRun(
       ok: false,
       error: "Run yang sudah diposting tidak bisa dibatalkan — void invoice satu per satu (§2.2).",
     };
+  }
+  // Bila retry posting sempat menjurnal sebagian draft, balik dulu jurnalnya
+  // agar buku tidak menyimpan jurnal untuk invoice yang tak pernah terbit.
+  const journaled = await db.invoice.findMany({
+    where: { invoiceRunId: runId, status: "DRAFT", journalEntryId: { not: null } },
+    select: { id: true, invoiceNumber: true },
+  });
+  for (const inv of journaled) {
+    const reversed = await reverseInvoiceJournal(inv.id, `Run ${run.period} dibatalkan: ${reason}`);
+    if (!reversed.ok) {
+      return { ok: false, error: `Gagal membalik jurnal ${inv.invoiceNumber}: ${reversed.error}` };
+    }
   }
   // Invoice masih DRAFT (belum pernah terbit) — boleh dihapus bersama run-nya.
   await db.$transaction([
@@ -460,6 +485,14 @@ export async function createManualInvoice(
       lines: { create: lines },
     },
   });
+  // Fase 11: invoice terbit wajib berjurnal saat GL aktif — gagal jurnal =
+  // invoice dibatalkan (tidak pernah terlihat).
+  const journal = await postInvoiceJournal(invoice.id);
+  if (!journal.ok) {
+    await db.invoiceLine.deleteMany({ where: { invoiceId: invoice.id } });
+    await db.invoice.delete({ where: { id: invoice.id } });
+    return { ok: false, error: `Jurnal gagal: ${journal.error}` };
+  }
   await logAudit({
     userId: user.id,
     action: "INVOICE_CREATE",
@@ -489,6 +522,11 @@ export async function voidInvoice(
       ok: false,
       error: "Invoice sudah menerima pembayaran — buat invoice penyesuaian, bukan void.",
     };
+  }
+  // Fase 11: jurnal balik DULU — void gagal bila bukunya tidak bisa dibalik.
+  const reversed = await reverseInvoiceJournal(invoiceId, `Void: ${reason}`);
+  if (!reversed.ok) {
+    return { ok: false, error: `Jurnal balik gagal: ${reversed.error}` };
   }
   await db.invoice.update({
     where: { id: invoiceId },
