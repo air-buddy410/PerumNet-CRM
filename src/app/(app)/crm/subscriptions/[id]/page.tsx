@@ -34,6 +34,11 @@ export default async function SubscriptionDetailPage({
   });
   if (!sub) notFound();
 
+  const routers = await db.networkDevice.findMany({
+    where: { deviceType: { in: ["ROUTER", "CORE_ROUTER"] }, status: "ACTIVE" },
+    orderBy: { hostname: "asc" },
+  });
+
   const canEdit = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_EDIT);
   const canActivate = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_ACTIVATE);
   const nextStatuses = SUBSCRIPTION_TRANSITIONS[sub.status] ?? [];
@@ -109,6 +114,15 @@ export default async function SubscriptionDetailPage({
               <div>
                 <label className="label" htmlFor="ipAddress">IP Address</label>
                 <input id="ipAddress" name="ipAddress" className="input" defaultValue={sub.ipAddress ?? ""} disabled={!canEdit} />
+              </div>
+              <div>
+                <label className="label" htmlFor="routerId">Router Distribusi (jalur isolir)</label>
+                <select id="routerId" name="routerId" className="input" defaultValue={sub.routerId ?? ""} disabled={!canEdit}>
+                  <option value="">— belum ditautkan —</option>
+                  {routers.map((r) => (
+                    <option key={r.id} value={r.id}>{r.hostname}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="label" htmlFor="billingCycleDay">Tanggal Tagihan (1–28)</label>

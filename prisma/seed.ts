@@ -121,6 +121,8 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "payments.create", module: "billing", action: "payment_create", description: "Mencatat pembayaran & membuat bundle gateway" },
   { code: "payments.post", module: "billing", action: "payment_post", description: "Posting pembayaran (mengubah piutang invoice)" },
   { code: "payments.reverse", module: "billing", action: "payment_reverse", description: "Reversal pembayaran posted" },
+  // Phase 10 — Isolir & Dunning
+  { code: "dunning.manage", module: "billing", action: "dunning", description: "Kebijakan dunning, evaluasi isolir, isolir/pemulihan manual" },
 ];
 
 // Pemetaan permission per role.
@@ -148,9 +150,9 @@ const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
   management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view"],
-  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse"],
+  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
-  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage"],
+  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],

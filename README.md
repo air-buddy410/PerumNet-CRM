@@ -174,6 +174,28 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Service layer `src/lib/payments.ts`; teruji 45 skenario + webhook
   end-to-end via HTTP
 
+**Phase 10 — Isolir & Dunning + MikroTik** ✅
+
+- **Kebijakan dunning dua ambang** (keputusan §11.4, konfiguratif): hari
+  lewat tempo DAN/ATAU jumlah invoice tertunggak — mana yang lebih dulu
+  tercapai; masa tenggang; offset pengingat (H-3/H/H+3)
+- **Isolir = event bercatat** (`ServiceSuspension`), bukan kolom boolean:
+  alasan (tunggakan/permintaan/abuse/maintenance), statistik tunggakan,
+  siapa/apa pemicunya; gerbang **tanggal isolir per langganan**
+  (`BillingProfile.isolirDay`, padanan isolir_date sistem lama)
+- **Antrian router (`NetworkAccessJob`)**: isolir TIDAK PERNAH dieksekusi
+  langsung dari UI ke router — job DISABLE/ENABLE diantrikan, worker
+  mengeksekusi, hasil tercatat; **sync failures = state yang terlihat**
+  dan bisa di-retry; langganan tanpa router → SKIPPED dengan pesan jelas;
+  *executor pluggable — adapter MikroTik live menunggu kredensial (§11.7)*
+- **Pemulihan otomatis**: saat pembayaran ter-posting (manual/gateway) dan
+  tunggakan lewat tempo habis, isolir OVERDUE dibuka otomatis + job ENABLE
+  antri; isolir manual (permintaan/abuse) tidak pernah dibuka otomatis
+- Evaluasi idempoten (langganan ISOLATED tidak dievaluasi ulang); daftar
+  pengingat jatuh tempo per offset untuk ditindaklanjuti CS (WA Fase 15)
+- Langganan kini punya tautan **router distribusi** (form data teknis)
+- Service layer `src/lib/dunning.ts`; teruji 35 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

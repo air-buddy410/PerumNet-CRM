@@ -84,6 +84,7 @@ export default async function AppLayout({
         { href: "/billing/runs", label: "Invoice Runs" },
         { href: "/billing/receivables", label: "Aging Piutang" },
         { href: "/billing/gateway", label: "Gateway Bundles" },
+        { href: "/billing/isolir", label: "Isolir & Dunning" },
         { href: "/billing/merchants", label: "Merchants" },
         { href: "/billing/profiles", label: "Billing Profiles" },
         { href: "/billing/addons", label: "Addon Services" },
@@ -121,6 +122,7 @@ export default async function AppLayout({
         { href: "/noc/devices", label: "Perangkat Jaringan" },
         { href: "/noc/links", label: "Links" },
         { href: "/noc/ipam", label: "IPAM" },
+        { href: "/noc/access-jobs", label: "Antrian Router" },
       ],
     });
   }

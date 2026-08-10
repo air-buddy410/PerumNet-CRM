@@ -109,6 +109,7 @@ model User {
   paymentsReceived Payment[]          @relation("PaymentReceiver")
   paymentsCreated  Payment[]          @relation("PaymentCreator")
   gatewayTxCreated PaymentGatewayTx[] @relation("GatewayTxCreator")
+  suspensionsCreated ServiceSuspension[] @relation("SuspensionCreator")
 }
 
 model Division {
@@ -529,6 +530,7 @@ model Subscription {
   popNode        String?
   vlan           String?
   pppoeUsername  String?
+  routerId       String? // distribution router (NetworkDevice) — jalur isolir
   ipAddress      String?
   contractMonths Int?
   quotationId    String?
@@ -550,6 +552,9 @@ model Subscription {
   addons          SubscriptionAddon[]
   billingProfile  BillingProfile?
   invoices        Invoice[]
+  router          NetworkDevice?         @relation("SubscriptionRouter", fields: [routerId], references: [id])
+  suspensions     ServiceSuspension[]
+  accessJobs      NetworkAccessJob[]
 
   @@index([status])
 }
@@ -1007,10 +1012,12 @@ model NetworkDevice {
 
   site        NetworkSite          @relation(fields: [siteId], references: [id])
   owner       User?                @relation("NetDeviceOwner", fields: [ownerId], references: [id])
-  ips         IPAddress[]
-  alarms      NetworkAlarm[]
-  incidents   Incident[]
-  maintenance NetworkMaintenance[]
+  ips           IPAddress[]
+  alarms        NetworkAlarm[]
+  incidents     Incident[]
+  maintenance   NetworkMaintenance[]
+  subscriptions Subscription[]     @relation("SubscriptionRouter")
+  accessJobs    NetworkAccessJob[]
 }
 
 model NetworkLink {
@@ -1722,4 +1729,66 @@ model PaymentGatewayTxInvoice {
   invoice   Invoice          @relation(fields: [invoiceId], references: [id])
 
   @@id([gatewayTxId, invoiceId])
+}
+
+// ═══════════════ Phase 10: Isolir & Dunning + MikroTik (DESIGN-PHASE-8 §4) ═══════════════
+// Adaptasi: reminderOffsets CSV string & payload JSON string (SQLite tanpa
+// scalar list/Json). Keputusan §11.4: kebijakan mendukung DUA ambang —
+// hari lewat tempo dan jumlah tunggakan — mana yang lebih dulu tercapai.
+
+model DunningPolicy {
+  id                String  @id @default(cuid())
+  name              String
+  graceDays         Int     @default(0)
+  reminderOffsets   String  @default("-3,0,3") // hari relatif jatuh tempo (CSV)
+  isolateAfterDays  Int? // ambang: hari lewat jatuh tempo
+  maxUnpaidInvoices Int? // ambang: jumlah invoice tertunggak
+  isActive          Boolean @default(true)
+
+  suspensions ServiceSuspension[]
+}
+
+// Isolir/pemulihan adalah EVENT bercatat, bukan kolom boolean (§0.3).
+model ServiceSuspension {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  reason         String // OVERDUE|REQUEST|ABUSE|MAINTENANCE
+  triggeredBy    String // SYSTEM|USER
+  policyId       String?
+  unpaidInvoices Int?
+  unpaidAmount   BigInt?
+  note           String?
+  suspendedAt    DateTime  @default(now())
+  restoredAt     DateTime?
+  restoreNote    String?
+  suspendJobId   String? // NetworkAccessJob DISABLE
+  restoreJobId   String? // NetworkAccessJob ENABLE
+  createdById    String? // null = evaluator sistem (cron)
+
+  subscription Subscription   @relation(fields: [subscriptionId], references: [id])
+  policy       DunningPolicy? @relation(fields: [policyId], references: [id])
+  createdBy    User?          @relation("SuspensionCreator", fields: [createdById], references: [id])
+
+  @@index([subscriptionId, suspendedAt])
+  @@index([restoredAt])
+}
+
+// Antrian perintah ke router — auditable & retryable (§4). Isolir TIDAK
+// pernah dieksekusi langsung dari UI ke router; kegagalan sync terlihat.
+model NetworkAccessJob {
+  id             String    @id @default(cuid())
+  subscriptionId String?
+  routerId       String? // NetworkDevice; null = belum tertaut → SKIPPED
+  action         String // ENABLE|DISABLE|CREATE|UPDATE|DELETE|SYNC
+  payload        String // JSON string (pppoeUsername, dsb.)
+  status         String    @default("QUEUED") // QUEUED|RUNNING|SUCCESS|FAILED|SKIPPED
+  attempts       Int       @default(0)
+  lastError      String?
+  executedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+  router       NetworkDevice? @relation(fields: [routerId], references: [id])
+
+  @@index([status, routerId])
 }
