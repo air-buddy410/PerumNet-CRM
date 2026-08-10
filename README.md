@@ -242,6 +242,27 @@ CRM & Operations Management System untuk ISP PerumNet.
   (WA/email/app) menyusul Fase 15*
 - Service layer `src/lib/helpdesk.ts`; teruji 42 skenario positif + negatif
 
+**Phase 13 — FTTH Port Management** ✅
+
+- **Rantai lengkap** OLT → PON port (padanan "Dist Group") → ODP
+  **kaskade** → port → pelanggan; ODP menempel ke `NetworkSite` yang sudah
+  ada — perluasan model NOC, bukan paralel
+- **`OdpPort` per-port** (gap G10) — inti perbaikan atas sistem lama yang
+  hanya menyimpan `port_used` sebagai angka lepas: kini **diketahui port
+  nomor berapa dipakai pelanggan mana**, sehingga penelusuran gangguan
+  per port menjadi mungkin (panel "Jalur FTTH" di detail langganan
+  menampilkan port → ODP kaskade → PON → OLT)
+- **`portUsed` = turunan** yang direkap engine setiap kali port berubah,
+  plus tombol **Rekonsiliasi Kapasitas** — tidak pernah diedit langsung;
+  kapasitas tidak bisa diciutkan memotong port terpakai/dicadangkan/rusak
+- Satu langganan menempati satu port; status port FREE/USED/RESERVED
+  (wajib keterangan)/DAMAGED; kaskade ODP dijaga bebas siklus
+- **Kredensial OLT bukan plaintext** — `credentialRef` hanya menerima
+  *nama environment variable* (rule 31, sama seperti registry integrasi)
+- **Tools teknis** (G21): IP/subnet calculator & MikroTik burst calculator
+- Service layer `src/lib/ftth.ts`; teruji 48 skenario positif + negatif
+- *Monitoring probe & PPPoE realtime (G9) menunggu kredensial perangkat*
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

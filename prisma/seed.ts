@@ -131,6 +131,8 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "ctickets.view", module: "helpdesk", action: "view", description: "Melihat tiket pelanggan & dispatch board" },
   { code: "ctickets.create", module: "helpdesk", action: "create", description: "Membuat tiket pelanggan" },
   { code: "ctickets.manage", module: "helpdesk", action: "manage", description: "Assign, kategori, workflow, pause, solve, close tiket pelanggan" },
+  // Phase 13 — FTTH Port Management
+  { code: "ftth.manage", module: "noc", action: "ftth", description: "Mengelola OLT, PON port, ODP, dan alokasi port pelanggan" },
 ];
 
 // Pemetaan permission per role.
@@ -160,7 +162,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
-  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage"],
+  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
@@ -169,7 +171,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
-  noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement"],
+  noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement", "ftth.manage"],
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
   it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],

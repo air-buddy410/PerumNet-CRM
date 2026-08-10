@@ -564,6 +564,7 @@ model Subscription {
   suspensions     ServiceSuspension[]
   accessJobs      NetworkAccessJob[]
   customerTickets CustomerTicket[]
+  odpPort         OdpPort?
 
   @@index([status])
 }
@@ -997,6 +998,7 @@ model NetworkSite {
   linksA      NetworkLink[]        @relation("LinkSiteA")
   linksB      NetworkLink[]        @relation("LinkSiteB")
   subnets     Subnet[]
+  odps        Odp[]
   alarms      NetworkAlarm[]
   incidents   Incident[]
   maintenance NetworkMaintenance[]
@@ -1028,6 +1030,7 @@ model NetworkDevice {
   maintenance   NetworkMaintenance[]
   subscriptions Subscription[]     @relation("SubscriptionRouter")
   accessJobs    NetworkAccessJob[]
+  oltDevice     OltDevice?
 }
 
 model NetworkLink {
@@ -2003,4 +2006,75 @@ model TicketPause {
   createdBy User           @relation("CTicketPauser", fields: [createdById], references: [id])
 
   @@index([ticketId, resumedAt])
+}
+
+// ═══════════════ Phase 13: FTTH Port Management (DESIGN-PHASE-8 §7) ═══════════════
+// Perluasan model NOC — bukan paralel. Perbaikan atas sistem lama:
+// OdpPort per-port (diketahui port berapa dipakai pelanggan mana);
+// portUsed = turunan yang dijaga konsisten oleh engine, bukan angka lepas.
+// Kredensial OLT TIDAK plaintext — credentialRef = nama env var (rule 31).
+
+model OltDevice {
+  id              String  @id @default(cuid())
+  networkDeviceId String  @unique // spesialisasi NetworkDevice bertipe OLT
+  vendor          String // ZTE|HUAWEI|CDATA|HSGQ|FIBERHOME|VSOL|HIOSO
+  model           String?
+  managementIp    String
+  telnetPort      Int?
+  snmpPort        Int?
+  credentialRef   String? // nama env var — bukan secret
+  notes           String?
+
+  networkDevice NetworkDevice @relation(fields: [networkDeviceId], references: [id])
+  ponPorts      PonPort[]
+}
+
+// Padanan "Dist Group" sistem lama: port PON pada OLT (mis. "1/2/1").
+model PonPort {
+  id    String @id @default(cuid())
+  oltId String
+  slot  Int
+  port  Int
+  label String
+
+  olt  OltDevice @relation(fields: [oltId], references: [id])
+  odps Odp[]
+
+  @@unique([oltId, slot, port])
+}
+
+model Odp {
+  id            String  @id @default(cuid())
+  code          String  @unique
+  siteId        String?
+  ponPortId     String?
+  parentId      String? // ODP kaskade
+  portCapacity  Int
+  portUsed      Int     @default(0) // turunan — direkap engine, selalu konsisten
+  opticPowerDbm Float?
+  latitude      Float?
+  longitude     Float?
+  status        String  @default("ACTIVE") // ACTIVE|INACTIVE|PLANNED
+  notes         String?
+
+  site     NetworkSite? @relation(fields: [siteId], references: [id])
+  ponPort  PonPort?     @relation(fields: [ponPortId], references: [id])
+  parent   Odp?         @relation("OdpTree", fields: [parentId], references: [id])
+  children Odp[]        @relation("OdpTree")
+  ports    OdpPort[]
+}
+
+// Yang TIDAK dimiliki sistem lama: pemetaan per-port → pelanggan.
+model OdpPort {
+  id             String  @id @default(cuid())
+  odpId          String
+  portNumber     Int
+  subscriptionId String? @unique // satu langganan satu port
+  status         String  @default("FREE") // FREE|USED|RESERVED|DAMAGED
+  note           String?
+
+  odp          Odp           @relation(fields: [odpId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([odpId, portNumber])
 }
