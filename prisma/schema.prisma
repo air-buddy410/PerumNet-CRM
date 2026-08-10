@@ -116,6 +116,7 @@ model User {
   cticketMembers    TicketMember[]       @relation("CTicketMember")
   cticketPauses     TicketPause[]        @relation("CTicketPauser")
   cticketStepsDone  TicketStepProgress[] @relation("CTicketStepDoer")
+  employee          Employee?            @relation("EmployeeUser")
 }
 
 model Division {
@@ -1500,8 +1501,8 @@ model Integration {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  events     IntegrationEvent[]
-  gatewayTxs PaymentGatewayTx[]
+  events           IntegrationEvent[]
+  gatewayTxs       PaymentGatewayTx[]
 }
 
 // Log lalu lintas integrasi (inbound webhook / outbound call).
@@ -2077,4 +2078,132 @@ model OdpPort {
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
 
   @@unique([odpId, portNumber])
+}
+
+// ═══════════════ Phase 14: HRD & Absensi (DESIGN-PHASE-8 §8) ═══════════════
+// Keunggulan vs sistem lama: izin & lembur memakai ApprovalRule yang sudah
+// ada sehingga bisa BERJENJANG (atasan → HRD), bukan satu tingkat.
+// Adaptasi: jam shift disimpan "HH:MM" (SQLite tanpa tipe Time); tanggal
+// memakai DateTime dinormalkan ke tengah malam.
+
+model Employee {
+  id           String   @id @default(cuid())
+  userId       String?  @unique // tertaut akun sistem bila ada
+  employeeNo   String   @unique
+  fullName     String
+  jobTitle     String?
+  employeeType String   @default("FULL_TIME") // FULL_TIME|PART_TIME|CONTRACT|PROBATION
+  supervisorId String?
+  joinedAt     DateTime
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user        User?              @relation("EmployeeUser", fields: [userId], references: [id])
+  supervisor  Employee?          @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
+  subordinates Employee[]        @relation("EmployeeSupervisor")
+  schedules   ShiftSchedule[]
+  attendances Attendance[]
+  leaves      LeaveRequest[]
+  overtimes   OvertimeRequest[]
+
+  @@index([isActive])
+}
+
+model AttendanceLocation {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  latitude  Float
+  longitude Float
+  radiusM   Int     @default(100)
+  isActive  Boolean @default(true)
+
+  attendances Attendance[]
+}
+
+model Shift {
+  id               String  @id @default(cuid())
+  name             String  @unique
+  startTime        String // "08:00"
+  endTime          String // "17:00"
+  lateToleranceMin Int     @default(0)
+  isActive         Boolean @default(true)
+
+  schedules   ShiftSchedule[]
+  attendances Attendance[]
+}
+
+model ShiftSchedule {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime
+  shiftId    String?
+  dayType    String   @default("WORK") // WORK|OFF|HOLIDAY
+  note       String?
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  shift    Shift?   @relation(fields: [shiftId], references: [id])
+
+  @@unique([employeeId, date])
+}
+
+model Attendance {
+  id                String    @id @default(cuid())
+  employeeId        String
+  date              DateTime
+  shiftId           String?
+  clockInAt         DateTime?
+  clockInLocationId String?
+  clockInDistanceM  Int?
+  clockInPhotoId    String? // Attachment (foto selfie)
+  clockOutAt        DateTime?
+  clockOutPhotoId   String?
+  lateMinutes       Int       @default(0)
+  workMinutes       Int       @default(0)
+  status            String    @default("PRESENT") // PRESENT|LATE|ABSENT|LEAVE|SICK|HOLIDAY
+  note              String?
+
+  employee       Employee            @relation(fields: [employeeId], references: [id])
+  shift          Shift?              @relation(fields: [shiftId], references: [id])
+  clockInLocation AttendanceLocation? @relation(fields: [clockInLocationId], references: [id])
+
+  @@unique([employeeId, date])
+  @@index([date, status])
+}
+
+model LeaveRequest {
+  id                String   @id @default(cuid())
+  requestNumber     String   @unique // LVE-YYYYMM-####
+  employeeId        String
+  type              String // ANNUAL|SICK|OTHER
+  startDate         DateTime
+  endDate           DateTime
+  days              Int
+  reason            String
+  attachmentId      String?
+  approvalRequestId String?  @unique // ← approval engine berjenjang
+  status            String   @default("PENDING") // PENDING|APPROVED|REJECTED|CANCELLED
+  createdAt         DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
+}
+
+model OvertimeRequest {
+  id                String   @id @default(cuid())
+  requestNumber     String   @unique // OVT-YYYYMM-####
+  employeeId        String
+  date              DateTime
+  startTime         String // "18:00"
+  endTime           String // "21:00"
+  minutes           Int
+  reason            String
+  approvalRequestId String?  @unique
+  status            String   @default("PENDING") // PENDING|APPROVED|REJECTED|CANCELLED
+  createdAt         DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
 }

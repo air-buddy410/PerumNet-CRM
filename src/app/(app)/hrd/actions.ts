@@ -1,0 +1,165 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/rbac";
+import { PERMISSIONS } from "@/lib/constants";
+import {
+  saveEmployee,
+  saveShift,
+  saveAttendanceLocation,
+  saveSchedule,
+  clockIn,
+  clockOut,
+  submitLeave,
+  submitOvertime,
+  syncRequestStatuses,
+} from "@/lib/hrd";
+
+function num(v: FormDataEntryValue | null): number {
+  return Number(String(v ?? "").trim());
+}
+
+// ── Master (HRD) ────────────────────────────────────────────────
+
+export async function saveEmployeeAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const joined = String(formData.get("joinedAt") ?? "");
+  const result = await saveEmployee(user, {
+    id: String(formData.get("id") ?? "") || undefined,
+    userId: String(formData.get("userId") ?? "") || null,
+    employeeNo: String(formData.get("employeeNo") ?? ""),
+    fullName: String(formData.get("fullName") ?? ""),
+    jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
+    employeeType: String(formData.get("employeeType") ?? "FULL_TIME"),
+    supervisorId: String(formData.get("supervisorId") ?? "") || null,
+    joinedAt: joined ? new Date(joined) : new Date(NaN),
+    isActive: formData.get("isActive") === "on",
+  });
+  revalidatePath("/hrd/employees");
+  redirect(
+    "/hrd/employees?" +
+      (result.ok ? "ok=" + encodeURIComponent("Karyawan tersimpan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function saveShiftAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const result = await saveShift(user, {
+    id: String(formData.get("id") ?? "") || undefined,
+    name: String(formData.get("name") ?? ""),
+    startTime: String(formData.get("startTime") ?? ""),
+    endTime: String(formData.get("endTime") ?? ""),
+    lateToleranceMin: num(formData.get("lateToleranceMin")),
+    isActive: formData.get("isActive") === "on",
+  });
+  revalidatePath("/hrd/shifts");
+  redirect(
+    "/hrd/shifts?" +
+      (result.ok ? "ok=" + encodeURIComponent("Shift tersimpan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function saveLocationAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const result = await saveAttendanceLocation(user, {
+    id: String(formData.get("id") ?? "") || undefined,
+    name: String(formData.get("name") ?? ""),
+    latitude: num(formData.get("latitude")),
+    longitude: num(formData.get("longitude")),
+    radiusM: num(formData.get("radiusM")),
+    isActive: formData.get("isActive") === "on",
+  });
+  revalidatePath("/hrd/shifts");
+  redirect(
+    "/hrd/shifts?" +
+      (result.ok ? "ok=" + encodeURIComponent("Lokasi absen tersimpan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function saveScheduleAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const date = String(formData.get("date") ?? "");
+  const result = await saveSchedule(user, {
+    employeeId: String(formData.get("employeeId") ?? ""),
+    date: date ? new Date(date) : new Date(NaN),
+    shiftId: String(formData.get("shiftId") ?? "") || null,
+    dayType: String(formData.get("dayType") ?? "WORK"),
+    note: String(formData.get("note") ?? "") || undefined,
+  });
+  revalidatePath("/hrd/schedule");
+  redirect(
+    "/hrd/schedule?" +
+      (result.ok ? "ok=" + encodeURIComponent("Jadwal tersimpan.") : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function syncRequestsAction(): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_VIEW);
+  const result = await syncRequestStatuses(user);
+  revalidatePath("/hrd/requests");
+  redirect(
+    "/hrd/requests?" +
+      (result.ok
+        ? "ok=" + encodeURIComponent(`Sinkronisasi: ${result.data?.leaves} izin, ${result.data?.overtimes} lembur diperbarui.`)
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+// ── Self-service ────────────────────────────────────────────────
+
+function backSelf(result: { ok: boolean; error?: string }, okMsg: string): never {
+  redirect(
+    "/hrd/my-attendance?" +
+      (result.ok ? "ok=" + encodeURIComponent(okMsg) : "error=" + encodeURIComponent(result.error ?? "Gagal."))
+  );
+}
+
+export async function clockInAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ATTENDANCE_SELF);
+  const result = await clockIn(user, {
+    latitude: num(formData.get("latitude")),
+    longitude: num(formData.get("longitude")),
+  });
+  revalidatePath("/hrd/my-attendance");
+  backSelf(
+    result,
+    result.ok
+      ? `Absen masuk tercatat (${result.data?.distanceM} m dari titik)${result.data?.lateMinutes ? ` — terlambat ${result.data.lateMinutes} menit` : ""}.`
+      : ""
+  );
+}
+
+export async function clockOutAction(): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ATTENDANCE_SELF);
+  const result = await clockOut(user, {});
+  revalidatePath("/hrd/my-attendance");
+  backSelf(result, result.ok ? `Absen pulang tercatat — ${result.data?.workMinutes} menit kerja.` : "");
+}
+
+export async function submitLeaveAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ATTENDANCE_SELF);
+  const start = String(formData.get("startDate") ?? "");
+  const end = String(formData.get("endDate") ?? "");
+  const result = await submitLeave(user, {
+    type: String(formData.get("type") ?? ""),
+    startDate: start ? new Date(start) : new Date(NaN),
+    endDate: end ? new Date(end) : new Date(NaN),
+    reason: String(formData.get("reason") ?? ""),
+  });
+  revalidatePath("/hrd/my-attendance");
+  backSelf(result, "Pengajuan izin dikirim — menunggu approval berjenjang (atasan → HRD).");
+}
+
+export async function submitOvertimeAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ATTENDANCE_SELF);
+  const date = String(formData.get("date") ?? "");
+  const result = await submitOvertime(user, {
+    date: date ? new Date(date) : new Date(NaN),
+    startTime: String(formData.get("startTime") ?? ""),
+    endTime: String(formData.get("endTime") ?? ""),
+    reason: String(formData.get("reason") ?? ""),
+  });
+  revalidatePath("/hrd/my-attendance");
+  backSelf(result, result.ok ? `Pengajuan lembur ${result.data?.minutes} menit dikirim.` : "");
+}

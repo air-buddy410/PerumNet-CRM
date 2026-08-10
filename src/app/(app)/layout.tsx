@@ -177,6 +177,21 @@ export default async function AppLayout({
       groups.push({ title: "IT Support", items: supportItems });
   }
 
+  const hrdItems = [];
+  if (can(PERMISSIONS.ATTENDANCE_SELF))
+    hrdItems.push({ href: "/hrd/my-attendance", label: "Absensi Saya" });
+  if (can(PERMISSIONS.HRD_VIEW)) {
+    hrdItems.push(
+      { href: "/hrd/attendance", label: "Absensi Harian" },
+      { href: "/hrd/requests", label: "Izin & Lembur" },
+      { href: "/hrd/schedule", label: "Jadwal Shift" },
+      { href: "/hrd/recap", label: "Rekap Bulanan" },
+      { href: "/hrd/employees", label: "Karyawan" },
+      { href: "/hrd/shifts", label: "Shift & Lokasi" }
+    );
+  }
+  if (hrdItems.length) groups.push({ title: "HRD", items: hrdItems });
+
   const approvalItems = [];
   if (can(PERMISSIONS.APPROVALS_VIEW))
     approvalItems.push({ href: "/approvals", label: "Approval Request" });

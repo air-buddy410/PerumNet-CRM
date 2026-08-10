@@ -161,6 +161,13 @@ const STATUS_STYLES: Record<string, string> = {
   // FTTH port
   FREE: "is-approved",
   USED: "is-pending",
+  // HRD & absensi
+  PRESENT: "is-approved",
+  LATE: "is-pending",
+  ABSENT: "is-rejected",
+  LEAVE: "is-neutral",
+  SICK: "is-neutral",
+  HOLIDAY: "is-neutral",
 };
 
 export function Badge({ value, label }: { value: string; label?: string }) {
