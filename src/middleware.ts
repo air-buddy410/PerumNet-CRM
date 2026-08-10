@@ -4,6 +4,15 @@ import { jwtVerify } from "jose";
 const SESSION_COOKIE = "perumnet_session";
 const PUBLIC_PATHS = ["/login"];
 
+// Next.js middleware membangun URL dari hostname/port server (bukan Host header),
+// sehingga di belakang reverse proxy/tunnel redirect harus dibangun dari header.
+function requestOrigin(request: NextRequest): string {
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "http";
+  const host = request.headers.get("host") || request.nextUrl.host;
+  return `${proto}://${host}`;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -27,12 +36,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!authenticated && !isPublic) {
-    const url = new URL("/login", request.url);
+    const url = new URL("/login", requestOrigin(request));
     if (pathname !== "/") url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
   if (authenticated && isPublic) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/dashboard", requestOrigin(request)));
   }
   return NextResponse.next();
 }
