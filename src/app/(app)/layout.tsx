@@ -75,6 +75,17 @@ export default async function AppLayout({
     });
   }
 
+  if (can(PERMISSIONS.CTICKETS_VIEW)) {
+    groups.push({
+      title: "Helpdesk",
+      items: [
+        { href: "/helpdesk/tickets", label: "Tiket Pelanggan" },
+        { href: "/helpdesk/dispatch", label: "Dispatch Board" },
+        { href: "/helpdesk/categories", label: "Kategori & Workflow" },
+      ],
+    });
+  }
+
   if (can(PERMISSIONS.BILLING_VIEW)) {
     groups.push({
       title: "Billing",
