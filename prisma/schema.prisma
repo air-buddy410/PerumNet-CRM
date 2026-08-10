@@ -126,6 +126,8 @@ model User {
   signatures       DocumentSignature[] @relation("SignatureSigner")
   returnRequested  ReturnRequest[] @relation("ReturnRequester")
   returnVerified   ReturnRequest[] @relation("ReturnVerifier")
+  materialRequests MaterialRequest[] @relation("MrqRequester")
+  materialDecided  MaterialRequest[] @relation("MrqDecider")
 }
 
 model Division {
@@ -619,6 +621,7 @@ model Warehouse {
   txTo        StockTransaction[] @relation("TxTo")
   opnames     OpnameSession[]
   returnRequests ReturnRequest[] @relation("ReturnWarehouse")
+  materialRequests MaterialRequest[] @relation("MrqWarehouse")
 }
 
 model Item {
@@ -643,6 +646,7 @@ model Item {
   transferReceiptLines TransferReceiptLine[]
   deliveryOrderLines DeliveryOrderLine[]
   returnRequestLines ReturnRequestLine[]
+  materialRequestLines MaterialRequestLine[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -717,6 +721,7 @@ model StockTransaction {
   returnRequest  ReturnRequest?
 
   @@index([type, status])
+  materialRequest MaterialRequest?
 }
 
 model StockTransactionLine {
@@ -822,6 +827,7 @@ model WorkOrder {
 
   @@index([status])
   @@index([technicianId])
+  materialRequests MaterialRequest[]
 }
 
 // Pemakaian material bulk pada WO — mengurangi custody teknisi.
@@ -2461,6 +2467,48 @@ model ReturnRequestLine {
   request ReturnRequest     @relation(fields: [requestId], references: [id])
   item    Item              @relation(fields: [itemId], references: [id])
   device  SerializedDevice? @relation(fields: [deviceId], references: [id])
+
+  @@index([requestId])
+}
+
+/// Fase 19 (PRD-WAREHOUSE-ENHANCEMENT F7) — permintaan material yang diajukan
+/// sendiri oleh teknisi/vendor/tim proyek dari lapangan. Persetujuan
+/// menghasilkan draft pengeluaran resmi yang langsung mereservasi stock.
+model MaterialRequest {
+  id           String    @id @default(cuid())
+  requestNumber String   @unique // MRQ-YYYYMM-####
+  requesterId  String
+  warehouseId  String
+  workOrderId  String?
+  purpose      String
+  note         String?
+  status       String    @default("SUBMITTED") // SUBMITTED|APPROVED|REJECTED|CANCELLED
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  txId         String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  requester User              @relation("MrqRequester", fields: [requesterId], references: [id])
+  warehouse Warehouse         @relation("MrqWarehouse", fields: [warehouseId], references: [id])
+  workOrder WorkOrder?        @relation(fields: [workOrderId], references: [id])
+  decidedBy User?             @relation("MrqDecider", fields: [decidedById], references: [id])
+  tx        StockTransaction? @relation(fields: [txId], references: [id])
+  lines     MaterialRequestLine[]
+
+  @@index([status, requesterId])
+}
+
+model MaterialRequestLine {
+  id        String @id @default(cuid())
+  requestId String
+  itemId    String
+  qty       Int
+  note      String?
+
+  request MaterialRequest @relation(fields: [requestId], references: [id])
+  item    Item            @relation(fields: [itemId], references: [id])
 
   @@index([requestId])
 }
