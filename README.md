@@ -196,6 +196,30 @@ CRM & Operations Management System untuk ISP PerumNet.
 - Langganan kini punya tautan **router distribusi** (form data teknis)
 - Service layer `src/lib/dunning.ts`; teruji 35 skenario positif + negatif
 
+**Phase 11 — General Ledger** ✅
+
+- **Chart of Accounts berjenjang** gaya `1-10100` (§7.1) dengan sisi normal
+  per kategori, akun pajak, dan **jembatan Cashbook→Akun** (modul kas
+  Fase 4 tidak dibongkar); saldo akun = turunan jurnal, bukan kolom
+- **Jurnal append-only**: total debit **wajib =** total kredit (divalidasi
+  engine), tiap baris tepat satu sisi; koreksi = **jurnal balik** bersisi
+  tukar — tidak pernah edit/hapus
+- **PostingRule**: pemetaan peristiwa → akun sebagai konfigurasi, bukan
+  hardcode; **GL aktif ketika rule INVOICE_POSTED aktif ada** — saat aktif,
+  invoice/pembayaran **wajib berjurnal atau operasi gagal** (uang tidak
+  boleh punya dua sumber kebenaran, §0.2); saat nonaktif, modul berjalan
+  seperti pra-GL
+- **Auto-posting** mengikuti pola §5: invoice → D Piutang / C Pendapatan +
+  PPN Keluaran; pembayaran → D Kas (akun jembatan cashbook) / C Piutang;
+  **fee kolektor → D Beban Fee / C Hutang Fee** (liabilitas, jurnal
+  terpisah); gateway → D Kas netto + D Beban Gateway / C Piutang; void &
+  reversal membalik jurnalnya lebih dulu — gagal balik = operasi batal
+- **Laporan = query di atas jurnal**: buku besar (saldo berjalan), neraca
+  saldo (awal/pergerakan/akhir + cek seimbang), laba rugi, neraca (aktiva =
+  kewajiban + ekuitas + laba berjalan); *arus kas, perubahan modal & rasio
+  menyusul; jurnal kas petty cash menyusul (butuh pemetaan kategori→akun)*
+- Service layer `src/lib/gl.ts`; teruji 46 skenario positif + negatif
+
 ## Stack
 
 Next.js 15 (App Router, TypeScript) · Prisma ORM · SQLite (dev) / PostgreSQL (prod) · Tailwind CSS · Zod · jose · bcryptjs

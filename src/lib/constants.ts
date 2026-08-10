@@ -120,6 +120,10 @@ export const PERMISSIONS = {
   PAYMENTS_REVERSE: "payments.reverse",
   // Phase 10 — Isolir & Dunning
   DUNNING_MANAGE: "dunning.manage", // kebijakan, evaluasi, isolir/restore
+  // Phase 11 — General Ledger
+  GL_VIEW: "gl.view", // laporan & jurnal
+  GL_MANAGE: "gl.manage", // CoA & posting rules
+  GL_POST: "gl.post", // jurnal manual & reversal
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -702,6 +706,45 @@ export const GATEWAY_TX_STATUSES = [
   "EXPIRED",
   "CANCELLED",
   "FAILED",
+] as const;
+
+// ── Phase 11: General Ledger ────────────────────────────────────
+
+// Kategori akun (§3.3 sistem lama) + sisi normal saldonya.
+export const ACCOUNT_CATEGORIES = [
+  ["KAS_BANK", "Kas & Bank", "DEBIT"],
+  ["PIUTANG", "Piutang", "DEBIT"],
+  ["PERSEDIAAN", "Persediaan", "DEBIT"],
+  ["AKTIVA_LANCAR_LAIN", "Aktiva Lancar Lainnya", "DEBIT"],
+  ["AKTIVA_TETAP", "Aktiva Tetap", "DEBIT"],
+  ["DEPRESIASI", "Depresiasi & Amortisasi", "CREDIT"],
+  ["AKTIVA_LAIN", "Aktiva Lainnya", "DEBIT"],
+  ["HUTANG", "Hutang", "CREDIT"],
+  ["KEWAJIBAN_LANCAR_LAIN", "Kewajiban Lancar Lainnya", "CREDIT"],
+  ["KEWAJIBAN_JK_PANJANG", "Kewajiban Jangka Panjang", "CREDIT"],
+  ["EKUITAS", "Ekuitas", "CREDIT"],
+  ["PENDAPATAN", "Pendapatan", "CREDIT"],
+  ["PENDAPATAN_LAIN", "Pendapatan Lainnya", "CREDIT"],
+  ["BEBAN", "Beban", "DEBIT"],
+] as const;
+
+// Kelompok neraca vs laba rugi (untuk laporan).
+export const BALANCE_SHEET_ASSET_CATS = [
+  "KAS_BANK", "PIUTANG", "PERSEDIAAN", "AKTIVA_LANCAR_LAIN",
+  "AKTIVA_TETAP", "DEPRESIASI", "AKTIVA_LAIN",
+] as const;
+export const BALANCE_SHEET_LIABILITY_CATS = [
+  "HUTANG", "KEWAJIBAN_LANCAR_LAIN", "KEWAJIBAN_JK_PANJANG",
+] as const;
+export const INCOME_CATS = ["PENDAPATAN", "PENDAPATAN_LAIN"] as const;
+export const EXPENSE_CATS = ["BEBAN"] as const;
+
+export const POSTING_EVENTS = [
+  ["INVOICE_POSTED", "Invoice terbit (Piutang → Pendapatan)"],
+  ["INVOICE_TAX", "PPN Keluaran invoice"],
+  ["PAYMENT_RECEIVED", "Pembayaran diterima (Kas → Piutang)"],
+  ["COLLECTOR_FEE", "Komisi kolektor diakui (Beban Fee → Hutang Fee)"],
+  ["GATEWAY_FEE", "Biaya payment gateway"],
 ] as const;
 
 // ── Phase 10: Isolir & Dunning ──────────────────────────────────

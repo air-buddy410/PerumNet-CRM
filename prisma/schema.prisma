@@ -110,6 +110,7 @@ model User {
   paymentsCreated  Payment[]          @relation("PaymentCreator")
   gatewayTxCreated PaymentGatewayTx[] @relation("GatewayTxCreator")
   suspensionsCreated ServiceSuspension[] @relation("SuspensionCreator")
+  journalsPosted     JournalEntry[]      @relation("JournalPoster")
 }
 
 model Division {
@@ -276,6 +277,7 @@ model CostCenter {
   isActive    Boolean @default(true)
 
   cashTransactions CashTransaction[]
+  journalLines     JournalLine[]
 }
 
 model Category {
@@ -1791,4 +1793,84 @@ model NetworkAccessJob {
   router       NetworkDevice? @relation(fields: [routerId], references: [id])
 
   @@index([status, routerId])
+}
+
+// ═══════════════ Phase 11: General Ledger (DESIGN-PHASE-8 §5) ═══════════════
+// Prinsip §0.2: uang tidak boleh punya dua sumber kebenaran — semua
+// peristiwa keuangan menghasilkan SATU jurnal; laporan diturunkan dari
+// jurnal. Jurnal append-only: koreksi = jurnal balik, tidak pernah edit.
+// Adaptasi: taxPercent Float (SQLite tanpa Decimal).
+
+model Account {
+  id           String  @id @default(cuid())
+  code         String  @unique // "1-10100" — gaya penomoran Accurate/Zahir (§7.1)
+  name         String
+  category     String // KAS_BANK|PIUTANG|...|PENDAPATAN|BEBAN (ACCOUNT_CATEGORIES)
+  normalSide   String // DEBIT|CREDIT
+  parentId     String?
+  isTaxAccount Boolean @default(false)
+  taxPercent   Float?
+  cashbookId   String? @unique // jembatan ke Cashbook Fase 4 (§5: tanpa bongkar modul kas)
+  isActive     Boolean @default(true)
+
+  parent   Account?  @relation("AccountTree", fields: [parentId], references: [id])
+  children Account[] @relation("AccountTree")
+  lines    JournalLine[]
+  debitRules  PostingRule[] @relation("RuleDebit")
+  creditRules PostingRule[] @relation("RuleCredit")
+
+  @@index([category, isActive])
+}
+
+model JournalEntry {
+  id           String    @id @default(cuid())
+  entryNumber  String    @unique // JRN-YYYYMM-####
+  entryDate    DateTime
+  source       String // INVOICE|INVOICE_VOID|PAYMENT|COLLECTOR_FEE|CASH_TX|MANUAL|REVERSAL
+  sourceId     String? // id entitas asal (tanpa FK — lintas modul)
+  memo         String?
+  partyType    String? // CUSTOMER|MERCHANT|EMPLOYEE|CONTACT
+  partyId      String?
+  status       String    @default("POSTED") // POSTED|REVERSED
+  reversalOfId String?   @unique
+  postedById   String? // null = diposting sistem (event billing/payment)
+  createdAt    DateTime  @default(now())
+
+  reversalOf JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
+  reversal   JournalEntry? @relation("JournalReversal")
+  postedBy   User?         @relation("JournalPoster", fields: [postedById], references: [id])
+  lines      JournalLine[]
+
+  @@index([entryDate, source])
+  @@index([source, sourceId])
+}
+
+model JournalLine {
+  id           String  @id @default(cuid())
+  entryId      String
+  accountId    String
+  debit        BigInt  @default(0)
+  credit       BigInt  @default(0)
+  description  String?
+  costCenterId String?
+
+  entry      JournalEntry @relation(fields: [entryId], references: [id])
+  account    Account      @relation(fields: [accountId], references: [id])
+  costCenter CostCenter?  @relation(fields: [costCenterId], references: [id])
+
+  @@index([accountId, entryId])
+}
+
+// Pemetaan peristiwa → akun — konfigurasi, bukan hardcode (§5).
+// GL "aktif" ketika rule INVOICE_POSTED aktif ada; tanpa itu, modul
+// billing/payment berjalan tanpa jurnal (perilaku pra-GL dipertahankan).
+model PostingRule {
+  id              String  @id @default(cuid())
+  event           String  @unique // INVOICE_POSTED|INVOICE_TAX|PAYMENT_RECEIVED|COLLECTOR_FEE|GATEWAY_FEE
+  debitAccountId  String?
+  creditAccountId String?
+  isActive        Boolean @default(true)
+
+  debitAccount  Account? @relation("RuleDebit", fields: [debitAccountId], references: [id])
+  creditAccount Account? @relation("RuleCredit", fields: [creditAccountId], references: [id])
 }

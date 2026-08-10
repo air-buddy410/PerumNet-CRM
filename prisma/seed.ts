@@ -123,6 +123,10 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "payments.reverse", module: "billing", action: "payment_reverse", description: "Reversal pembayaran posted" },
   // Phase 10 — Isolir & Dunning
   { code: "dunning.manage", module: "billing", action: "dunning", description: "Kebijakan dunning, evaluasi isolir, isolir/pemulihan manual" },
+  // Phase 11 — General Ledger
+  { code: "gl.view", module: "gl", action: "view", description: "Melihat jurnal, buku besar, dan laporan keuangan" },
+  { code: "gl.manage", module: "gl", action: "manage", description: "Mengelola Chart of Accounts & posting rules" },
+  { code: "gl.post", module: "gl", action: "post", description: "Jurnal manual & reversal jurnal" },
 ];
 
 // Pemetaan permission per role.
@@ -149,8 +153,8 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view"],
-  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view"],
+  finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
@@ -450,6 +454,56 @@ async function main() {
         minAmount: BigInt(rule.min),
         maxAmount: rule.max === null ? null : BigInt(rule.max),
         steps: { create: stepsData },
+      },
+    });
+  }
+
+  // Phase 11 — Chart of Accounts default (gaya penomoran §7.1; kode bisa
+  // disesuaikan PO — saat migrasi, kode akun lama dipertahankan §10).
+  console.log("Seeding chart of accounts...");
+  const COA: { code: string; name: string; category: string; normalSide: string; parent?: string; isTax?: boolean; taxPercent?: number }[] = [
+    { code: "1-10000", name: "Kas Tunai", category: "KAS_BANK", normalSide: "DEBIT" },
+    { code: "1-10050", name: "Bank", category: "KAS_BANK", normalSide: "DEBIT" },
+    { code: "1-10100", name: "Piutang Usaha", category: "PIUTANG", normalSide: "DEBIT" },
+    { code: "1-10200", name: "Persediaan", category: "PERSEDIAAN", normalSide: "DEBIT" },
+    { code: "2-20100", name: "Hutang Usaha", category: "HUTANG", normalSide: "CREDIT" },
+    { code: "2-20101", name: "Hutang Fee Mitra", category: "HUTANG", normalSide: "CREDIT" },
+    { code: "2-20500", name: "PPN Keluaran", category: "KEWAJIBAN_LANCAR_LAIN", normalSide: "CREDIT", isTax: true, taxPercent: 11 },
+    { code: "3-30000", name: "Modal", category: "EKUITAS", normalSide: "CREDIT" },
+    { code: "4-40000", name: "Pendapatan Jasa Internet", category: "PENDAPATAN", normalSide: "CREDIT" },
+    { code: "4-40100", name: "Pendapatan Instalasi", category: "PENDAPATAN", normalSide: "CREDIT" },
+    { code: "5-50000", name: "Beban Operasional", category: "BEBAN", normalSide: "DEBIT" },
+    { code: "5-50100", name: "Beban Fee Kolektor", category: "BEBAN", normalSide: "DEBIT" },
+    { code: "5-50200", name: "Beban Biaya Gateway", category: "BEBAN", normalSide: "DEBIT" },
+  ];
+  const accountMap = new Map<string, string>();
+  for (const a of COA) {
+    const row = await db.account.upsert({
+      where: { code: a.code },
+      update: { name: a.name, category: a.category, normalSide: a.normalSide },
+      create: {
+        code: a.code, name: a.name, category: a.category, normalSide: a.normalSide,
+        isTaxAccount: a.isTax ?? false, taxPercent: a.taxPercent ?? null,
+      },
+    });
+    accountMap.set(a.code, row.id);
+  }
+  // Posting rules default — GL aktif karena INVOICE_POSTED ada (§5).
+  const RULES: { event: string; debit?: string; credit?: string }[] = [
+    { event: "INVOICE_POSTED", debit: "1-10100", credit: "4-40000" },
+    { event: "INVOICE_TAX", credit: "2-20500" },
+    { event: "PAYMENT_RECEIVED", debit: "1-10000", credit: "1-10100" },
+    { event: "COLLECTOR_FEE", debit: "5-50100", credit: "2-20101" },
+    { event: "GATEWAY_FEE", debit: "5-50200" },
+  ];
+  for (const r of RULES) {
+    await db.postingRule.upsert({
+      where: { event: r.event },
+      update: {},
+      create: {
+        event: r.event,
+        debitAccountId: r.debit ? accountMap.get(r.debit)! : null,
+        creditAccountId: r.credit ? accountMap.get(r.credit)! : null,
       },
     });
   }

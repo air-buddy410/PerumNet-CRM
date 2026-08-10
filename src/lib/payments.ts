@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { autoRestoreAfterPayment } from "@/lib/dunning";
+import { postPaymentJournal, reversePaymentJournals } from "@/lib/gl";
 import { PAYMENT_METHODS, GATEWAY_PROVIDERS } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -262,11 +263,22 @@ export async function postPayment(user: CurrentUser, paymentId: string): Promise
   );
   if (!valid.ok) return valid;
 
+  // Fase 11: jurnal DULU (idempoten) — pembayaran tidak pernah mengubah
+  // piutang tanpa jurnal saat GL aktif (§0.2).
+  const journal = await postPaymentJournal(paymentId);
+  if (!journal.ok) {
+    return { ok: false, error: `Jurnal gagal: ${journal.error}` };
+  }
+
   const applied = await applyAllocations(
     payment.allocations.map((a) => ({ invoiceId: a.invoiceId, amount: a.amount })),
     1
   );
-  if (!applied.ok) return applied;
+  if (!applied.ok) {
+    // Alokasi gagal setelah jurnal dibuat (race) — balik jurnalnya.
+    await reversePaymentJournals(paymentId, `Posting gagal: ${applied.error}`);
+    return applied;
+  }
 
   await db.payment.update({ where: { id: paymentId }, data: { status: "POSTED" } });
   await logAudit({
@@ -301,6 +313,12 @@ export async function reversePayment(
   }
   if (payment.reversal) {
     return { ok: false, error: "Pembayaran ini sudah pernah di-reverse." };
+  }
+
+  // Fase 11: jurnal balik DULU — reversal gagal bila buku tidak bisa dibalik.
+  const journalReversed = await reversePaymentJournals(paymentId, reason);
+  if (!journalReversed.ok) {
+    return { ok: false, error: `Jurnal balik gagal: ${journalReversed.error}` };
   }
 
   const applied = await applyAllocations(
@@ -534,8 +552,18 @@ export async function ingestGatewayEvent(
       allocations: { create: allocations.map((a) => ({ invoiceId: a.invoiceId, amount: a.amount })) },
     },
   });
+  // Fase 11: jurnal dulu; gagal -> draft dibuang, bundle tetap PENDING
+  // (gateway akan mengirim ulang webhook).
+  const journal = await postPaymentJournal(payment.id);
+  if (!journal.ok) {
+    await db.paymentAllocation.deleteMany({ where: { paymentId: payment.id } });
+    await db.payment.delete({ where: { id: payment.id } });
+    await logEvent("REJECTED", `Jurnal gagal: ${journal.error}`);
+    return { ok: false, error: `Jurnal gagal: ${journal.error}` };
+  }
   const applied = await applyAllocations(allocations, 1);
   if (!applied.ok) {
+    await reversePaymentJournals(payment.id, `Alokasi gagal: ${applied.error}`);
     await logEvent("REJECTED", `Gagal alokasi: ${applied.error}`);
     return applied;
   }
