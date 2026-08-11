@@ -224,6 +224,7 @@ export default async function AppLayout({
     settingItems.push({ href: "/settings/users", label: "Users" });
   if (can(PERMISSIONS.ROLES_VIEW))
     settingItems.push({ href: "/settings/roles", label: "Roles & Permissions" });
+    settingItems.push({ href: "/settings/scheduler", label: "Pekerjaan Berkala" });
   if (can(PERMISSIONS.MASTER_DATA_VIEW)) {
     settingItems.push(
       { href: "/settings/master/divisions", label: "Divisi" },
