@@ -37,6 +37,11 @@ export default async function StockPage() {
       <PageHeader
         title="Posisi Stock"
         subtitle={`Tersedia = fisik − ditahan draft. ${lowCount > 0 ? `${lowCount} item di bawah minimum.` : "Semua item di atas minimum."}${reservedTotal > 0 ? ` ${reservedTotal} unit ditahan draft.` : ""}${transitTotal > 0 ? ` ${transitTotal} unit dalam perjalanan.` : ""}`}
+        action={
+          <a href="/api/export/stock" className="btn-secondary">
+            Unduh CSV
+          </a>
+        }
       />
 
       <div className="card overflow-x-auto">
