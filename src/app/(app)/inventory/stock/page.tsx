@@ -27,12 +27,16 @@ export default async function StockPage() {
     (s, i) => s + i.stockLevels.reduce((a, l) => a + l.reserved, 0),
     0
   );
+  const transitTotal = items.reduce(
+    (s, i) => s + i.stockLevels.reduce((a, l) => a + l.inTransit, 0),
+    0
+  );
 
   return (
     <div>
       <PageHeader
         title="Posisi Stock"
-        subtitle={`Tersedia = fisik − ditahan draft. ${lowCount > 0 ? `${lowCount} item di bawah minimum.` : "Semua item di atas minimum."}${reservedTotal > 0 ? ` ${reservedTotal} unit sedang ditahan draft.` : ""}`}
+        subtitle={`Tersedia = fisik − ditahan draft. ${lowCount > 0 ? `${lowCount} item di bawah minimum.` : "Semua item di atas minimum."}${reservedTotal > 0 ? ` ${reservedTotal} unit ditahan draft.` : ""}${transitTotal > 0 ? ` ${transitTotal} unit dalam perjalanan.` : ""}`}
       />
 
       <div className="card overflow-x-auto">
@@ -49,6 +53,7 @@ export default async function StockPage() {
                 <th className="th text-right">Tersedia</th>
                 <th className="th text-right">Fisik</th>
                 <th className="th text-right">Ditahan</th>
+                <th className="th text-right">Perjalanan</th>
                 <th className="th text-right">Min</th>
               </tr>
             </thead>
@@ -57,6 +62,7 @@ export default async function StockPage() {
                 const available = availableOf(item.stockLevels);
                 const onHand = item.stockLevels.reduce((s, l) => s + l.onHand, 0);
                 const reserved = item.stockLevels.reduce((s, l) => s + l.reserved, 0);
+                const inTransit = item.stockLevels.reduce((s, l) => s + l.inTransit, 0);
                 const low = available < item.minStock;
                 return (
                   <tr key={item.id} className={low ? "bg-red-50/50" : "hover:bg-slate-50"}>
@@ -84,6 +90,9 @@ export default async function StockPage() {
                     <td className="td text-right text-slate-500">{onHand}</td>
                     <td className={`td text-right ${reserved > 0 ? "text-amber-600" : "text-slate-400"}`}>
                       {reserved}
+                    </td>
+                    <td className={`td text-right ${inTransit > 0 ? "text-sky-600" : "text-slate-400"}`}>
+                      {inTransit}
                     </td>
                     <td className="td text-right text-slate-400">{item.minStock}</td>
                   </tr>

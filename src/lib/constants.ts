@@ -64,6 +64,7 @@ export const PERMISSIONS = {
   STOCK_CREATE: "stock.create", // buat draft transaksi
   STOCK_POST: "stock.post", // posting transaksi (mengubah saldo)
   STOCK_REVERSE: "stock.reverse",
+  STOCK_RECEIVE: "stock.receive", // menerima transfer antar gudang (Fase 17)
   DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
   CUSTODY_VIEW: "custody.view",
   WORK_ORDERS_VIEW: "work_orders.view",
@@ -413,6 +414,7 @@ export const TX_PREFIX: Record<string, string> = {
 
 export const DEVICE_STATUSES = [
   "AVAILABLE",
+  "IN_TRANSIT", // Fase 17: dikirim antar gudang, belum diterima
   "IN_CUSTODY",
   "INSTALLED",
   "UNDER_INSPECTION",
