@@ -208,6 +208,8 @@ Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dar
 
 | **26. Impor/Ekspor KML** | Ambil titik ODP dari survei lapangan, keluarkan peta ODP untuk Google Earth | ✅ selesai (PRD-NOC-TOOLS N4; parser ditulis tanpa dependensi XML; impor WAJIB dua tahap — pratinjau menampilkan cocok/baru/ganda/ditolak beserta pergeseran koordinat dalam meter sebelum apa pun disimpan; impor hanya menyentuh koordinat, kapasitas & relasi ODP tidak pernah diubah berkas peta; placemark rusak dilaporkan, tidak dibuang diam-diam; ODP baru dibuat berstatus PLANNED; KMZ sengaja tidak didukung — diminta ekstrak dulu) |
 
+| **27. Worker Penjadwal** | ScheduledTask + kunci sewa, worker proses terpisah, halaman pemantau | ✅ selesai (menutup lubang terbesar: seluruh mesin sejak Fase 8 hanya berjalan bila ada orang menekan tombol; sekarang probe, poller PPPoE, antrian pesan, antrian isolir, evaluasi dunning, dan pemangkasan berjalan sendiri lewat `npm run worker`. Perebutan tugas lewat SATU UPDATE bersyarat sehingga dua worker tidak pernah menjalankan pekerjaan yang sama; sewa kedaluwarsa boleh direbut agar worker mati tidak mengunci selamanya. **Evaluasi dunning sengaja nonaktif secara default** dan **penerbitan tagihan tidak dijadwalkan sama sekali** — memutus layanan & menagih ribuan pelanggan tetap keputusan manusia) |
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 **Tes:** `npm test` — test runner bawaan Node (`node:test`) lewat `tsx`, tanpa dependensi baru. Saat ini 41 tes unit atas fungsi murni (KML, klasifikasi PPPoE, okupansi & proyeksi peta, penomoran dokumen, pembulatan PPN). Tes integrasi berbasis database belum ada dan butuh database tersendiri — lihat `tests/README.md`.

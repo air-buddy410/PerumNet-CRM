@@ -164,6 +164,62 @@ export function readCredential(credentialRef: string): { user: string; password:
 
 export type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
 
+
+// ── Sertifikat self-signed ──────────────────────────────────────
+// RouterOS biasanya memakai sertifikat yang dibuat sendiri, dan fetch Node
+// menolaknya. Melewati verifikasi TLS berarti koneksi bisa disadap atau
+// dibajak di tengah jalan, jadi ini MATI secara default dan hanya menyala
+// bila dinyalakan sadar lewat MIKROTIK_INSECURE_TLS=1.
+//
+// Jalan yang benar tetap: pasang sertifikat tepercaya di router. Opsi ini
+// untuk jaringan manajemen tertutup, bukan untuk kenyamanan.
+
+export function insecureTlsEnabled(): boolean {
+  return process.env.MIKROTIK_INSECURE_TLS === "1";
+}
+
+/** Fetcher berbasis node:https yang melewati verifikasi sertifikat. */
+export const insecureFetcher: Fetcher = async (url, init) => {
+  const https = await import("node:https");
+  const target = new URL(url);
+  const headers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(init.headers ?? {})) headers[k] = String(v);
+
+  return new Promise<Response>((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: target.hostname,
+        port: target.port || 443,
+        path: target.pathname + target.search,
+        method: init.method ?? "GET",
+        headers,
+        rejectUnauthorized: false,
+        timeout: 10_000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(c as Buffer));
+        res.on("end", () =>
+          resolve(
+            new Response(Buffer.concat(chunks), {
+              status: res.statusCode ?? 500,
+              headers: { "content-type": res.headers["content-type"] ?? "application/json" },
+            })
+          )
+        );
+      }
+    );
+    req.on("timeout", () => req.destroy(new Error("timeout menghubungi router")));
+    req.on("error", reject);
+    req.end();
+  });
+};
+
+/** Fetcher yang dipakai bila pemanggil tidak menyuntikkan sendiri. */
+export function defaultFetcher(): Fetcher | undefined {
+  return insecureTlsEnabled() ? insecureFetcher : undefined;
+}
+
 export interface RouterOsClientOptions {
   baseUrl: string;
   credentialRef: string;
@@ -183,7 +239,7 @@ async function routerOsGet<T>(
   const url = `${options.baseUrl.replace(/\/+$/, "")}/rest${path}`;
   const auth = Buffer.from(`${user}:${password}`).toString("base64");
 
-  const doFetch = options.fetcher ?? fetch;
+  const doFetch = options.fetcher ?? defaultFetcher() ?? fetch;
   let response: Response;
   try {
     response = await doFetch(url, {

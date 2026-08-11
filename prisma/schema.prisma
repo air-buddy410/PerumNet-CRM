@@ -2753,3 +2753,52 @@ model ProbeResult {
 
   @@index([targetId, checkedAt])
 }
+
+/// Fase 27 — pekerjaan berkala. Sebelum ini seluruh mesin (probe, poller PPPoE,
+/// antrian pesan, antrian isolir, evaluasi dunning) hanya berjalan bila ada
+/// orang menekan tombol. Sistemnya utuh tapi pasif.
+///
+/// Kunci sewa (lockedAt/lockedBy) mencegah dua worker menjalankan pekerjaan
+/// yang sama bersamaan — direbut lewat satu UPDATE bersyarat, bukan baca-lalu-
+/// tulis, sehingga aman terhadap balapan.
+model ScheduledTask {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  description String?
+  intervalSec Int
+  isEnabled   Boolean   @default(true)
+
+  lastRunAt      DateTime?
+  lastStatus     String? // SUCCESS|FAILED
+  lastError      String?
+  lastDurationMs Int?
+  runCount       Int      @default(0)
+  failCount      Int      @default(0)
+
+  /// Sewa: diisi saat pekerjaan direbut, dikosongkan saat selesai. Sewa yang
+  /// kedaluwarsa boleh direbut worker lain — supaya worker yang mati tidak
+  /// mengunci pekerjaan selamanya.
+  lockedAt  DateTime?
+  lockedBy  String?
+
+  createdAt DateTime @default(now())
+  runs      ScheduledTaskRun[]
+
+  @@index([isEnabled, lastRunAt])
+}
+
+model ScheduledTaskRun {
+  id         String    @id @default(cuid())
+  taskId     String
+  workerId   String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("RUNNING") // RUNNING|SUCCESS|FAILED
+  detail     String?
+  error      String?
+
+  task ScheduledTask @relation(fields: [taskId], references: [id])
+
+  @@index([taskId, startedAt])
+}
