@@ -84,3 +84,61 @@ export function notImportableReason(type: ImportPointType): string | null {
   }
   return null;
 }
+
+// ── Jenis rute kabel (Fase 39) ──────────────────────────────────
+// Sama seperti jenis titik, ditebak dari nama folder KML dan selalu bisa
+// ditimpa. Yang tidak tertebak menjadi OTHER — bukan ditebak jadi salah satu,
+// karena keliru menyebut drop core sebagai feeder menyesatkan teknisi yang
+// membaca peta.
+
+export type RouteType = "FEEDER" | "DISTRIBUTION" | "DROP" | "OTHER";
+
+export const ROUTE_TYPE_LABEL: Record<RouteType, string> = {
+  FEEDER: "Feeder",
+  DISTRIBUTION: "Distribusi",
+  DROP: "Drop core",
+  OTHER: "Lainnya",
+};
+
+const ROUTE_RULES: { type: RouteType; keywords: string[] }[] = [
+  { type: "DROP", keywords: ["DROP", "DROPCORE", "DROP CORE", "PRECON"] },
+  { type: "DISTRIBUTION", keywords: ["DISTRIBUSI", "DISTRIBUTION", "DIST"] },
+  { type: "FEEDER", keywords: ["FEEDER", "BACKBONE", "TRUNK"] },
+];
+
+export function inferRouteType(folder: string | null | undefined): RouteType {
+  if (!folder) return "OTHER";
+  const words = folder.toUpperCase().replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim().split(" ");
+  const joined = words.join(" ");
+  for (const rule of ROUTE_RULES) {
+    for (const kw of rule.keywords) {
+      if (kw.includes(" ") ? joined.includes(kw) : words.includes(kw)) return rule.type;
+    }
+  }
+  return "OTHER";
+}
+
+/**
+ * Panjang perkiraan sebuah rute dalam meter.
+ *
+ * Sengaja DIHITUNG saat dibaca, bukan disimpan. Angka tersimpan cepat berubah
+ * menjadi "sumber kebenaran" yang dipakai orang untuk menagih atau menghitung
+ * rugi-rugi — padahal ini hanya jumlah jarak lurus antar simpul yang digambar
+ * tangan surveyor, bukan panjang kabel sebenarnya.
+ */
+export function routeLengthMeters(coordinates: [number, number][]): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  let total = 0;
+  for (let i = 1; i < coordinates.length; i++) {
+    const [lng1, lat1] = coordinates[i - 1];
+    const [lng2, lat2] = coordinates[i];
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const s =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    total += 2 * R * Math.asin(Math.sqrt(s));
+  }
+  return Math.round(total);
+}

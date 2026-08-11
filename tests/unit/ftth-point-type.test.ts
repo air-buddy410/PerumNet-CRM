@@ -5,6 +5,8 @@ import {
   isImportable,
   notImportableReason,
   IMPORTABLE_TYPES,
+  inferRouteType,
+  routeLengthMeters,
 } from "@/lib/ftth-point-type";
 
 // Tebakan jenis menentukan sebuah titik akan tersimpan sebagai apa. Salah
@@ -82,5 +84,41 @@ describe("isImportable & notImportableReason", () => {
     assert.match(String(notImportableReason("CUSTOMER")), /manual/i);
     assert.match(String(notImportableReason("UNKNOWN")), /pilih jenisnya/i);
     assert.equal(notImportableReason("ODP"), null);
+  });
+});
+
+describe("inferRouteType (Fase 39)", () => {
+  test("jenis rute dikenali dari folder", () => {
+    assert.equal(inferRouteType("Rute Feeder"), "FEEDER");
+    assert.equal(inferRouteType("Backbone"), "FEEDER");
+    assert.equal(inferRouteType("Distribusi"), "DISTRIBUTION");
+    assert.equal(inferRouteType("DROP CORE"), "DROP");
+    assert.equal(inferRouteType("Precon"), "DROP");
+  });
+
+  test("yang tak tertebak menjadi OTHER, bukan ditebak salah satu", () => {
+    // Menyebut drop core sebagai feeder menyesatkan teknisi yang baca peta.
+    for (const f of [null, "", "Layer 2", "Coba"]) {
+      assert.equal(inferRouteType(f), "OTHER", String(f));
+    }
+  });
+});
+
+describe("routeLengthMeters", () => {
+  test("garis dua simpul = jarak antar keduanya", () => {
+    // ~111 km per derajat lintang di khatulistiwa.
+    const d = routeLengthMeters([[115, -8], [115, -8.01]]);
+    assert.ok(d > 1000 && d < 1200, `dapat ${d} m`);
+  });
+
+  test("panjang menjumlahkan seluruh ruas", () => {
+    const dua = routeLengthMeters([[115, -8], [115, -8.01]]);
+    const tiga = routeLengthMeters([[115, -8], [115, -8.01], [115, -8.02]]);
+    assert.ok(Math.abs(tiga - dua * 2) < 5, `${tiga} ≈ 2 × ${dua}`);
+  });
+
+  test("kurang dari dua simpul = nol, bukan galat", () => {
+    assert.equal(routeLengthMeters([]), 0);
+    assert.equal(routeLengthMeters([[115, -8]]), 0);
   });
 });

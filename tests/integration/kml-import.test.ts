@@ -185,4 +185,74 @@ describe("impor KML/KMZ multi-jenis (Fase 36)", () => {
     assert.equal(await db.odp.count(), 0);
     assert.equal(await db.networkSite.count(), 0);
   });
+
+describe("rute kabel (Fase 39)", () => {
+  const WITH_ROUTES = kml(
+    folder("ODP", point("ODP-R1", 115.2, -8.5)) +
+      folder(
+        "Rute Feeder",
+        `<Placemark><name>Feeder Abang</name><LineString><coordinates>
+          115.10,-8.40,0 115.15,-8.45,0 115.20,-8.50,0
+        </coordinates></LineString></Placemark>`
+      ) +
+      folder(
+        "Rute Drop Core",
+        `<Placemark><name>Drop R1-01</name><LineString><coordinates>
+          115.20,-8.50,0 115.21,-8.51,0
+        </coordinates></LineString></Placemark>`
+      )
+  );
+
+  test("jenis rute ditebak dari folder, panjangnya dihitung", async () => {
+    const p = await previewKmlImport(WITH_ROUTES);
+    const byName = new Map(p.routes.map((r) => [r.name, r]));
+    assert.equal(byName.get("Feeder Abang")?.routeType, "FEEDER");
+    assert.equal(byName.get("Drop R1-01")?.routeType, "DROP");
+    assert.equal(byName.get("Feeder Abang")?.pointCount, 3);
+    assert.ok(byName.get("Feeder Abang")!.lengthMeters > 0);
+    assert.deepEqual(p.routeCounts, { new: 2, keep: 0, duplicate: 0 });
+  });
+
+  test("rute tersimpan sebagai lapisan visual, terpisah dari titik", async () => {
+    const user = await importer();
+    const res = await applyKmlImport(user, WITH_ROUTES, {
+      createMissing: true,
+      defaultCapacity: 8,
+    });
+    assert.ok(res.ok, res.ok ? "" : res.error);
+    assert.equal(res.ok && res.data?.routes, 2);
+    assert.equal(res.ok && res.data?.created, 1, "hanya ODP yang jadi titik");
+
+    const feeder = await db.fiberRoute.findFirst({ where: { name: "Feeder Abang" } });
+    assert.equal(feeder?.routeType, "FEEDER");
+    assert.equal(feeder?.source, "KML_IMPORT");
+    assert.equal((feeder?.geometry as unknown as unknown[]).length, 3);
+  });
+
+  test("rute yang sudah ada TIDAK ditimpa geometrinya", async () => {
+    const user = await importer();
+    const existing = await db.fiberRoute.create({
+      data: {
+        name: "Feeder Abang",
+        routeType: "FEEDER",
+        geometry: [[999, 999]] as unknown as object,
+        source: "MANUAL",
+      },
+    });
+
+    const p = await previewKmlImport(WITH_ROUTES);
+    assert.equal(p.routes.find((r) => r.name === "Feeder Abang")?.action, "KEEP");
+
+    await applyKmlImport(user, WITH_ROUTES, { createMissing: true, defaultCapacity: 8 });
+    const after = await db.fiberRoute.findUnique({ where: { id: existing.id } });
+    assert.deepEqual(after!.geometry, [[999, 999]], "geometri manual tetap utuh");
+    assert.equal(after!.source, "MANUAL");
+  });
+
+  test("berkas tanpa rute tidak membuat apa pun", async () => {
+    const user = await importer();
+    await applyKmlImport(user, SURVEY, { createMissing: true, defaultCapacity: 8 });
+    assert.equal(await db.fiberRoute.count(), 0);
+  });
+});
 });

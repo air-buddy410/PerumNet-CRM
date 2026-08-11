@@ -1087,6 +1087,7 @@ model NetworkSite {
   incidents   Incident[]
   maintenance NetworkMaintenance[]
   probeTargets ProbeTarget[]
+  fiberRoutes FiberRoute[]
 }
 
 model NetworkDevice {
@@ -2979,4 +2980,32 @@ model DeviceInspection {
 
   item      DeviceRecoveryItem @relation(fields: [itemId], references: [id])
   inspector User               @relation("DeviceInspector", fields: [inspectorId], references: [id])
+}
+
+/// Fase 39 (D1 pilihan b) — rute kabel hasil impor KMZ atau digambar manual.
+///
+/// LAPISAN VISUAL, BUKAN SUMBER KEBENARAN. Geometrinya berasal dari gambar
+/// tangan surveyor, jadi TIDAK dipakai menghitung apa pun: bukan panjang kabel
+/// untuk penagihan, bukan rugi-rugi optik, bukan kapasitas. Yang dihitung
+/// tetap berasal dari OdpPort dan pengukuran lapangan.
+///
+/// Kalau kelak rute ini mau dijadikan data jaringan sungguhan (D1 pilihan c),
+/// itu keputusan tersendiri yang menuntut kualitas data yang jauh lebih ketat.
+model FiberRoute {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  /// FEEDER | DISTRIBUTION | DROP | OTHER
+  routeType String   @default("OTHER")
+  /// Deretan [bujur, lintang] mengikuti urutan asli KML.
+  geometry  Json
+  /// Asal data: KML_IMPORT | MANUAL
+  source    String   @default("KML_IMPORT")
+  siteId    String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  site NetworkSite? @relation(fields: [siteId], references: [id])
+
+  @@index([routeType])
 }

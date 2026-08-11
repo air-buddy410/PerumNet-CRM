@@ -219,6 +219,7 @@ export async function resetTransactionalData() {
   // Topologi FTTH yang dibuat tes ikut dibersihkan. Tanpa ini, kode ODP
   // tersisa dari jalankan sebelumnya dan tes gagal karena unique constraint
   // pada jalankan KEDUA — kegagalan yang menyesatkan karena kodenya benar.
+  await db.fiberRoute.deleteMany({});
   await db.pppoeSession.deleteMany({});
   await db.odpPort.deleteMany({});
   await db.odp.deleteMany({});
