@@ -1,7 +1,12 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/constants";
-import { parseKml, buildKml, type KmlPlacemark } from "@/lib/kml";
+import {
+  parseKml,
+  buildKml,
+  type KmlPlacemark,
+  type KmlExportPoint,
+} from "@/lib/kml";
 import {
   inferPointType,
   notImportableReason,
@@ -288,6 +293,9 @@ export async function applyKmlImport(
   return { ok: true, id: "-", data: { created, filled, skipped } };
 }
 
+/// Gaya penanda untuk POP — dibedakan dari warna okupansi ODP.
+const SITE_STYLE = { id: "pop-site", colorAabbggrr: "ffd08b2b" };
+
 const OCCUPANCY_STYLE: Record<OccupancyLevel, { id: string; colorAabbggrr: string }> = {
   // KML memakai urutan aabbggrr, bukan rrggbb.
   FREE: { id: "odp-free", colorAabbggrr: "ff4ade16" },
@@ -297,27 +305,61 @@ const OCCUPANCY_STYLE: Record<OccupancyLevel, { id: string; colorAabbggrr: strin
 };
 
 /** Menyusun KML seluruh ODP berkoordinat, diwarnai menurut okupansi. */
-export async function exportOdpKml(siteId?: string | null): Promise<string> {
-  const odps = await db.odp.findMany({
-    where: {
-      latitude: { not: null },
-      longitude: { not: null },
-      ...(siteId ? { siteId } : {}),
-    },
-    include: {
-      site: { select: { name: true } },
-      ports: { select: { status: true } },
-    },
-    orderBy: { code: "asc" },
-  });
+/**
+ * Ekspor seluruh titik FTTH ke KML: POP, MS/ODC, dan ODP.
+ *
+ * Titik dikelompokkan ke dalam folder bernama sama dengan yang dikenali
+ * importir. Ini membuat berkasnya bisa PULANG-PERGI: hasil ekspor yang
+ * diimpor kembali dikenali sebagai jenis yang sama, bukan menjadi
+ * "belum ditentukan" dan harus ditebak ulang petugas.
+ */
+export async function exportFtthKml(siteId?: string | null): Promise<string> {
+  const [odps, sites] = await Promise.all([
+    db.odp.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        ...(siteId ? { siteId } : {}),
+      },
+      include: {
+        site: { select: { name: true } },
+        ports: { select: { status: true } },
+      },
+      orderBy: { code: "asc" },
+    }),
+    db.networkSite.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        type: { in: ["POP", "MINI_POP"] },
+        ...(siteId ? { id: siteId } : {}),
+      },
+      orderBy: { siteCode: "asc" },
+    }),
+  ]);
 
-  const points = odps.map((o) => {
+  const points: KmlExportPoint[] = [];
+
+  for (const st of sites) {
+    points.push({
+      name: st.siteCode,
+      latitude: st.latitude!,
+      longitude: st.longitude!,
+      folder: "POP",
+      description: [st.name, st.address, `Status: ${st.status}`].filter(Boolean).join(" · "),
+      styleId: SITE_STYLE.id,
+    });
+  }
+
+  for (const o of odps) {
     const used = o.ports.filter((p) => p.status === "USED").length;
     const occupancy = occupancyOf(used, o.portCapacity);
-    return {
+    points.push({
       name: o.code,
       latitude: o.latitude!,
       longitude: o.longitude!,
+      // Folder mengikuti peran, sehingga MS kembali sebagai MS saat diimpor.
+      folder: o.role === "MS" ? "MS" : "ODP",
       description: [
         `Port: ${used}/${o.portCapacity} (${OCCUPANCY_LABEL[occupancy]})`,
         o.site?.name ? `Site: ${o.site.name}` : null,
@@ -327,8 +369,14 @@ export async function exportOdpKml(siteId?: string | null): Promise<string> {
         .filter(Boolean)
         .join(" · "),
       styleId: OCCUPANCY_STYLE[occupancy].id,
-    };
-  });
+    });
+  }
 
-  return buildKml("PERUMNET — ODP", points, Object.values(OCCUPANCY_STYLE));
+  return buildKml("PerumNet FTTH", points, [
+    ...Object.values(OCCUPANCY_STYLE),
+    SITE_STYLE,
+  ]);
 }
+
+/** Nama lama dipertahankan supaya pemanggil yang ada tidak putus. */
+export const exportOdpKml = exportFtthKml;
