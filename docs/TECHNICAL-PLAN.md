@@ -194,6 +194,8 @@ Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dar
 
 | **24. Monitor PPPoE (MikroTik)** | Adapter RouterOS v7 REST read-only, poller, Total/Aktif/Offline/Disable | ✅ selesai (PRD-NOC-TOOLS N2; v7 REST di atas HTTPS jadi **tanpa dependensi baru** — cukup fetch bawaan; adapter READ-ONLY, perintah yang mengubah layanan tetap lewat NetworkAccessJob Fase 10; kredensial lewat nama env var (`credentialRef`) bukan nilai, mengikuti pola Fase 13; username dicocokkan ke `Subscription.pppoeUsername` yang sudah ada; kegagalan polling jadi state terlihat di PppoePollRun, bukan log tenggelam) |
 
+| **25. Probe Monitoring Realtime** | ProbeTarget + ProbeResult, alarm berambang, auto-clear saat pulih | ✅ selesai (PRD-NOC-TOOLS N3; metode TCP connect karena ICMP butuh raw socket/root yang tidak tersedia di proses aplikasi — konsekuensinya port per target dapat dikonfigurasi; DOWN tidak langsung membangunkan orang, alarm baru naik setelah gagal beruntun mencapai ambang lalu ditutup sendiri saat pulih, memakai NetworkAlarm + dedupKey yang sudah ada; halaman menandai target yang lama tidak diperiksa agar worker mati tidak lolos perhatian) |
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 ---

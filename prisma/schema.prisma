@@ -1014,6 +1014,7 @@ model NetworkSite {
   alarms      NetworkAlarm[]
   incidents   Incident[]
   maintenance NetworkMaintenance[]
+  probeTargets ProbeTarget[]
 }
 
 model NetworkDevice {
@@ -1044,6 +1045,7 @@ model NetworkDevice {
   accessJobs    NetworkAccessJob[]
   oltDevice     OltDevice?
   mikrotikRouter MikrotikRouter?
+  probeTargets ProbeTarget[]
 }
 
 model NetworkLink {
@@ -2357,4 +2359,55 @@ model PppoePollRun {
   router MikrotikRouter @relation(fields: [routerId], references: [id])
 
   @@index([routerId, startedAt])
+}
+
+/// Fase 25 (PRD-NOC-TOOLS N3) — target monitoring realtime.
+///
+/// Metode TCP connect dipilih sebagai default karena ICMP butuh raw socket
+/// (hak root) yang tidak tersedia di proses aplikasi. TCP connect mengukur
+/// keterjangkauan DAN latensi tanpa hak khusus, dan hasilnya deterministik.
+model ProbeTarget {
+  id              String  @id @default(cuid())
+  name            String
+  address         String // IP atau hostname
+  method          String  @default("TCP") // TCP (ICMP menyusul bila ada worker berhak)
+  port            Int     @default(443)
+  kind            String  @default("DEVICE") // DEVICE|SITE|UPSTREAM
+  networkDeviceId String?
+  siteId          String?
+  severity        String  @default("MAJOR") // severity alarm saat DOWN
+  intervalSec     Int     @default(60)
+  timeoutMs       Int     @default(3000)
+  /// Berapa kali gagal berturut-turut sebelum alarm dinaikkan. Mencegah
+  /// satu paket hilang langsung membangunkan orang.
+  failThreshold   Int     @default(3)
+  isActive        Boolean @default(true)
+
+  consecutiveFails Int      @default(0)
+  lastStatus       String? // UP|DOWN
+  lastLatencyMs    Int?
+  lastCheckedAt    DateTime?
+  /// Alarm yang sedang terbuka akibat target ini — dipakai untuk auto-clear.
+  openAlarmId      String?
+  createdAt        DateTime @default(now())
+
+  networkDevice NetworkDevice? @relation(fields: [networkDeviceId], references: [id])
+  site          NetworkSite?   @relation(fields: [siteId], references: [id])
+  results       ProbeResult[]
+
+  @@index([isActive, lastStatus])
+}
+
+/// Hasil tiap pemeriksaan — append-only, dipangkas berkala oleh worker.
+model ProbeResult {
+  id        String   @id @default(cuid())
+  targetId  String
+  checkedAt DateTime @default(now())
+  status    String // UP|DOWN
+  latencyMs Int?
+  error     String?
+
+  target ProbeTarget @relation(fields: [targetId], references: [id])
+
+  @@index([targetId, checkedAt])
 }
