@@ -8,6 +8,7 @@ import {
   canDeclareNotReturned,
   isOverdue,
   slaPhase,
+  coordinateRejection,
 } from "@/lib/recovery";
 
 describe("isRecoverable", () => {
@@ -204,5 +205,34 @@ describe("slaPhase — H-1 vs sudah terlewat", () => {
       const now = new Date(at);
       assert.equal(isOverdue(dri, now), slaPhase(dri, now) === "BREACHED", at);
     }
+  });
+});
+
+describe("coordinateRejection", () => {
+  test("koordinat wajar diterima", () => {
+    assert.equal(coordinateRejection({ latitude: -8.65, longitude: 115.21 }), null);
+  });
+
+  test("tanpa koordinat bukan kesalahan — GPS boleh tidak tersedia", () => {
+    assert.equal(coordinateRejection({}), null);
+    assert.equal(coordinateRejection({ latitude: undefined, longitude: undefined }), null);
+  });
+
+  test("di luar rentang ditolak", () => {
+    assert.match(String(coordinateRejection({ latitude: 91, longitude: 0 })), /Lintang/);
+    assert.match(String(coordinateRejection({ latitude: 0, longitude: 181 })), /Bujur/);
+  });
+
+  test("batas rentang masih diterima", () => {
+    assert.equal(coordinateRejection({ latitude: 90, longitude: 180 }), null);
+    assert.equal(coordinateRejection({ latitude: -90, longitude: -180 }), null);
+  });
+
+  test("titik nol ditolak — itu GPS gagal mengunci, bukan lokasi", () => {
+    assert.match(String(coordinateRejection({ latitude: 0, longitude: 0 })), /gagal mengunci/i);
+  });
+
+  test("NaN ditolak", () => {
+    assert.match(String(coordinateRejection({ latitude: NaN, longitude: 0 })), /angka/i);
   });
 });

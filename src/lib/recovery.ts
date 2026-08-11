@@ -105,3 +105,31 @@ export function slaPhase(
   const warnAt = new Date(recovery.slaDueAt.getTime() - warningHours * 60 * 60 * 1000);
   return now >= warnAt ? "DUE_SOON" : "OK";
 }
+
+// ── Koordinat kunjungan (Fase 33, PRD §9.2 FR-PICK-006) ─────────
+// Koordinat dipakai untuk membuktikan teknisi benar-benar mendatangi lokasi.
+// Karena itu nilai yang jelas mustahil harus ditolak, bukan disimpan apa
+// adanya — titik di tengah samudra atau (0,0) dari GPS yang gagal justru
+// merusak nilai pembuktiannya.
+
+export interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
+
+/** Alasan penolakan koordinat, atau null bila masuk akal. */
+export function coordinateRejection(c: Partial<Coordinate>): string | null {
+  const { latitude: lat, longitude: lng } = c;
+  if (lat === undefined || lng === undefined || lat === null || lng === null) return null; // opsional
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return "Koordinat tidak berupa angka yang sah.";
+  }
+  if (lat < -90 || lat > 90) return "Lintang harus antara -90 dan 90.";
+  if (lng < -180 || lng > 180) return "Bujur harus antara -180 dan 180.";
+  if (lat === 0 && lng === 0) {
+    // Titik nol adalah keluaran khas GPS yang gagal mengunci, bukan lokasi
+    // yang mungkin untuk pelanggan di Indonesia.
+    return "Koordinat (0,0) menandakan GPS gagal mengunci — ulangi pengambilan lokasi.";
+  }
+  return null;
+}

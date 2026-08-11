@@ -204,6 +204,7 @@ model DeviceRecoverySetting {
 | **30** | Penarikan: penugasan teknisi, attempt, pickup penuh/parsial, bukti & tanda tangan, konfirmasi pemutusan fisik → pelepasan port ODP | 29 |
 | **31** | Gudang: penerimaan ke QUARANTINE, pencocokan serial/MAC, checklist inspeksi, lima keputusan final, dampak inventory | 30 |
 | **32** | SLA & eskalasi lewat worker Fase 27, notifikasi, laporan/KPI §17, cetak berita acara A4 | 31 |
+| **33** | Bukti lapangan: foto, tanda tangan, koordinat — beserta pengerasan penyimpanan berkas privat §15 | 30–31 |
 
 Fase 28 sengaja dipisah karena menyentuh data yang sudah ada (`ownership` backfill) — perubahan itu harus mendarat dan diperiksa sendiri sebelum alur di atasnya dibangun.
 

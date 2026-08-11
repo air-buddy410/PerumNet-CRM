@@ -12,7 +12,8 @@ import {
   RECOVERY_ATTEMPT_RESULTS,
   INSPECTION_CHECKLIST,
 } from "@/lib/constants";
-import { notReturnedBlocker, slaPhase } from "@/lib/recovery";
+import { notReturnedBlocker, slaPhase, coordinateRejection } from "@/lib/recovery";
+import { saveAttachment } from "@/lib/files";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Mesin Penarikan Perangkat (Fase 30, PRD §13) ────────────────
@@ -148,6 +149,11 @@ export async function recordAttempt(
   if (data.result !== "BERHASIL" && !data.note?.trim()) {
     return { ok: false, error: "Kunjungan yang tidak berhasil wajib disertai keterangan." };
   }
+  const badCoordinate = coordinateRejection({
+    latitude: data.latitude ?? undefined,
+    longitude: data.longitude ?? undefined,
+  });
+  if (badCoordinate) return { ok: false, error: badCoordinate };
 
   const attempt = await db.deviceRecoveryAttempt.create({
     data: {
@@ -544,6 +550,18 @@ export async function inspectDevice(
   if (unknown.length) {
     return { ok: false, error: `Butir checklist tidak dikenal: ${unknown.join(", ")}.` };
   }
+  // §9.4 FR-INSP-002 — keputusan final wajib berbukti foto. Keputusan yang
+  // menentukan nasib sebuah aset tidak boleh hanya berupa pilihan di layar
+  // yang tidak bisa ditinjau ulang siapa pun.
+  const photos = await db.attachment.count({
+    where: { entityType: "DeviceInspectionPhoto", entityId: itemId },
+  });
+  if (photos === 0) {
+    return {
+      ok: false,
+      error: "Unggah minimal satu foto hasil pemeriksaan sebelum menyimpan keputusan.",
+    };
+  }
 
   const item = await db.deviceRecoveryItem.findUnique({
     where: { id: itemId },
@@ -903,4 +921,156 @@ async function notifiedRecently(type: string, link: string, hours = 24): Promise
     select: { id: true },
   });
   return existing !== null;
+}
+
+// ── Bukti Lapangan: foto, tanda tangan, koordinat (Fase 33) ─────
+// PRD §9.2 FR-PICK-006 dan §9.4 FR-INSP-002 menuntut bukti tersimpan, dan
+// §15 menuntut bukti itu privat. Penyimpanannya memakai mesin lampiran yang
+// sudah ada (`saveAttachment` + `/api/files/[id]`) yang sudah dikeraskan:
+// validasi MIME + ukuran + extension + magic byte, dan penyajian yang
+// memeriksa izin atas entitas induk, bukan sekadar "sudah login".
+
+/**
+ * Jenis bukti yang bisa dilampirkan, beserta izin dan jangkar entitasnya.
+ *
+ * Bukti inspeksi sengaja dijangkarkan pada BARIS PERANGKAT, bukan pada baris
+ * inspeksi. Alasannya urutan kerja: §9.4 FR-INSP-002 menuntut foto sudah ada
+ * ketika keputusan dibuat, padahal baris inspeksi baru lahir bersama
+ * keputusan itu. Menjangkarkannya pada perangkat membuat foto bisa diunggah
+ * lebih dulu, dan tetap terbedakan dari foto penarikan karena entityType-nya
+ * berbeda.
+ */
+const EVIDENCE_KINDS = {
+  ATTEMPT: {
+    entityType: "DeviceRecoveryAttempt",
+    permission: PERMISSIONS.RECOVERY_PICKUP,
+    anchor: "attempt" as const,
+  },
+  PICKUP: {
+    entityType: "DeviceRecoveryItem",
+    permission: PERMISSIONS.RECOVERY_PICKUP,
+    anchor: "item" as const,
+  },
+  INSPECTION: {
+    entityType: "DeviceInspectionPhoto",
+    permission: PERMISSIONS.RECOVERY_INSPECT,
+    anchor: "item" as const,
+  },
+} as const;
+
+export type EvidenceKind = keyof typeof EVIDENCE_KINDS;
+
+/**
+ * Melampirkan foto bukti pada kunjungan, penarikan, atau inspeksi.
+ *
+ * Keberadaan entitas induk diperiksa lebih dulu: lampiran yatim tidak akan
+ * pernah bisa ditampilkan siapa pun, tetapi tetap memakan ruang dan lolos
+ * dari pemeriksaan izin yang bersandar pada induknya.
+ */
+export async function attachRecoveryEvidence(
+  user: CurrentUser,
+  kind: EvidenceKind,
+  entityId: string,
+  file: File
+): Promise<Result> {
+  const spec = EVIDENCE_KINDS[kind];
+  if (!spec) return { ok: false, error: "Jenis bukti tidak dikenal." };
+  if (!user.permissions.has(spec.permission)) {
+    return { ok: false, error: "Anda tidak memiliki izin melampirkan bukti ini." };
+  }
+
+  const exists =
+    spec.anchor === "attempt"
+      ? await db.deviceRecoveryAttempt.findUnique({ where: { id: entityId }, select: { id: true } })
+      : await db.deviceRecoveryItem.findUnique({ where: { id: entityId }, select: { id: true } });
+  if (!exists) return { ok: false, error: "Data yang mau dilampiri tidak ditemukan." };
+
+  const saved = await saveAttachment(file, spec.entityType, entityId, user.id);
+  if (!saved.ok) return saved;
+
+  await logAudit({
+    userId: user.id,
+    action: "RECOVERY_EVIDENCE_ATTACH",
+    module: "device_recovery",
+    entityType: spec.entityType,
+    entityId,
+    description: `Bukti ${kind.toLowerCase()} dilampirkan (${file.name})`,
+  });
+  return { ok: true, id: saved.id };
+}
+
+export async function recoveryEvidence(kind: EvidenceKind, entityId: string) {
+  const spec = EVIDENCE_KINDS[kind];
+  if (!spec) return [];
+  return db.attachment.findMany({
+    where: { entityType: spec.entityType, entityId },
+    select: { id: true, filename: true, mimeType: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/// Peran tanda tangan pada dokumen penarikan (§9.2 FR-PICK-006).
+export const RECOVERY_SIGNATURE_ROLES = ["CUSTOMER", "TECHNICIAN"] as const;
+export const RECOVERY_PICKUP_DOCTYPE = "RECOVERY_PICKUP";
+
+/**
+ * Menyimpan tanda tangan serah terima di lokasi pelanggan.
+ *
+ * Gambar tanda tangannya opsional dan diunggah lebih dulu sebagai lampiran —
+ * nama penanda tangan tetap wajib, karena itulah yang bisa dibaca kembali
+ * bertahun-tahun kemudian ketika berkas gambarnya sudah tidak terbaca.
+ */
+export async function signRecoveryPickup(
+  user: CurrentUser,
+  recoveryId: string,
+  role: string,
+  signerName: string,
+  attachmentId?: string
+): Promise<Result> {
+  if (!user.permissions.has(PERMISSIONS.RECOVERY_PICKUP)) {
+    return { ok: false, error: "Anda tidak memiliki izin menyimpan tanda tangan." };
+  }
+  if (!(RECOVERY_SIGNATURE_ROLES as readonly string[]).includes(role)) {
+    return { ok: false, error: "Peran tanda tangan tidak dikenal." };
+  }
+  if (!signerName?.trim()) {
+    return { ok: false, error: "Nama penanda tangan wajib diisi." };
+  }
+  const dri = await db.deviceRecoveryIssue.findUnique({
+    where: { id: recoveryId },
+    select: { id: true, recoveryNumber: true },
+  });
+  if (!dri) return { ok: false, error: "Penarikan tidak ditemukan." };
+
+  const signature = await db.documentSignature.upsert({
+    where: {
+      docType_docId_role: { docType: RECOVERY_PICKUP_DOCTYPE, docId: recoveryId, role },
+    },
+    update: { signerName: signerName.trim(), signerUserId: user.id, attachmentId: attachmentId ?? null },
+    create: {
+      docType: RECOVERY_PICKUP_DOCTYPE,
+      docId: recoveryId,
+      role,
+      signerName: signerName.trim(),
+      signerUserId: user.id,
+      attachmentId: attachmentId ?? null,
+    },
+  });
+  await logAudit({
+    userId: user.id,
+    action: "RECOVERY_SIGN",
+    module: "device_recovery",
+    entityType: "DeviceRecoveryIssue",
+    entityId: recoveryId,
+    description: `${dri.recoveryNumber}: tanda tangan ${role} oleh ${signerName.trim()}`,
+  });
+  return { ok: true, id: signature.id };
+}
+
+export async function recoverySignatures(recoveryId: string) {
+  return db.documentSignature.findMany({
+    where: { docType: RECOVERY_PICKUP_DOCTYPE, docId: recoveryId },
+    include: { attachment: { select: { id: true } } },
+    orderBy: { signedAt: "asc" },
+  });
 }
