@@ -12,7 +12,13 @@ import {
   RECOVERY_ATTEMPT_RESULTS,
   INSPECTION_CHECKLIST,
 } from "@/lib/constants";
-import { notReturnedBlocker, slaPhase, coordinateRejection } from "@/lib/recovery";
+import {
+  notReturnedBlocker,
+  slaPhase,
+  coordinateRejection,
+  canViewRecovery,
+  isRecoveryCoordinator,
+} from "@/lib/recovery";
 import { saveAttachment } from "@/lib/files";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -1073,4 +1079,147 @@ export async function recoverySignatures(recoveryId: string) {
     include: { attachment: { select: { id: true } } },
     orderBy: { signedAt: "asc" },
   });
+}
+
+// ── Pembacaan berpagar izin (Fase 40) ───────────────────────────
+// Satu tempat untuk aturan "siapa boleh melihat apa", supaya tidak diulang di
+// tiap halaman dan tidak ada halaman yang lupa memakainya.
+
+export interface RecoveryListFilter {
+  status?: string | null;
+  /** Hanya yang melewati batas SLA dan belum selesai. */
+  overdueOnly?: boolean;
+  /** Saring menurut teknisi tertentu — diabaikan bila pemakainya teknisi. */
+  technicianId?: string | null;
+  /** Cari nomor penarikan, nama pelanggan, nomor layanan, serial, atau MAC. */
+  query?: string | null;
+  limit?: number;
+}
+
+/**
+ * Potongan kondisi yang membatasi seorang teknisi pada tugasnya sendiri.
+ * Mengembalikan null bila pemakainya berperan koordinasi (lihat seluruhnya).
+ */
+function assignmentScope(user: CurrentUser) {
+  if (isRecoveryCoordinator({ id: user.id, permissions: user.permissions })) return null;
+  if (!user.permissions.has(PERMISSIONS.RECOVERY_PICKUP)) return null;
+  return {
+    OR: [{ assigneeId: user.id }, { workOrder: { technicianId: user.id } }],
+  };
+}
+
+export async function loadRecoveryList(user: CurrentUser, filter: RecoveryListFilter = {}) {
+  const now = new Date();
+  const q = filter.query?.trim();
+  const scope = assignmentScope(user);
+
+  return db.deviceRecoveryIssue.findMany({
+    where: {
+      ...(scope ?? {}),
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.overdueOnly
+        ? { slaDueAt: { lte: now }, status: { notIn: ["COMPLETED", "CLOSED_UNRECOVERED"] } }
+        : {}),
+      // Penyaring teknisi hanya berlaku bagi yang memang boleh melihat semua;
+      // bagi teknisi, pembatasan tugasnya sendiri sudah lebih ketat.
+      ...(filter.technicianId && !scope
+        ? {
+            OR: [
+              { assigneeId: filter.technicianId },
+              { workOrder: { technicianId: filter.technicianId } },
+            ],
+          }
+        : {}),
+      ...(q
+        ? {
+            AND: [
+              {
+                OR: [
+                  { recoveryNumber: { contains: q, mode: "insensitive" as const } },
+                  {
+                    termination: {
+                      OR: [
+                        { terminationNumber: { contains: q, mode: "insensitive" as const } },
+                        { customer: { name: { contains: q, mode: "insensitive" as const } } },
+                        {
+                          subscription: {
+                            serviceNumber: { contains: q, mode: "insensitive" as const },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  // Serial & MAC (§9.6 FR-UI-001) dicari pada snapshot MAUPUN
+                  // nilai yang ditemukan di lapangan — perangkat tertukar
+                  // justru yang paling sering dicari orang.
+                  {
+                    items: {
+                      some: {
+                        OR: [
+                          { snapshotSerial: { contains: q, mode: "insensitive" as const } },
+                          { actualSerial: { contains: q, mode: "insensitive" as const } },
+                          { snapshotMac: { contains: q, mode: "insensitive" as const } },
+                          { actualMac: { contains: q, mode: "insensitive" as const } },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
+    },
+    include: {
+      termination: {
+        include: {
+          customer: { select: { name: true } },
+          subscription: { select: { serviceNumber: true } },
+        },
+      },
+      assignee: { select: { name: true } },
+      items: { select: { status: true } },
+    },
+    orderBy: [{ slaDueAt: "asc" }, { createdAt: "desc" }],
+    take: Math.min(filter.limit ?? 100, 200),
+  });
+}
+
+/**
+ * Membaca satu penarikan, ATAU null bila pemakainya tidak berhak melihatnya.
+ *
+ * Halaman cukup memanggil ini lalu `notFound()` bila null. Sengaja null dan
+ * bukan galat "tidak berhak": membedakan keduanya memberi tahu penebak bahwa
+ * penarikan dengan id itu memang ada.
+ */
+export async function loadRecoveryDetail(user: CurrentUser, recoveryId: string) {
+  const dri = await db.deviceRecoveryIssue.findUnique({
+    where: { id: recoveryId },
+    include: {
+      termination: {
+        include: {
+          customer: true,
+          subscription: { select: { id: true, serviceNumber: true } },
+        },
+      },
+      warehouseTo: true,
+      assignee: { select: { name: true } },
+      workOrder: { select: { id: true, woNumber: true, status: true, technicianId: true } },
+      items: {
+        include: {
+          device: { include: { item: { select: { name: true } } } },
+          inspection: { include: { inspector: { select: { name: true } } } },
+        },
+        orderBy: { snapshotSerial: "asc" },
+      },
+      attempts: { include: { byUser: { select: { name: true } } }, orderBy: { attemptAt: "desc" } },
+    },
+  });
+  if (!dri) return null;
+
+  const allowed = canViewRecovery(
+    { id: user.id, permissions: user.permissions },
+    { assigneeId: dri.assigneeId, workOrderTechnicianId: dri.workOrder.technicianId }
+  );
+  return allowed ? dri : null;
 }
