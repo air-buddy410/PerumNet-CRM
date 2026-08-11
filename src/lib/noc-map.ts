@@ -27,6 +27,12 @@ export interface MapOdp {
   status: string;
 }
 
+/// Status sambungan menurut router, BUKAN menurut status langganan.
+/// UNKNOWN sengaja dibedakan dari OFFLINE: "tidak ada datanya" tidak sama
+/// dengan "diketahui mati". Menyamakan keduanya membuat peta menuduh
+/// pelanggan yang sebenarnya belum pernah tertarik datanya.
+export type LinkStatus = "ONLINE" | "OFFLINE" | "DISABLED" | "UNKNOWN";
+
 export interface MapCustomer {
   id: string;
   subscriptionId: string;
@@ -37,6 +43,13 @@ export interface MapCustomer {
   status: string; // status langganan: ACTIVE|ISOLATED|SUSPENDED|...
   odpId: string | null;
   portNumber: number | null;
+  // ── Fase 37b: keadaan sambungan langsung dari router ──────────
+  pppoeUsername: string | null;
+  linkStatus: LinkStatus;
+  /// Kapan terakhir terlihat online — dasar "offline sejak" di UI.
+  lastSeenAt: string | null;
+  routerId: string | null;
+  routerName: string | null;
 }
 
 export interface MapBounds {
@@ -54,6 +67,17 @@ export interface NetworkMapData {
   bounds: MapBounds | null;
   /** Titik yang tidak bisa dipetakan karena koordinatnya kosong. */
   missingCoordinates: { odps: number; customers: number };
+  // ── Fase 37b ──────────────────────────────────────────────────
+  /** Rekap status sambungan pada titik yang TAMPIL di peta. */
+  linkCounts: Record<LinkStatus, number>;
+  /** Router yang bisa dipilih sebagai penyaring, beserta waktu tarik terakhir. */
+  routers: { id: string; name: string; lastPolledAt: string | null }[];
+  /**
+   * Penarikan data router terakhir yang diketahui. Ditampilkan supaya orang
+   * tahu peta ini menggambarkan keadaan KAPAN — peta status tanpa keterangan
+   * waktu adalah peta yang menyesatkan saat poller-nya mati.
+   */
+  lastSyncedAt: string | null;
 }
 
 export function occupancyOf(used: number, capacity: number): OccupancyLevel {
@@ -94,11 +118,62 @@ export interface MapFilter {
   minOccupancy?: OccupancyLevel | null;
   /** Hanya tampilkan pelanggan berstatus ini. */
   subscriptionStatus?: string | null;
+  /// Fase 37b — saring pelanggan menurut router yang melayaninya.
+  /// ODP tidak ikut disaring: topologi tidak berubah karena pilihan router.
+  routerId?: string | null;
+  /// Saring menurut keadaan sambungan langsung (mis. hanya yang offline).
+  linkStatus?: LinkStatus | null;
+}
+
+/**
+ * Keadaan sambungan sebuah langganan menurut sesi router terakhir.
+ *
+ * Tidak adanya sesi menghasilkan UNKNOWN, bukan OFFLINE. Bedanya penting:
+ * langganan yang belum pernah tertarik datanya — misalnya karena routernya
+ * belum didaftarkan — bukan pelanggan yang jaringannya mati. Menyamakan
+ * keduanya membuat hitungan "sekian pelanggan offline" jadi tuduhan palsu.
+ */
+export function linkStatusOf(session: { status: string } | null | undefined): LinkStatus {
+  if (!session) return "UNKNOWN";
+  if (session.status === "ONLINE" || session.status === "OFFLINE" || session.status === "DISABLED") {
+    return session.status;
+  }
+  return "UNKNOWN";
+}
+
+/** Rekap kosong — dipakai sebagai titik awal penghitungan. */
+export function emptyLinkCounts(): Record<LinkStatus, number> {
+  return { ONLINE: 0, OFFLINE: 0, DISABLED: 0, UNKNOWN: 0 };
 }
 
 const OCCUPANCY_ORDER: OccupancyLevel[] = ["FREE", "MODERATE", "TIGHT", "FULL"];
 
 export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMapData> {
+  // Keadaan sambungan ditarik sekali lalu diindeks per langganan. Sesi yang
+  // belum tercocokkan ke langganan (username tak dikenal) memang tidak bisa
+  // dipetakan — titiknya tidak diketahui — jadi tidak ikut diambil.
+  const [sessionRows, routerRows] = await Promise.all([
+    db.pppoeSession.findMany({
+      where: { subscriptionId: { not: null } },
+      select: {
+        subscriptionId: true,
+        username: true,
+        status: true,
+        lastSeenAt: true,
+        routerId: true,
+        router: { select: { networkDevice: { select: { hostname: true } } } },
+      },
+    }),
+    db.mikrotikRouter.findMany({
+      select: {
+        id: true,
+        lastPolledAt: true,
+        networkDevice: { select: { hostname: true } },
+      },
+    }),
+  ]);
+  const sessionOf = new Map(sessionRows.map((r) => [r.subscriptionId!, r]));
+
   const odpRows = await db.odp.findMany({
     where: {
       ...(filter.siteId ? { siteId: filter.siteId } : {}),
@@ -117,6 +192,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
               id: true,
               serviceNumber: true,
               status: true,
+              pppoeUsername: true,
               customer: {
                 select: { id: true, name: true, latitude: true, longitude: true },
               },
@@ -176,6 +252,11 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
       if (sub.customer.latitude === null || sub.customer.longitude === null) {
         missingCustomer++;
       }
+      const session = sessionOf.get(sub.id) ?? null;
+      const linkStatus = linkStatusOf(session);
+      if (filter.routerId && session?.routerId !== filter.routerId) continue;
+      if (filter.linkStatus && linkStatus !== filter.linkStatus) continue;
+
       customers.push({
         id: sub.customer.id,
         subscriptionId: sub.id,
@@ -186,6 +267,11 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
         status: sub.status,
         odpId: odp.id,
         portNumber: port.portNumber,
+        pppoeUsername: session?.username ?? sub.pppoeUsername ?? null,
+        linkStatus,
+        lastSeenAt: session?.lastSeenAt?.toISOString() ?? null,
+        routerId: session?.routerId ?? null,
+        routerName: session?.router.networkDevice.hostname ?? null,
       });
     }
   }
@@ -206,12 +292,31 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
       }
     : null;
 
+  // Rekap dihitung dari titik yang BENAR-BENAR tampil, bukan dari seluruh
+  // tabel — supaya angka di layar selalu cocok dengan yang bisa diklik.
+  const linkCounts = emptyLinkCounts();
+  for (const c of customers) linkCounts[c.linkStatus] += 1;
+
+  const routers = routerRows.map((r) => ({
+    id: r.id,
+    name: r.networkDevice.hostname,
+    lastPolledAt: r.lastPolledAt?.toISOString() ?? null,
+  }));
+  const polled = routerRows
+    .map((r) => r.lastPolledAt)
+    .filter((d): d is Date => d !== null)
+    .map((d) => d.getTime());
+  const lastSyncedAt = polled.length ? new Date(Math.max(...polled)).toISOString() : null;
+
   return {
     odps,
     customers,
     cascades,
     bounds,
     missingCoordinates: { odps: missingOdp, customers: missingCustomer },
+    linkCounts,
+    routers,
+    lastSyncedAt,
   };
 }
 
