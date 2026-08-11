@@ -400,3 +400,177 @@ export async function verifyReturnRequest(
   });
   return { ok: true, id: requestId };
 }
+
+// ── Permintaan material dari lapangan (Fase 19, F7) ──────────────
+// Teknisi/vendor mengajukan sendiri; admin gudang memutuskan. Persetujuan
+// menghasilkan draft pengeluaran resmi yang langsung mereservasi stock,
+// sehingga barang yang dijanjikan tidak bisa dijanjikan ulang ke orang lain.
+
+export interface MaterialRequestLineInput {
+  itemId: string;
+  qty: number;
+  note?: string | null;
+}
+
+export async function createMaterialRequest(
+  user: CurrentUser,
+  data: {
+    warehouseId: string;
+    purpose: string;
+    note?: string;
+    workOrderId?: string | null;
+    lines: MaterialRequestLineInput[];
+  }
+): Promise<Result> {
+  if (!data.warehouseId) return { ok: false, error: "Gudang wajib dipilih." };
+  if (!data.purpose?.trim()) return { ok: false, error: "Tujuan permintaan wajib diisi." };
+  const rows = data.lines.filter((l) => l.qty > 0);
+  if (!rows.length) return { ok: false, error: "Minimal satu baris material." };
+
+  let requestId = "";
+  let requestNumber = "";
+  try {
+    await db.$transaction(async (prisma) => {
+      requestNumber = await nextDocumentNumber(prisma, {
+        docType: "MRQ",
+        period: "MONTHLY",
+        backfill: async (periodKey) => {
+          const existing = await prisma.materialRequest.findMany({
+            where: { requestNumber: { startsWith: `MRQ-${periodKey}-` } },
+            select: { requestNumber: true },
+          });
+          return highestSuffix(existing.map((r) => r.requestNumber));
+        },
+      });
+      const created = await prisma.materialRequest.create({
+        data: {
+          requestNumber,
+          requesterId: user.id,
+          warehouseId: data.warehouseId,
+          workOrderId: data.workOrderId || null,
+          purpose: data.purpose.trim(),
+          note: data.note?.trim() || null,
+          lines: {
+            create: rows.map((l) => ({
+              itemId: l.itemId,
+              qty: Math.floor(l.qty),
+              note: l.note?.trim() || null,
+            })),
+          },
+        },
+      });
+      requestId = created.id;
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Gagal membuat permintaan." };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "MRQ_CREATE",
+    module: "inventory",
+    entityType: "MaterialRequest",
+    entityId: requestId,
+    description: `Permintaan material ${requestNumber}`,
+  });
+  return { ok: true, id: requestId };
+}
+
+export async function cancelMaterialRequest(user: CurrentUser, requestId: string): Promise<Result> {
+  const req = await db.materialRequest.findUnique({ where: { id: requestId } });
+  if (!req) return { ok: false, error: "Permintaan tidak ditemukan." };
+  if (req.requesterId !== user.id) {
+    return { ok: false, error: "Hanya pengaju yang bisa membatalkan permintaannya." };
+  }
+  if (req.status !== "SUBMITTED") {
+    return { ok: false, error: "Hanya permintaan yang belum diputuskan bisa dibatalkan." };
+  }
+  await db.materialRequest.update({ where: { id: requestId }, data: { status: "CANCELLED" } });
+  await logAudit({
+    userId: user.id,
+    action: "MRQ_CANCEL",
+    module: "inventory",
+    entityType: "MaterialRequest",
+    entityId: requestId,
+    description: `Membatalkan permintaan ${req.requestNumber}`,
+  });
+  return { ok: true, id: requestId };
+}
+
+export async function decideMaterialRequest(
+  user: CurrentUser,
+  requestId: string,
+  approve: boolean,
+  decisionNote?: string
+): Promise<Result> {
+  if (!user.permissions.has(PERMISSIONS.STOCK_CREATE)) {
+    return { ok: false, error: "Anda tidak memiliki izin memutuskan permintaan material." };
+  }
+  const req = await db.materialRequest.findUnique({
+    where: { id: requestId },
+    include: { lines: true },
+  });
+  if (!req) return { ok: false, error: "Permintaan tidak ditemukan." };
+  if (req.status !== "SUBMITTED") return { ok: false, error: "Permintaan ini sudah diputuskan." };
+  if (req.requesterId === user.id) {
+    return { ok: false, error: "Pengaju tidak boleh memutuskan permintaannya sendiri." };
+  }
+
+  if (!approve) {
+    if (!decisionNote?.trim()) return { ok: false, error: "Alasan penolakan wajib diisi." };
+    await db.materialRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "REJECTED",
+        decidedById: user.id,
+        decidedAt: new Date(),
+        decisionNote: decisionNote.trim(),
+      },
+    });
+    await logAudit({
+      userId: user.id,
+      action: "MRQ_REJECT",
+      module: "inventory",
+      entityType: "MaterialRequest",
+      entityId: requestId,
+      description: `Menolak permintaan ${req.requestNumber}: ${decisionNote.trim()}`,
+    });
+    return { ok: true, id: requestId };
+  }
+
+  // Disetujui → draft pengeluaran resmi. Reservasi terjadi di sini, sehingga
+  // ketersediaan divalidasi saat keputusan diambil, bukan nanti saat serah terima.
+  const draft = await createDraftTransaction(
+    user,
+    "STOCK_ISSUE",
+    {
+      warehouseFromId: req.warehouseId,
+      custodianId: req.requesterId,
+      workOrderId: req.workOrderId ?? undefined,
+      purpose: req.purpose,
+      referenceNote: req.requestNumber,
+    },
+    req.lines.map((l) => ({ itemId: l.itemId, qty: l.qty }))
+  );
+  if (!draft.ok) return draft;
+
+  await db.materialRequest.update({
+    where: { id: requestId },
+    data: {
+      status: "APPROVED",
+      decidedById: user.id,
+      decidedAt: new Date(),
+      decisionNote: decisionNote?.trim() || null,
+      txId: draft.id,
+    },
+  });
+  await logAudit({
+    userId: user.id,
+    action: "MRQ_APPROVE",
+    module: "inventory",
+    entityType: "MaterialRequest",
+    entityId: requestId,
+    description: `Menyetujui permintaan ${req.requestNumber} — draft pengeluaran dibuat & stock direservasi`,
+  });
+  return { ok: true, id: requestId };
+}
