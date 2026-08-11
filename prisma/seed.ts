@@ -67,6 +67,8 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "stock.create", module: "stock", action: "create", description: "Membuat draft transaksi stock" },
   { code: "stock.post", module: "stock", action: "post", description: "Posting transaksi stock (mengubah saldo)" },
   { code: "stock.reverse", module: "stock", action: "reverse", description: "Reversal transaksi posted" },
+  { code: "stock.receive", module: "stock", action: "receive", description: "Menerima transfer antar gudang (Fase 17)" },
+  { code: "slot.approve", module: "stock", action: "approve", description: "Menyetujui perpindahan alokasi slot di atas ambang (Fase 20)" },
   { code: "devices.writeoff", module: "inventory", action: "writeoff", description: "Mengajukan & memfinalisasi write-off perangkat" },
   { code: "custody.view", module: "inventory", action: "custody", description: "Melihat custody teknisi" },
   { code: "work_orders.view", module: "work_orders", action: "view", description: "Melihat work order" },
@@ -180,7 +182,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign", "channels.view", "channels.manage"],
   sales: [...BASE, ...SALES_CORE],
   customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage", "channels.view", "channels.manage"],
-  warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
+  warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "stock.receive", "slot.approve", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
@@ -628,6 +630,62 @@ async function main() {
       create: { code: t.code, name: t.name, channel: t.channel, body: t.body, subject: t.subject ?? null },
     });
   }
+
+  console.log("Seeding kategori material FTTH...");
+  const FTTH_CATEGORIES: [string, string, string][] = [
+    ["ADP", "Adapter", "Connector"],
+    ["CLS", "Closure", "Passive Device"],
+    ["CSM", "Consumable", "Consumable"],
+    ["DRP", "Dropcore", "Cable"],
+    ["FOC", "Kabel Fiber Optic", "Cable"],
+    ["FSC", "Fast Connector", "Connector"],
+    ["ODC", "ODC", "Passive Device"],
+    ["ODP", "ODP", "Passive Device"],
+    ["OLT", "OLT", "Network Device"],
+    ["ONT", "ONU / ONT", "Network Device"],
+    ["PCH", "Patchcord", "Cable"],
+    ["PGT", "Pigtail", "Cable"],
+    ["PWR", "Power Supply", "Power"],
+    ["RTR", "Router", "Network Device"],
+    ["SFP", "SFP", "Network Device"],
+    ["SPL", "Splitter", "Passive Device"],
+    ["SWT", "Switch", "Network Device"],
+    ["TLS", "Tools", "Tools"],
+    ["OTH", "Lainnya", "Other"],
+  ];
+  for (const [code, name, materialType] of FTTH_CATEGORIES) {
+    await db.category.upsert({
+      where: { code },
+      update: { name, materialType },
+      create: { code, name, materialType, type: "ITEM" },
+    });
+  }
+
+  console.log("Seeding tipe slot stock...");
+  const SLOT_TYPES = [
+    ["UNALLOC", "Belum Dialokasikan", true],
+    ["INST", "Instalasi", false],
+    ["MNT", "Maintenance", false],
+    ["MKT", "Marketing", false],
+    ["PRJ", "Proyek", false],
+    ["EMG", "Emergency", false],
+    ["SPR", "Cadangan", false],
+    ["RMA", "RMA", false],
+    ["DEMO", "Demo", false],
+    ["OTHER", "Lainnya", false],
+  ] as const;
+  for (const [code, name, isSystem] of SLOT_TYPES) {
+    await db.stockSlotType.upsert({
+      where: { code },
+      update: { name, isSystem },
+      create: { code, name, isSystem },
+    });
+  }
+  await db.slotTransferPolicy.upsert({
+    where: { id: "default-slot-policy" },
+    update: {},
+    create: { id: "default-slot-policy", name: "Ambang default", maxQty: 50 },
+  });
 
   console.log("Seed selesai. Login awal: admin / Admin#12345 (wajib ganti password).");
 }

@@ -119,6 +119,17 @@ model User {
   employee          Employee?            @relation("EmployeeUser")
   outboundCreated   OutboundMessage[]    @relation("OutboundCreator")
   announcements     Announcement[]       @relation("AnnouncementCreator")
+  transferReceipts TransferReceipt[] @relation("TransferReceiver")
+  doCreated        DeliveryOrder[] @relation("DoCreator")
+  doApproved       DeliveryOrder[] @relation("DoApprover")
+  irfCreated       InventoryRequestForm[] @relation("IrfCreator")
+  signatures       DocumentSignature[] @relation("SignatureSigner")
+  returnRequested  ReturnRequest[] @relation("ReturnRequester")
+  returnVerified   ReturnRequest[] @relation("ReturnVerifier")
+  materialRequests MaterialRequest[] @relation("MrqRequester")
+  materialDecided  MaterialRequest[] @relation("MrqDecider")
+  slotLedgerEntries SlotLedger[] @relation("SlotLedgerCreator")
+  warehouseScopes UserWarehouseScope[] @relation("WarehouseScopeUser")
 }
 
 model Division {
@@ -288,7 +299,11 @@ model CostCenter {
   journalLines     JournalLine[]
 }
 
+/// Fase 21 (F12) — kategori material dua tingkat: kategori di atas materialType,
+/// mengikuti pengelompokan FTTH (Cable, Connector, Network Device, dst).
 model Category {
+  /// Cable | Connector | Network Device | Passive Device | Power | Consumable | Tools | Other
+  materialType String?
   id       String  @id @default(cuid())
   type     String // EXPENSE | ITEM | TICKET | ... (Phase 1: EXPENSE)
   code     String  @unique
@@ -590,6 +605,7 @@ model Attachment {
   uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
 
   @@index([entityType, entityId])
+  signatures DocumentSignature[]
 }
 
 // ── Phase 3: Inventory & Operational ────────────────────────────
@@ -604,6 +620,11 @@ model Warehouse {
   code     String  @unique
   name     String
   address  String?
+  /// Fase 20 (F10) — CENTRAL|BRANCH|MINI_STOCK|PROJECT_STOCK.
+  /// Stok teknisi TIDAK dijadikan tipe gudang; tetap memakai CustodyLevel.
+  type      String  @default("CENTRAL")
+  latitude  Float?
+  longitude Float?
   isActive Boolean @default(true)
 
   stockLevels StockLevel[]
@@ -611,6 +632,11 @@ model Warehouse {
   txFrom      StockTransaction[] @relation("TxFrom")
   txTo        StockTransaction[] @relation("TxTo")
   opnames     OpnameSession[]
+  returnRequests ReturnRequest[] @relation("ReturnWarehouse")
+  materialRequests MaterialRequest[] @relation("MrqWarehouse")
+  racks      Rack[]
+  stockSlots StockSlot[]
+  userScopes UserWarehouseScope[] @relation("WarehouseScope")
 }
 
 model Item {
@@ -620,7 +646,9 @@ model Item {
   categoryId   String?
   brand        String?
   model        String?
-  unit         String  @default("pcs") // pcs | meter | roll | box
+  unit         String  @default("pcs") // pcs | meter | roll | box | set
+  /// Fase 21 (F12) — barcode/QR untuk pemindaian di opname & pengambilan barang.
+  barcode      String? @unique
   trackingType String  @default("BULK") // SERIALIZED | BULK
   minStock     Int     @default(0)
   isActive     Boolean @default(true)
@@ -632,6 +660,12 @@ model Item {
   opnameLines OpnameLine[]
   custodyLevels CustodyLevel[]
   bomLines      ProjectBomLine[]
+  transferReceiptLines TransferReceiptLine[]
+  deliveryOrderLines DeliveryOrderLine[]
+  returnRequestLines ReturnRequestLine[]
+  materialRequestLines MaterialRequestLine[]
+  slotAllocations SlotAllocation[]
+  slotLedger      SlotLedger[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -684,6 +718,9 @@ model StockTransaction {
   postedAt        DateTime?
   reversalOfId    String?   @unique // transaksi ini adalah reversal dari ...
   reversedById    String?   @unique // transaksi ini telah di-reverse oleh ...
+  // Fase 17 — hanya untuk STOCK_TRANSFER. Posting = pengiriman; barang masuk
+  // inTransit gudang tujuan sampai diterima. PENDING|PARTIAL|RECEIVED.
+  receiveStatus   String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -697,8 +734,13 @@ model StockTransaction {
   reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
   reversedBy    StockTransaction?      @relation("TxReversal")
   lines         StockTransactionLine[]
+  receipts      TransferReceipt[]
+  deliveryOrders DeliveryOrder[]
+  irf            InventoryRequestForm?
+  returnRequest  ReturnRequest?
 
   @@index([type, status])
+  materialRequest MaterialRequest?
 }
 
 model StockTransactionLine {
@@ -708,12 +750,17 @@ model StockTransactionLine {
   qty      Int
   deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
   snInput  String? // SN yang akan dibuat saat posting goods receipt
+  /// Fase 18 — kondisi barang saat dikembalikan: GOOD|USED|DAMAGED|RMA.
+  /// GOOD/USED masuk onHand, DAMAGED/RMA masuk dimensi damaged.
+  condition String?
 
-  tx     StockTransaction  @relation(fields: [txId], references: [id])
-  item   Item              @relation(fields: [itemId], references: [id])
-  device SerializedDevice? @relation(fields: [deviceId], references: [id])
+  tx           StockTransaction      @relation(fields: [txId], references: [id])
+  item         Item                  @relation(fields: [itemId], references: [id])
+  device       SerializedDevice?     @relation(fields: [deviceId], references: [id])
+  receiptLines TransferReceiptLine[]
 
   @@index([txId])
+  deliveryOrderLines DeliveryOrderLine[]
 }
 
 model SerializedDevice {
@@ -743,6 +790,7 @@ model SerializedDevice {
 
   @@index([status])
   @@index([custodianId])
+  returnRequestLines ReturnRequestLine[]
 }
 
 // Riwayat perangkat — append-only.
@@ -798,6 +846,7 @@ model WorkOrder {
 
   @@index([status])
   @@index([technicianId])
+  materialRequests MaterialRequest[]
 }
 
 // Pemakaian material bulk pada WO — mengurangi custody teknisi.
@@ -2296,6 +2345,299 @@ model DocumentSequence {
   updatedAt  DateTime @updatedAt
 
   @@unique([docType, periodKey])
+}
+
+/// Penerimaan transfer antar gudang — Fase 17 (PRD-WAREHOUSE-ENHANCEMENT F3).
+/// Satu transfer bisa punya beberapa penerimaan (penerimaan bertahap), sehingga
+/// barang tidak pernah hilang dari pembukuan: selalu ada di gudang asal,
+/// perjalanan (inTransit), atau gudang tujuan.
+model TransferReceipt {
+  id            String   @id @default(cuid())
+  receiptNumber String   @unique // RCV-YYYYMM-####
+  txId          String
+  receivedById  String
+  receivedAt    DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  tx         StockTransaction      @relation(fields: [txId], references: [id])
+  receivedBy User                  @relation("TransferReceiver", fields: [receivedById], references: [id])
+  lines      TransferReceiptLine[]
+
+  @@index([txId])
+}
+
+model TransferReceiptLine {
+  id        String  @id @default(cuid())
+  receiptId String
+  txLineId  String
+  itemId    String
+  qty       Int
+  deviceId  String?
+
+  receipt TransferReceipt      @relation(fields: [receiptId], references: [id])
+  txLine  StockTransactionLine @relation(fields: [txLineId], references: [id])
+  item    Item                 @relation(fields: [itemId], references: [id])
+
+  @@index([receiptId])
+  @@index([txLineId])
+}
+
+/// Fase 18 (PRD-WAREHOUSE-ENHANCEMENT F5) — surat jalan atas transaksi
+/// pengeluaran/transfer. Maksimal satu DO aktif per transaksi.
+model DeliveryOrder {
+  id          String    @id @default(cuid())
+  doNumber    String    @unique // DO-YYYYMM-####
+  txId        String
+  status      String    @default("DRAFT") // DRAFT|APPROVED|CANCELLED
+  notes       String?
+  createdById String
+  approvedById String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  tx         StockTransaction    @relation(fields: [txId], references: [id])
+  createdBy  User                @relation("DoCreator", fields: [createdById], references: [id])
+  approvedBy User?               @relation("DoApprover", fields: [approvedById], references: [id])
+  lines      DeliveryOrderLine[]
+
+  @@index([txId, status])
+}
+
+model DeliveryOrderLine {
+  id       String @id @default(cuid())
+  doId     String
+  txLineId String
+  itemId   String
+  qty      Int
+
+  deliveryOrder DeliveryOrder        @relation(fields: [doId], references: [id])
+  txLine        StockTransactionLine @relation(fields: [txLineId], references: [id])
+  item          Item                 @relation(fields: [itemId], references: [id])
+
+  @@index([doId])
+}
+
+/// Fase 18 (F6) — Inventory Request Form: satu IRF per sesi pengeluaran barang,
+/// dibuat otomatis saat posting dan wajib memuat dua tanda tangan.
+model InventoryRequestForm {
+  id          String   @id @default(cuid())
+  irfNumber   String   @unique // IRF-YYYYMM-####
+  txId        String   @unique
+  status      String   @default("SIGNED") // DRAFT|SIGNED|CANCELLED
+  createdById String
+  createdAt   DateTime @default(now())
+
+  tx        StockTransaction @relation(fields: [txId], references: [id])
+  createdBy User             @relation("IrfCreator", fields: [createdById], references: [id])
+}
+
+/// Tanda tangan dokumen — diambil SEBELUM transaksi database dijalankan,
+/// sehingga tidak pernah ada tanda tangan yatim yang seolah mengesahkan
+/// serah-terima yang tidak terjadi.
+model DocumentSignature {
+  id           String   @id @default(cuid())
+  docType      String // IRF|DO|RECEIPT
+  docId        String
+  role         String // REQUESTOR|WAREHOUSE_ADMIN|RECEIVED_BY|RELEASED_BY
+  signerName   String
+  signerUserId String?
+  attachmentId String? // gambar tanda tangan (model Attachment)
+  signedAt     DateTime @default(now())
+
+  signerUser User?       @relation("SignatureSigner", fields: [signerUserId], references: [id])
+  attachment Attachment? @relation(fields: [attachmentId], references: [id])
+
+  @@unique([docType, docId, role])
+  @@index([docType, docId])
+}
+
+/// Fase 18 (F8) — pengajuan pengembalian material oleh pemegang barang.
+/// Jalur kedua (verifikasi admin) menghasilkan transaksi STOCK_RETURN.
+model ReturnRequest {
+  id            String    @id @default(cuid())
+  returnNumber  String    @unique // RET-YYYYMM-####
+  requesterId   String
+  warehouseToId String
+  status        String    @default("PENDING") // PENDING|ACCEPTED|REJECTED
+  note          String?
+  verifiedById  String?
+  verifiedAt    DateTime?
+  verifyNote    String?
+  txId          String?   @unique
+  createdAt     DateTime  @default(now())
+
+  requester   User                @relation("ReturnRequester", fields: [requesterId], references: [id])
+  warehouseTo Warehouse           @relation("ReturnWarehouse", fields: [warehouseToId], references: [id])
+  verifiedBy  User?               @relation("ReturnVerifier", fields: [verifiedById], references: [id])
+  tx          StockTransaction?   @relation(fields: [txId], references: [id])
+  lines       ReturnRequestLine[]
+
+  @@index([status])
+}
+
+model ReturnRequestLine {
+  id        String  @id @default(cuid())
+  requestId String
+  itemId    String
+  qty       Int
+  deviceId  String?
+  condition String // GOOD|USED|DAMAGED|RMA
+
+  request ReturnRequest     @relation(fields: [requestId], references: [id])
+  item    Item              @relation(fields: [itemId], references: [id])
+  device  SerializedDevice? @relation(fields: [deviceId], references: [id])
+
+  @@index([requestId])
+}
+
+/// Fase 19 (PRD-WAREHOUSE-ENHANCEMENT F7) — permintaan material yang diajukan
+/// sendiri oleh teknisi/vendor/tim proyek dari lapangan. Persetujuan
+/// menghasilkan draft pengeluaran resmi yang langsung mereservasi stock.
+model MaterialRequest {
+  id           String    @id @default(cuid())
+  requestNumber String   @unique // MRQ-YYYYMM-####
+  requesterId  String
+  warehouseId  String
+  workOrderId  String?
+  purpose      String
+  note         String?
+  status       String    @default("SUBMITTED") // SUBMITTED|APPROVED|REJECTED|CANCELLED
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  txId         String?   @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  requester User              @relation("MrqRequester", fields: [requesterId], references: [id])
+  warehouse Warehouse         @relation("MrqWarehouse", fields: [warehouseId], references: [id])
+  workOrder WorkOrder?        @relation(fields: [workOrderId], references: [id])
+  decidedBy User?             @relation("MrqDecider", fields: [decidedById], references: [id])
+  tx        StockTransaction? @relation(fields: [txId], references: [id])
+  lines     MaterialRequestLine[]
+
+  @@index([status, requesterId])
+}
+
+model MaterialRequestLine {
+  id        String @id @default(cuid())
+  requestId String
+  itemId    String
+  qty       Int
+  note      String?
+
+  request MaterialRequest @relation(fields: [requestId], references: [id])
+  item    Item            @relation(fields: [itemId], references: [id])
+
+  @@index([requestId])
+}
+
+/// Fase 20 (F10) — lokasi fisik dalam gudang: rak lalu bin.
+model Rack {
+  id          String  @id @default(cuid())
+  warehouseId String
+  code        String
+  name        String?
+  isActive    Boolean @default(true)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  bins      Bin[]
+
+  @@unique([warehouseId, code])
+}
+
+model Bin {
+  id       String  @id @default(cuid())
+  rackId   String
+  code     String
+  isActive Boolean @default(true)
+
+  rack Rack @relation(fields: [rackId], references: [id])
+
+  @@unique([rackId, code])
+}
+
+/// Fase 20 (F9) — slot peruntukan stock. UNALLOC bersifat sistem: sisa yang
+/// belum dialokasikan dihitung sebagai onHand dikurangi seluruh alokasi
+/// bernama, jadi tidak pernah bisa menyimpang dari saldo gudang.
+model StockSlotType {
+  id       String  @id @default(cuid())
+  code     String  @unique // INST|MNT|MKT|PRJ|EMG|SPR|RMA|DEMO|OTHER
+  name     String
+  isSystem Boolean @default(false)
+  isActive Boolean @default(true)
+
+  slots StockSlot[]
+}
+
+model StockSlot {
+  id          String  @id @default(cuid())
+  warehouseId String
+  typeId      String
+  code        String
+  name        String?
+  isActive    Boolean @default(true)
+
+  warehouse   Warehouse        @relation(fields: [warehouseId], references: [id])
+  type        StockSlotType    @relation(fields: [typeId], references: [id])
+  allocations SlotAllocation[]
+  ledger      SlotLedger[]
+
+  @@unique([warehouseId, code])
+}
+
+/// Saldo alokasi per (slot × item). Total alokasi seluruh slot dalam satu
+/// gudang tidak boleh melebihi onHand item tersebut.
+model SlotAllocation {
+  id     String @id @default(cuid())
+  slotId String
+  itemId String
+  qty    Int    @default(0)
+
+  slot StockSlot @relation(fields: [slotId], references: [id])
+  item Item      @relation(fields: [itemId], references: [id])
+
+  @@unique([slotId, itemId])
+}
+
+/// Jejak mutasi alokasi — append-only, tidak pernah diedit.
+model SlotLedger {
+  id          String   @id @default(cuid())
+  slotId      String
+  itemId      String
+  qty         Int // bertanda: positif masuk slot, negatif keluar slot
+  reason      String // ALLOCATE|RELEASE|SLOT_TRANSFER
+  note        String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  slot      StockSlot @relation(fields: [slotId], references: [id])
+  item      Item      @relation(fields: [itemId], references: [id])
+  createdBy User      @relation("SlotLedgerCreator", fields: [createdById], references: [id])
+
+  @@index([slotId, itemId])
+}
+
+/// Ambang nilai/jumlah yang membuat perpindahan slot butuh persetujuan.
+model SlotTransferPolicy {
+  id        String  @id @default(cuid())
+  name      String
+  maxQty    Int // di atas ini butuh izin slot.approve
+  isActive  Boolean @default(true)
+}
+
+/// Fase 21 (F12) — pembatasan gudang untuk seorang user. Bila user punya
+/// setidaknya satu baris, ia hanya boleh menyentuh gudang yang terdaftar.
+model UserWarehouseScope {
+  id          String @id @default(cuid())
+  userId      String
+  warehouseId String
+
+  user      User      @relation("WarehouseScopeUser", fields: [userId], references: [id])
+  warehouse Warehouse @relation("WarehouseScope", fields: [warehouseId], references: [id])
+
+  @@unique([userId, warehouseId])
 }
 
 /// Fase 24 (PRD-NOC-TOOLS N2) — router MikroTik sebagai spesialisasi

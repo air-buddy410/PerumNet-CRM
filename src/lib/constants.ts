@@ -12,8 +12,7 @@ export const ROLES = {
   OPERATIONAL_COORDINATOR: "operational_coordinator",
   TECHNICIAN: "technician",
   PROJECT_MANAGER: "project_manager",
-  NOC_MANAGER: "noc_manager",
-  NOC_ENGINEER: "noc_engineer",
+  NOC: "noc", // Fase 22: noc_manager + noc_engineer dilebur jadi satu
   IT_MANAGER: "it_manager",
   DEVELOPER: "developer",
   DEVOPS_ENGINEER: "devops_engineer",
@@ -64,6 +63,8 @@ export const PERMISSIONS = {
   STOCK_CREATE: "stock.create", // buat draft transaksi
   STOCK_POST: "stock.post", // posting transaksi (mengubah saldo)
   STOCK_REVERSE: "stock.reverse",
+  STOCK_RECEIVE: "stock.receive", // menerima transfer antar gudang (Fase 17)
+  SLOT_APPROVE: "slot.approve", // perpindahan alokasi di atas ambang (Fase 20)
   DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
   CUSTODY_VIEW: "custody.view",
   WORK_ORDERS_VIEW: "work_orders.view",
@@ -412,8 +413,21 @@ export const TX_PREFIX: Record<string, string> = {
   STOCK_ADJUSTMENT: "ADJ",
 };
 
+/// Pengelompokan tingkat kedua di atas kategori, mengikuti kebutuhan FTTH.
+export const MATERIAL_TYPES = [
+  "Cable",
+  "Connector",
+  "Network Device",
+  "Passive Device",
+  "Power",
+  "Consumable",
+  "Tools",
+  "Other",
+] as const;
+
 export const DEVICE_STATUSES = [
   "AVAILABLE",
+  "IN_TRANSIT", // Fase 17: dikirim antar gudang, belum diterima
   "IN_CUSTODY",
   "INSTALLED",
   "UNDER_INSPECTION",

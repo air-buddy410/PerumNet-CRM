@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
 import { PERMISSIONS, TX_PREFIX, statusLabel } from "@/lib/constants";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
+import { assertWarehouseInScope } from "@/lib/slots";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Inventory Engine ────────────────────────────────────────────
@@ -55,6 +56,10 @@ export interface DraftLineInput {
   qty: number;
   serialNumbers?: string[]; // GR item serialized
   deviceIds?: string[]; // issue/return/transfer item serialized
+  /// Kondisi barang untuk STOCK_RETURN: GOOD|USED|DAMAGED|RMA.
+  /// Dibawa per baris sejak awal — item yang sama bisa dikembalikan dengan
+  /// kondisi berbeda dalam satu transaksi.
+  condition?: string | null;
 }
 
 interface DraftHeader {
@@ -73,11 +78,26 @@ async function buildLines(
   type: string,
   lines: DraftLineInput[]
 ): Promise<
-  | { ok: true; rows: { itemId: string; qty: number; deviceId?: string; snInput?: string }[] }
+  | {
+      ok: true;
+      rows: {
+        itemId: string;
+        qty: number;
+        deviceId?: string;
+        snInput?: string;
+        condition?: string | null;
+      }[];
+    }
   | { ok: false; error: string }
 > {
   if (!lines.length) return { ok: false, error: "Minimal satu baris item." };
-  const rows: { itemId: string; qty: number; deviceId?: string; snInput?: string }[] = [];
+  const rows: {
+    itemId: string;
+    qty: number;
+    deviceId?: string;
+    snInput?: string;
+    condition?: string | null;
+  }[] = [];
 
   for (const line of lines) {
     const item = await db.item.findUnique({ where: { id: line.itemId } });
@@ -116,17 +136,19 @@ async function buildLines(
             error: `SN "${pendingDraft.snInput}" sudah ada di draft ${pendingDraft.tx.txNumber}.`,
           };
         }
-        for (const sn of sns) rows.push({ itemId: item.id, qty: 1, snInput: sn });
+        for (const sn of sns) rows.push({ itemId: item.id, qty: 1, snInput: sn, condition: line.condition ?? null });
       } else {
         const deviceIds = (line.deviceIds ?? []).filter(Boolean);
         if (!deviceIds.length) {
           return { ok: false, error: `Item ${item.name}: pilih perangkat (SN).` };
         }
-        for (const deviceId of deviceIds) rows.push({ itemId: item.id, qty: 1, deviceId });
+        for (const deviceId of deviceIds) {
+          rows.push({ itemId: item.id, qty: 1, deviceId, condition: line.condition ?? null });
+        }
       }
     } else {
       if (line.qty <= 0) return { ok: false, error: `Item ${item.name}: qty harus > 0.` };
-      rows.push({ itemId: item.id, qty: line.qty });
+      rows.push({ itemId: item.id, qty: line.qty, condition: line.condition ?? null });
     }
   }
   return { ok: true, rows };
@@ -158,6 +180,13 @@ export async function createDraftTransaction(
       return { ok: false, error: "Gudang asal dan tujuan tidak boleh sama." };
     }
   }
+
+  // Fase 21 (F12): user yang dibatasi scope tidak boleh menyentuh gudang lain.
+  const scopeError = await assertWarehouseInScope(user.id, [
+    header.warehouseFromId,
+    header.warehouseToId,
+  ]);
+  if (scopeError) return { ok: false, error: scopeError };
 
   const built = await buildLines(type, lines);
   if (!built.ok) return built;
@@ -283,11 +312,19 @@ async function consumeReserved(
   qty: number,
   itemName: string
 ): Promise<string | null> {
+  // Draft yang dibuat SEBELUM fitur reservasi ada tidak punya tahanan apa pun.
+  // Tanpa pembatasan ini, posting draft warisan gagal dengan pesan "reservasi
+  // tidak konsisten" dan transaksinya mustahil diselesaikan. Yang dilepas
+  // paling banyak sebesar yang benar-benar sedang ditahan.
+  const level = await prisma.stockLevel.findUnique({
+    where: { itemId_warehouseId: { itemId, warehouseId } },
+  });
+  const release = Math.min(level?.reserved ?? 0, qty);
   return adjustBalance(
     prisma,
     itemId,
     warehouseId,
-    { onHand: -qty, reserved: -qty },
+    { onHand: -qty, reserved: -release },
     itemName
   );
 }
@@ -327,11 +364,21 @@ async function applyReservation(
         }
       }
     }
+    // Saat melepas, jangan pernah melepas lebih dari yang benar-benar ditahan.
+    // Draft warisan (dibuat sebelum fitur reservasi ada) tidak menahan apa pun;
+    // tanpa pembatasan ini draft tersebut mustahil dibatalkan.
+    let delta = sign * line.qty;
+    if (sign === -1) {
+      const level = await prisma.stockLevel.findUnique({
+        where: { itemId_warehouseId: { itemId: line.itemId, warehouseId } },
+      });
+      delta = -Math.min(level?.reserved ?? 0, line.qty);
+    }
     const err = await adjustBalance(
       prisma,
       line.itemId,
       warehouseId,
-      { reserved: sign * line.qty },
+      { reserved: delta },
       line.item.name
     );
     if (err) return err;
@@ -365,7 +412,10 @@ async function adjustCustody(
 
 export async function postTransaction(
   user: CurrentUser,
-  txId: string
+  txId: string,
+  // Fase 18: dokumen turunan (IRF, tanda tangan) dibuat di dalam transaksi yang
+  // sama dengan perubahan saldo — kalau posting gagal, dokumennya ikut batal.
+  opts?: { afterPost?: (prisma: TxClient, tx: { id: string; txNumber: string }) => Promise<void> }
 ): Promise<Result> {
   if (!user.permissions.has(PERMISSIONS.STOCK_POST)) {
     return { ok: false, error: "Anda tidak memiliki izin posting transaksi stock." };
@@ -378,6 +428,13 @@ export async function postTransaction(
   if (tx.status !== "DRAFT") {
     return { ok: false, error: "Hanya draft yang bisa diposting. Transaksi posted immutable." };
   }
+  // Scope gudang ditegakkan di setiap jalur yang mengubah saldo, bukan hanya
+  // saat draft dibuat — draft bisa dibuat orang lain lalu diposting user ini.
+  const postScopeError = await assertWarehouseInScope(user.id, [
+    tx.warehouseFromId,
+    tx.warehouseToId,
+  ]);
+  if (postScopeError) return { ok: false, error: postScopeError };
 
   try {
     await db.$transaction(async (prisma) => {
@@ -458,9 +515,15 @@ export async function postTransaction(
                 `Perangkat ${device?.serialNumber ?? "?"} tidak berada dalam custody teknisi tersebut.`
               );
             }
+            const brokenDevice = line.condition === "DAMAGED" || line.condition === "RMA";
             await prisma.serializedDevice.update({
               where: { id: device.id },
-              data: { status: "AVAILABLE", warehouseId: tx.warehouseToId, custodianId: null },
+              data: {
+                status: brokenDevice ? "DAMAGED" : "AVAILABLE",
+                condition: brokenDevice ? "DAMAGED" : "GOOD",
+                warehouseId: tx.warehouseToId,
+                custodianId: null,
+              },
             });
             await prisma.deviceMovement.create({
               data: {
@@ -477,7 +540,16 @@ export async function postTransaction(
             const errC = await adjustCustody(prisma, tx.custodianId!, line.itemId, -line.qty, line.item.name);
             if (errC) throw new Error(errC);
           }
-          const err = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, line.qty, line.item.name);
+          // Fase 18: GOOD/USED kembali sebagai stock siap pakai; DAMAGED/RMA
+          // masuk dimensi damaged agar tidak pernah ikut terhitung tersedia.
+          const brokenReturn = line.condition === "DAMAGED" || line.condition === "RMA";
+          const err = await adjustBalance(
+            prisma,
+            line.itemId,
+            tx.warehouseToId!,
+            brokenReturn ? { damaged: line.qty } : { onHand: line.qty },
+            line.item.name
+          );
           if (err) throw new Error(err);
         } else if (tx.type === "STOCK_TRANSFER") {
           if (isSerialized) {
@@ -489,16 +561,17 @@ export async function postTransaction(
                 `Perangkat ${device?.serialNumber ?? "?"} tidak tersedia di gudang asal.`
               );
             }
+            // Perangkat tidak berada di gudang manapun selama perjalanan.
             await prisma.serializedDevice.update({
               where: { id: device.id },
-              data: { warehouseId: tx.warehouseToId },
+              data: { status: "IN_TRANSIT", warehouseId: null },
             });
             await prisma.deviceMovement.create({
               data: {
                 deviceId: device.id,
                 action: "TRANSFERRED",
                 fromNote: "Gudang asal",
-                toNote: `Gudang tujuan (${tx.txNumber})`,
+                toNote: `Dalam perjalanan (${tx.txNumber})`,
                 txId: tx.id,
                 byUserId: user.id,
               },
@@ -506,7 +579,15 @@ export async function postTransaction(
           }
           const errFrom = await consumeReserved(prisma, line.itemId, tx.warehouseFromId!, line.qty, line.item.name);
           if (errFrom) throw new Error(errFrom);
-          const errTo = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, line.qty, line.item.name);
+          // Fase 17: barang masuk inTransit gudang tujuan, BUKAN langsung onHand.
+          // Menjadi onHand hanya lewat receiveTransfer().
+          const errTo = await adjustBalance(
+            prisma,
+            line.itemId,
+            tx.warehouseToId!,
+            { inTransit: line.qty },
+            line.item.name
+          );
           if (errTo) throw new Error(errTo);
         } else if (tx.type === "STOCK_ADJUSTMENT") {
           // qty bertanda (delta) — hanya dibuat sistem via opname.
@@ -519,8 +600,18 @@ export async function postTransaction(
 
       await prisma.stockTransaction.update({
         where: { id: tx.id },
-        data: { status: "POSTED", postedById: user.id, postedAt: new Date() },
+        data: {
+          status: "POSTED",
+          postedById: user.id,
+          postedAt: new Date(),
+          // Transfer baru selesai setelah barangnya diterima gudang tujuan.
+          ...(tx.type === "STOCK_TRANSFER" ? { receiveStatus: "PENDING" } : {}),
+        },
       });
+
+      if (opts?.afterPost) {
+        await opts.afterPost(prisma, { id: tx.id, txNumber: tx.txNumber });
+      }
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Posting gagal." };
@@ -595,6 +686,15 @@ export async function reverseTransaction(
   if (tx.status !== "POSTED") return { ok: false, error: "Hanya transaksi posted yang bisa di-reverse." };
   if (tx.reversedById) return { ok: false, error: "Transaksi ini sudah pernah di-reverse." };
   if (tx.reversalOfId) return { ok: false, error: "Transaksi reversal tidak bisa di-reverse lagi." };
+  // Fase 17: begitu sebagian barang sudah diterima gudang tujuan, pengiriman
+  // tidak bisa ditarik utuh. Koreksinya lewat transfer balik, bukan reversal.
+  if (tx.type === "STOCK_TRANSFER" && tx.receiveStatus && tx.receiveStatus !== "PENDING") {
+    return {
+      ok: false,
+      error:
+        "Transfer sudah diterima sebagian/seluruhnya — reversal ditolak. Buat transfer balik untuk mengoreksi.",
+    };
+  }
 
   let revId = "";
   let revNumber = "";
@@ -689,19 +789,29 @@ export async function reverseTransaction(
           const err = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, -line.qty, line.item.name);
           if (err) throw new Error(err);
         } else if (tx.type === "STOCK_TRANSFER") {
+          // Fase 17: barang yang belum diterima ada di inTransit gudang tujuan,
+          // bukan di onHand-nya. Reversal menarik kembali dari perjalanan.
           if (isSerialized) {
-            if (!dev || dev.status !== "AVAILABLE" || dev.warehouseId !== tx.warehouseToId) {
-              throw new Error(`Perangkat ${dev?.serialNumber ?? "?"} sudah berpindah — reversal gagal.`);
+            if (!dev || dev.status !== "IN_TRANSIT") {
+              throw new Error(
+                `Perangkat ${dev?.serialNumber ?? "?"} tidak lagi dalam perjalanan — reversal gagal.`
+              );
             }
             await prisma.serializedDevice.update({
               where: { id: dev.id },
-              data: { warehouseId: tx.warehouseFromId },
+              data: { status: "AVAILABLE", warehouseId: tx.warehouseFromId },
             });
             await prisma.deviceMovement.create({
               data: { deviceId: dev.id, action: "REVERSED", txId: rev.id, byUserId: user.id, note: reason },
             });
           }
-          const errTo = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, -line.qty, line.item.name);
+          const errTo = await adjustBalance(
+            prisma,
+            line.itemId,
+            tx.warehouseToId!,
+            { inTransit: -line.qty },
+            line.item.name
+          );
           if (errTo) throw new Error(errTo);
           const errFrom = await adjustLevel(prisma, line.itemId, tx.warehouseFromId!, line.qty, line.item.name);
           if (errFrom) throw new Error(errFrom);
@@ -1041,6 +1151,32 @@ export async function postOpname(
     };
   }
 
+  // Fase 20 (F11): saldo tidak boleh berubah sejak snapshot diambil. Kalau
+  // ada mutasi di tengah sesi, selisih hasil hitung menjadi tidak bermakna —
+  // sesi harus dihitung ulang, bukan dipaksa diposting.
+  const currentLevels = await db.stockLevel.findMany({
+    where: { warehouseId: session.warehouseId },
+    select: { itemId: true, onHand: true },
+  });
+  const currentMap = new Map(currentLevels.map((l) => [l.itemId, l.onHand]));
+  const drifted = session.lines.filter((l) => (currentMap.get(l.itemId) ?? 0) !== l.systemQty);
+  if (drifted.length) {
+    const names = await db.item.findMany({
+      where: { id: { in: drifted.slice(0, 3).map((l) => l.itemId) } },
+      select: { id: true, name: true },
+    });
+    const detail = names
+      .map((n) => {
+        const line = drifted.find((l) => l.itemId === n.id)!;
+        return `${n.name} (snapshot ${line.systemQty}, sekarang ${currentMap.get(n.id) ?? 0})`;
+      })
+      .join("; ");
+    return {
+      ok: false,
+      error: `Saldo berubah sejak sesi opname dibuka pada ${drifted.length} item — ${detail}. Buat sesi baru agar hitungannya sahih.`,
+    };
+  }
+
   const deltas = session.lines
     .filter((l) => (l.countedQty ?? 0) !== l.systemQty)
     .map((l) => ({ itemId: l.itemId, qty: (l.countedQty ?? 0) - l.systemQty }));
@@ -1087,6 +1223,161 @@ export async function postOpname(
   return { ok: true, id: sessionId };
 }
 
+// ── Penerimaan transfer antar gudang (Fase 17, F3) ───────────────
+// Posting transfer = PENGIRIMAN. Barang berada di inTransit gudang tujuan
+// sampai diterima di sini. Penerimaan boleh bertahap: transfer tetap PARTIAL
+// sampai seluruh qty diterima, sehingga barang tidak pernah hilang dari
+// pembukuan — selalu ada di gudang asal, perjalanan, atau gudang tujuan.
+
+export interface ReceiveLineInput {
+  txLineId: string;
+  qty: number;
+}
+
+export async function receiveTransfer(
+  user: CurrentUser,
+  txId: string,
+  lines: ReceiveLineInput[],
+  notes?: string
+): Promise<Result> {
+  if (!user.permissions.has(PERMISSIONS.STOCK_RECEIVE)) {
+    return { ok: false, error: "Anda tidak memiliki izin menerima transfer." };
+  }
+  const tx = await db.stockTransaction.findUnique({
+    where: { id: txId },
+    include: { lines: { include: { item: true, receiptLines: true } } },
+  });
+  if (!tx) return { ok: false, error: "Transaksi tidak ditemukan." };
+  if (tx.type !== "STOCK_TRANSFER") {
+    return { ok: false, error: "Hanya transfer antar gudang yang bisa diterima." };
+  }
+  if (tx.status !== "POSTED") {
+    return { ok: false, error: "Transfer belum dikirim — posting dulu transaksinya." };
+  }
+  if (tx.receiveStatus === "RECEIVED") {
+    return { ok: false, error: "Transfer ini sudah diterima seluruhnya." };
+  }
+  const receiveScopeError = await assertWarehouseInScope(user.id, [tx.warehouseToId]);
+  if (receiveScopeError) return { ok: false, error: receiveScopeError };
+
+  const byId = new Map(tx.lines.map((l) => [l.id, l]));
+  const toReceive: { line: (typeof tx.lines)[number]; qty: number }[] = [];
+  for (const input of lines) {
+    if (!input.qty || input.qty <= 0) continue;
+    const line = byId.get(input.txLineId);
+    if (!line) return { ok: false, error: "Baris transfer tidak dikenal." };
+    const already = line.receiptLines.reduce((sum, r) => sum + r.qty, 0);
+    const remaining = line.qty - already;
+    if (input.qty > remaining) {
+      return {
+        ok: false,
+        error: `"${line.item.name}": diterima ${input.qty} melebihi sisa kiriman ${remaining}.`,
+      };
+    }
+    toReceive.push({ line, qty: input.qty });
+  }
+  if (!toReceive.length) {
+    return { ok: false, error: "Tidak ada qty yang diterima." };
+  }
+
+  let receiptId = "";
+  let receiptNumber = "";
+  try {
+    await db.$transaction(async (prisma) => {
+      receiptNumber = await nextDocumentNumber(prisma, {
+        docType: "RCV",
+        period: "MONTHLY",
+        backfill: async (periodKey) => {
+          const rows = await prisma.transferReceipt.findMany({
+            where: { receiptNumber: { startsWith: `RCV-${periodKey}-` } },
+            select: { receiptNumber: true },
+          });
+          return highestSuffix(rows.map((r) => r.receiptNumber));
+        },
+      });
+
+      const receipt = await prisma.transferReceipt.create({
+        data: {
+          receiptNumber,
+          txId: tx.id,
+          receivedById: user.id,
+          notes: notes?.trim() || null,
+          lines: {
+            create: toReceive.map((t) => ({
+              txLineId: t.line.id,
+              itemId: t.line.itemId,
+              qty: t.qty,
+              deviceId: t.line.deviceId,
+            })),
+          },
+        },
+      });
+      receiptId = receipt.id;
+
+      for (const { line, qty } of toReceive) {
+        const err = await adjustBalance(
+          prisma,
+          line.itemId,
+          tx.warehouseToId!,
+          { inTransit: -qty, onHand: qty },
+          line.item.name
+        );
+        if (err) throw new Error(err);
+
+        if (line.deviceId) {
+          const device = await prisma.serializedDevice.findUnique({
+            where: { id: line.deviceId },
+          });
+          if (!device || device.status !== "IN_TRANSIT") {
+            throw new Error(
+              `Perangkat ${device?.serialNumber ?? "?"} tidak berstatus dalam perjalanan.`
+            );
+          }
+          await prisma.serializedDevice.update({
+            where: { id: device.id },
+            data: { status: "AVAILABLE", warehouseId: tx.warehouseToId },
+          });
+          await prisma.deviceMovement.create({
+            data: {
+              deviceId: device.id,
+              action: "TRANSFERRED",
+              fromNote: "Dalam perjalanan",
+              toNote: `Gudang tujuan (${receiptNumber})`,
+              txId: tx.id,
+              byUserId: user.id,
+            },
+          });
+        }
+      }
+
+      // Status dihitung ulang dari data, bukan diakumulasi — penerimaan
+      // bertahap tetap akurat walau dilakukan berkali-kali.
+      const shipped = tx.lines.reduce((sum, l) => sum + l.qty, 0);
+      const receivedBefore = tx.lines.reduce(
+        (sum, l) => sum + l.receiptLines.reduce((a, r) => a + r.qty, 0),
+        0
+      );
+      const receivedNow = receivedBefore + toReceive.reduce((sum, t) => sum + t.qty, 0);
+      await prisma.stockTransaction.update({
+        where: { id: tx.id },
+        data: { receiveStatus: receivedNow >= shipped ? "RECEIVED" : "PARTIAL" },
+      });
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Penerimaan transfer gagal." };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "TRANSFER_RECEIVE",
+    module: "inventory",
+    entityType: "TransferReceipt",
+    entityId: receiptId,
+    description: `Penerimaan ${receiptNumber} atas transfer ${tx.txNumber}`,
+  });
+  return { ok: true, id: receiptId };
+}
+
 // ── Rekonsiliasi saldo (PRD-WAREHOUSE-ENHANCEMENT F1) ────────────
 // Menghitung ulang saldo dari transaksi dan membandingkannya dengan StockLevel.
 // SENGAJA hanya melaporkan, tidak memperbaiki: saldo tidak boleh diubah di luar
@@ -1098,13 +1389,13 @@ export interface BalanceDiscrepancy {
   itemName: string;
   warehouseId: string;
   warehouseCode: string;
-  field: "onHand" | "reserved";
+  field: "onHand" | "reserved" | "inTransit" | "damaged";
   stored: number;
   expected: number;
 }
 
 export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
-  const [transactions, levels, warehouses, items] = await Promise.all([
+  const [transactions, levels, warehouses, items, receiptLines] = await Promise.all([
     db.stockTransaction.findMany({
       where: { status: { in: ["DRAFT", "POSTED"] } },
       include: { lines: true },
@@ -1112,38 +1403,62 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
     db.stockLevel.findMany(),
     db.warehouse.findMany({ select: { id: true, code: true } }),
     db.item.findMany({ select: { id: true, name: true } }),
+    db.transferReceiptLine.findMany({
+      include: { receipt: { include: { tx: { select: { warehouseToId: true } } } } },
+    }),
   ]);
 
   const onHand = new Map<string, number>();
   const reserved = new Map<string, number>();
+  const inTransit = new Map<string, number>();
+  const damaged = new Map<string, number>();
   const bump = (map: Map<string, number>, itemId: string, warehouseId: string, delta: number) => {
     const key = `${itemId}::${warehouseId}`;
     map.set(key, (map.get(key) ?? 0) + delta);
   };
 
   for (const tx of transactions) {
+    // Transaksi reversal punya tipe yang sama dengan transaksi asalnya tetapi
+    // efeknya terbalik. Tanpa pembalikan tanda di sini, reversal akan terhitung
+    // ganda alih-alih saling meniadakan.
+    const sign = tx.reversalOfId ? -1 : 1;
     for (const line of tx.lines) {
+      const qty = line.qty * sign;
       if (tx.status === "DRAFT") {
         if (RESERVING_TYPES.has(tx.type) && tx.warehouseFromId) {
           bump(reserved, line.itemId, tx.warehouseFromId, line.qty);
         }
         continue;
       }
+      const broken = line.condition === "DAMAGED" || line.condition === "RMA";
       switch (tx.type) {
-        case "GOODS_RECEIPT":
         case "STOCK_RETURN":
+          if (tx.warehouseToId) {
+            bump(broken ? damaged : onHand, line.itemId, tx.warehouseToId, qty);
+          }
+          break;
+        case "GOODS_RECEIPT":
         case "STOCK_ADJUSTMENT":
-          if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, line.qty);
+          if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, qty);
           break;
         case "STOCK_ISSUE":
-          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -line.qty);
+          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -qty);
           break;
         case "STOCK_TRANSFER":
-          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -line.qty);
-          if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, line.qty);
+          // Fase 17: pengiriman memindahkan barang ke inTransit gudang tujuan.
+          // Perpindahan inTransit → onHand terjadi lewat dokumen penerimaan.
+          if (tx.warehouseFromId) bump(onHand, line.itemId, tx.warehouseFromId, -qty);
+          if (tx.warehouseToId) bump(inTransit, line.itemId, tx.warehouseToId, qty);
           break;
       }
     }
+  }
+
+  for (const receiptLine of receiptLines) {
+    const warehouseId = receiptLine.receipt.tx.warehouseToId;
+    if (!warehouseId) continue;
+    bump(inTransit, receiptLine.itemId, warehouseId, -receiptLine.qty);
+    bump(onHand, receiptLine.itemId, warehouseId, receiptLine.qty);
   }
 
   const itemName = new Map(items.map((i) => [i.id, i.name]));
@@ -1162,16 +1477,24 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
     };
     const expectedOnHand = onHand.get(key) ?? 0;
     const expectedReserved = reserved.get(key) ?? 0;
+    const expectedInTransit = inTransit.get(key) ?? 0;
+    const expectedDamaged = damaged.get(key) ?? 0;
     if (level.onHand !== expectedOnHand) {
       out.push({ ...base, field: "onHand", stored: level.onHand, expected: expectedOnHand });
     }
     if (level.reserved !== expectedReserved) {
       out.push({ ...base, field: "reserved", stored: level.reserved, expected: expectedReserved });
     }
+    if (level.inTransit !== expectedInTransit) {
+      out.push({ ...base, field: "inTransit", stored: level.inTransit, expected: expectedInTransit });
+    }
+    if (level.damaged !== expectedDamaged) {
+      out.push({ ...base, field: "damaged", stored: level.damaged, expected: expectedDamaged });
+    }
   }
 
   // Kombinasi yang punya transaksi tapi belum punya baris saldo sama sekali.
-  for (const [key, expected] of [...onHand, ...reserved]) {
+  for (const [key, expected] of [...onHand, ...reserved, ...inTransit, ...damaged]) {
     if (expected === 0 || seen.has(key)) continue;
     const [itemId, warehouseId] = key.split("::");
     out.push({
@@ -1179,7 +1502,13 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
       itemName: itemName.get(itemId) ?? "?",
       warehouseId,
       warehouseCode: warehouseCode.get(warehouseId) ?? "?",
-      field: onHand.has(key) ? "onHand" : "reserved",
+      field: onHand.has(key)
+        ? "onHand"
+        : inTransit.has(key)
+          ? "inTransit"
+          : damaged.has(key)
+            ? "damaged"
+            : "reserved",
       stored: 0,
       expected,
     });

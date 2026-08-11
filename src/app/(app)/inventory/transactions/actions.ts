@@ -9,8 +9,15 @@ import {
   postTransaction,
   cancelDraftTransaction,
   reverseTransaction,
+  receiveTransfer,
   type DraftLineInput,
+  type ReceiveLineInput,
 } from "@/lib/inventory";
+import {
+  createDeliveryOrder,
+  approveDeliveryOrder,
+  issueMaterial,
+} from "@/lib/warehouse-docs";
 
 const MAX_BULK_ROWS = 5;
 const MAX_SERIAL_ROWS = 3;
@@ -123,5 +130,82 @@ export async function reverseTransactionAction(formData: FormData): Promise<void
   redirect(
     `/inventory/transactions/${result.id}?ok=` +
       encodeURIComponent("Reversal diposting sebagai transaksi baru.")
+  );
+}
+
+// Fase 17: menerima transfer antar gudang. Qty per baris boleh sebagian —
+// transfer tetap terbuka sampai seluruh kiriman diterima.
+export async function receiveTransferAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.STOCK_RECEIVE);
+  const txId = String(formData.get("txId") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+
+  const lines: ReceiveLineInput[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("qty_")) continue;
+    const qty = Number(value);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    lines.push({ txLineId: key.slice(4), qty: Math.floor(qty) });
+  }
+
+  const result = await receiveTransfer(user, txId, lines, notes);
+  revalidatePath("/inventory/transactions");
+  revalidatePath("/inventory/stock");
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Penerimaan dicatat — stock gudang tujuan bertambah.")
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+// ── Fase 18: surat jalan & pengeluaran bertanda tangan ───────────
+
+export async function createDeliveryOrderAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.STOCK_CREATE);
+  const txId = String(formData.get("txId") ?? "");
+  const result = await createDeliveryOrder(user, txId, String(formData.get("notes") ?? ""));
+  revalidatePath(`/inventory/transactions/${txId}`);
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Surat jalan dibuat — menunggu persetujuan.")
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function approveDeliveryOrderAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.STOCK_POST);
+  const txId = String(formData.get("txId") ?? "");
+  const result = await approveDeliveryOrder(user, String(formData.get("doId") ?? ""));
+  revalidatePath(`/inventory/transactions/${txId}`);
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Surat jalan disetujui.")
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+// Pengeluaran barang: tanda tangan kedua pihak diambil di sini, lalu posting
+// dan penerbitan IRF berjalan dalam satu transaksi.
+export async function issueMaterialAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.STOCK_POST);
+  const txId = String(formData.get("txId") ?? "");
+  const result = await issueMaterial(user, txId, [
+    { role: "REQUESTOR", signerName: String(formData.get("receiverName") ?? "") },
+    {
+      role: "WAREHOUSE_ADMIN",
+      signerName: String(formData.get("adminName") ?? ""),
+      signerUserId: user.id,
+    },
+  ]);
+  revalidatePath("/inventory/transactions");
+  revalidatePath("/inventory/stock");
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Barang diserahkan — IRF terbit dengan dua tanda tangan.")
+        : "error=" + encodeURIComponent(result.error))
   );
 }
