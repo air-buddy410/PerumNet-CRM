@@ -6,11 +6,15 @@ import {
   buildKml,
   type KmlPlacemark,
   type KmlExportPoint,
+  type KmlExportLine,
 } from "@/lib/kml";
 import {
   inferPointType,
   notImportableReason,
+  inferRouteType,
+  routeLengthMeters,
   type ImportPointType,
+  type RouteType,
 } from "@/lib/ftth-point-type";
 import { occupancyOf, OCCUPANCY_LABEL, type OccupancyLevel } from "@/lib/noc-map";
 import type { CurrentUser } from "@/lib/rbac";
@@ -55,8 +59,21 @@ export interface KmlImportRow {
   moveMeters: number | null;
 }
 
+/// Baris rute kabel pada pratinjau (Fase 39).
+export interface KmlRouteRow {
+  name: string;
+  folder: string | null;
+  routeType: RouteType;
+  pointCount: number;
+  lengthMeters: number;
+  /** NEW = belum ada · KEEP = sudah ada, tidak ditimpa · DUPLICATE = ganda di berkas */
+  action: "NEW" | "KEEP" | "DUPLICATE";
+  coordinates: [number, number][];
+}
+
 export interface KmlImportPreview {
   rows: KmlImportRow[];
+  routes: KmlRouteRow[];
   rejected: { raw: string; reason: string }[];
   counts: {
     new: number;
@@ -66,6 +83,7 @@ export interface KmlImportPreview {
     skip: number;
     rejected: number;
   };
+  routeCounts: { new: number; keep: number; duplicate: number };
 }
 
 /** Jarak kasar antar dua koordinat (haversine), untuk menunjukkan seberapa jauh titik bergeser. */
@@ -89,16 +107,18 @@ export async function previewKmlImport(
   xml: string,
   options: PreviewOptions = {}
 ): Promise<KmlImportPreview> {
-  const { placemarks, rejected } = parseKml(xml);
+  const { placemarks, lines, rejected } = parseKml(xml);
 
   // Seluruh calon target diambil sekali, bukan per baris — berkas survei bisa
   // memuat ratusan titik dan kueri per baris akan menyiksa database.
-  const [odps, sites] = await Promise.all([
+  const [odps, sites, existingRoutes] = await Promise.all([
     db.odp.findMany({ select: { id: true, code: true, latitude: true, longitude: true } }),
     db.networkSite.findMany({
       select: { id: true, siteCode: true, name: true, latitude: true, longitude: true },
     }),
+    db.fiberRoute.findMany({ select: { name: true } }),
   ]);
+  const routeNames = new Set(existingRoutes.map((r) => r.name));
   const odpByCode = new Map(odps.map((o) => [o.code, o]));
   const siteByKey = new Map<string, (typeof sites)[number]>();
   for (const st of sites) {
@@ -170,9 +190,33 @@ export async function previewKmlImport(
     });
   }
 
+  // Rute mengikuti aturan yang sama dengan titik: yang sudah ada TIDAK
+  // ditimpa. Geometri hasil gambar tangan tidak boleh menggantikan yang
+  // sudah diperiksa orang.
+  const routes: KmlRouteRow[] = [];
+  const seenRoutes = new Set<string>();
+  for (const l of lines) {
+    const base = {
+      name: l.name,
+      folder: l.folder,
+      routeType: inferRouteType(l.folder),
+      pointCount: l.coordinates.length,
+      lengthMeters: routeLengthMeters(l.coordinates),
+      coordinates: l.coordinates,
+    };
+    if (seenRoutes.has(l.name)) {
+      routes.push({ ...base, action: "DUPLICATE" });
+      continue;
+    }
+    seenRoutes.add(l.name);
+    routes.push({ ...base, action: routeNames.has(l.name) ? "KEEP" : "NEW" });
+  }
+
   const count = (a: KmlImportAction) => rows.filter((r) => r.action === a).length;
+  const routeCount = (a: KmlRouteRow["action"]) => routes.filter((r) => r.action === a).length;
   return {
     rows,
+    routes,
     rejected,
     counts: {
       new: count("NEW"),
@@ -181,6 +225,11 @@ export async function previewKmlImport(
       duplicate: count("DUPLICATE"),
       skip: count("SKIP"),
       rejected: rejected.length,
+    },
+    routeCounts: {
+      new: routeCount("NEW"),
+      keep: routeCount("KEEP"),
+      duplicate: routeCount("DUPLICATE"),
     },
   };
 }
@@ -197,7 +246,7 @@ export async function applyKmlImport(
   user: CurrentUser,
   xml: string,
   options: KmlImportOptions
-): Promise<Result<{ created: number; filled: number; skipped: number }>> {
+): Promise<Result<{ created: number; filled: number; skipped: number; routes: number }>> {
   if (!user.permissions.has(PERMISSIONS.FTTH_MANAGE)) {
     return { ok: false, error: "Anda tidak memiliki izin mengubah data FTTH." };
   }
@@ -215,6 +264,7 @@ export async function applyKmlImport(
   let created = 0;
   let filled = 0;
   let skipped = 0;
+  let routesCreated = 0;
 
   try {
     await db.$transaction(async (prisma) => {
@@ -274,6 +324,20 @@ export async function applyKmlImport(
         }
         created++;
       }
+
+      for (const route of preview.routes) {
+        if (route.action !== "NEW") continue;
+        await prisma.fiberRoute.create({
+          data: {
+            name: route.name,
+            routeType: route.routeType,
+            geometry: route.coordinates as unknown as object,
+            source: "KML_IMPORT",
+            siteId: options.siteId || null,
+          },
+        });
+        routesCreated++;
+      }
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Impor KML gagal." };
@@ -287,11 +351,20 @@ export async function applyKmlImport(
     entityId: "-",
     description:
       `Impor KML/KMZ: ${created} titik baru (status PLANNED), ${filled} koordinat diisi, ` +
-      `${skipped} dilewati, ${preview.rejected.length} ditolak. ` +
-      `Koordinat yang sudah terisi tidak ditimpa.`,
+      `${skipped} dilewati, ${routesCreated} rute kabel, ${preview.rejected.length} ditolak. ` +
+      `Koordinat dan geometri yang sudah tersimpan tidak ditimpa.`,
   });
-  return { ok: true, id: "-", data: { created, filled, skipped } };
+  return { ok: true, id: "-", data: { created, filled, skipped, routes: routesCreated } };
 }
+
+/// Nama folder ekspor per jenis rute — dipilih agar tertebak kembali oleh
+/// inferRouteType() saat berkasnya diimpor ulang.
+const ROUTE_FOLDER: Record<string, string> = {
+  FEEDER: "Rute Feeder",
+  DISTRIBUTION: "Rute Distribusi",
+  DROP: "Rute Drop Core",
+  OTHER: "Rute Lainnya",
+};
 
 /// Gaya penanda untuk POP — dibedakan dari warna okupansi ODP.
 const SITE_STYLE = { id: "pop-site", colorAabbggrr: "ffd08b2b" };
@@ -314,7 +387,7 @@ const OCCUPANCY_STYLE: Record<OccupancyLevel, { id: string; colorAabbggrr: strin
  * "belum ditentukan" dan harus ditebak ulang petugas.
  */
 export async function exportFtthKml(siteId?: string | null): Promise<string> {
-  const [odps, sites] = await Promise.all([
+  const [odps, sites, routes] = await Promise.all([
     db.odp.findMany({
       where: {
         latitude: { not: null },
@@ -335,6 +408,10 @@ export async function exportFtthKml(siteId?: string | null): Promise<string> {
         ...(siteId ? { id: siteId } : {}),
       },
       orderBy: { siteCode: "asc" },
+    }),
+    db.fiberRoute.findMany({
+      where: siteId ? { siteId } : {},
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -372,10 +449,24 @@ export async function exportFtthKml(siteId?: string | null): Promise<string> {
     });
   }
 
-  return buildKml("PerumNet FTTH", points, [
-    ...Object.values(OCCUPANCY_STYLE),
-    SITE_STYLE,
-  ]);
+  // Rute diekspor ke folder sesuai jenisnya, sehingga impor ulang mengenali
+  // feeder tetap sebagai feeder.
+  const lines: KmlExportLine[] = routes.map((r) => {
+    const coordinates = (r.geometry as unknown as [number, number][]) ?? [];
+    return {
+      name: r.name,
+      folder: ROUTE_FOLDER[r.routeType] ?? "Rute Lainnya",
+      description: `Perkiraan panjang: ${routeLengthMeters(coordinates)} m (dari geometri, bukan ukuran lapangan)`,
+      coordinates,
+    };
+  });
+
+  return buildKml(
+    "PerumNet FTTH",
+    points,
+    [...Object.values(OCCUPANCY_STYLE), SITE_STYLE],
+    lines
+  );
 }
 
 /** Nama lama dipertahankan supaya pemanggil yang ada tidak putus. */

@@ -192,10 +192,19 @@ export interface KmlExportPoint {
 }
 
 /** Menyusun dokumen KML. Gaya warna mengikuti okupansi ODP. */
+/// Rute untuk diekspor (Fase 39).
+export interface KmlExportLine {
+  name: string;
+  folder?: string | null;
+  description?: string | null;
+  coordinates: [number, number][];
+}
+
 export function buildKml(
   documentName: string,
   points: KmlExportPoint[],
-  styles: { id: string; colorAabbggrr: string }[] = []
+  styles: { id: string; colorAabbggrr: string }[] = [],
+  lines: KmlExportLine[] = []
 ): string {
   const styleXml = styles
     .map(
@@ -233,12 +242,41 @@ ${list.map((p) => renderPoint(p, "    ")).join("\n")}
     ),
   ].join("\n");
 
+  const renderLine = (l: KmlExportLine, indent: string) =>
+    `${indent}<Placemark>
+${indent}  <name>${escapeXml(l.name)}</name>${
+      l.description ? `\n${indent}  <description>${escapeXml(l.description)}</description>` : ""
+    }
+${indent}  <LineString><coordinates>${l.coordinates
+      .map(([lng, lat]) => `${lng},${lat},0`)
+      .join(" ")}</coordinates></LineString>
+${indent}</Placemark>`;
+
+  const lineFolders = new Map<string, KmlExportLine[]>();
+  const looseLines: KmlExportLine[] = [];
+  for (const l of lines) {
+    if (!l.folder) { looseLines.push(l); continue; }
+    const list = lineFolders.get(l.folder) ?? [];
+    list.push(l);
+    lineFolders.set(l.folder, list);
+  }
+  const lineXml = [
+    ...looseLines.map((l) => renderLine(l, "  ")),
+    ...[...lineFolders.entries()].map(
+      ([name, list]) => `  <Folder>
+    <name>${escapeXml(name)}</name>
+${list.map((l) => renderLine(l, "    ")).join("\n")}
+  </Folder>`
+    ),
+  ].join("\n");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
 <Document>
   <name>${escapeXml(documentName)}</name>
 ${styleXml}
 ${placemarks}
+${lineXml}
 </Document>
 </kml>
 `;

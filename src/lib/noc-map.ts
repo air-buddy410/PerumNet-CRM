@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { routeLengthMeters } from "@/lib/ftth-point-type";
 
 // ── Peta Jaringan Terpadu (Fase 23, PRD-NOC-TOOLS N1) ───────────
 // Menyatukan tiga hal yang sudah ada di database sejak Fase 13:
@@ -68,6 +69,17 @@ export interface MapSite {
   status: string;
 }
 
+/// Rute kabel (Fase 39) — LAPISAN VISUAL. Panjangnya perkiraan dari geometri
+/// gambar tangan, bukan panjang kabel sebenarnya, dan tidak dipakai menghitung
+/// apa pun.
+export interface MapRoute {
+  id: string;
+  name: string;
+  routeType: string;
+  coordinates: [number, number][];
+  lengthMeters: number;
+}
+
 export interface MapBounds {
   minLat: number;
   maxLat: number;
@@ -78,6 +90,7 @@ export interface MapBounds {
 export interface NetworkMapData {
   odps: MapOdp[];
   sites: MapSite[];
+  routes: MapRoute[];
   customers: MapCustomer[];
   /** Garis ODP anak → ODP induk (kaskade). */
   cascades: { fromId: string; toId: string }[];
@@ -190,6 +203,12 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     }),
   ]);
   const sessionOf = new Map(sessionRows.map((r) => [r.subscriptionId!, r]));
+
+  const routeRows = await db.fiberRoute.findMany({
+    where: filter.siteId ? { siteId: filter.siteId } : {},
+    select: { id: true, name: true, routeType: true, geometry: true },
+    orderBy: { name: "asc" },
+  });
 
   const siteRows = await db.networkSite.findMany({
     where: {
@@ -317,6 +336,17 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     .filter((o) => o.parentId && visible.has(o.parentId))
     .map((o) => ({ fromId: o.id, toId: o.parentId! }));
 
+  const routes: MapRoute[] = routeRows.map((r) => {
+    const coordinates = (r.geometry as unknown as [number, number][]) ?? [];
+    return {
+      id: r.id,
+      name: r.name,
+      routeType: r.routeType,
+      coordinates,
+      lengthMeters: routeLengthMeters(coordinates),
+    };
+  });
+
   const sites: MapSite[] = siteRows.map((st) => ({
     id: st.id,
     code: st.siteCode,
@@ -367,6 +397,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
   return {
     odps,
     sites,
+    routes,
     customers,
     cascades,
     bounds,

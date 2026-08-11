@@ -148,4 +148,57 @@ describe("peta & ekspor seluruh jenis titik (Fase 38)", () => {
       assert.equal(after!.latitude, -8.5);
     });
   });
+
+  describe("rute kabel di peta & ekspor (Fase 39)", () => {
+    async function withRoute(label: string) {
+      const t = await topology(label);
+      const route = await db.fiberRoute.create({
+        data: {
+          name: `Feeder ${label}`,
+          routeType: "FEEDER",
+          geometry: [[115.10, -8.40], [115.15, -8.45], [115.20, -8.50]] as unknown as object,
+          source: "KML_IMPORT",
+        },
+      });
+      return { ...t, route };
+    }
+
+    test("rute ikut dirakit ke peta berikut panjang perkiraannya", async () => {
+      const t = await withRoute(tag("J"));
+      const data = await loadNetworkMap();
+      assert.equal(data.routes.length, 1);
+      assert.equal(data.routes[0].name, t.route.name);
+      assert.equal(data.routes[0].routeType, "FEEDER");
+      assert.equal(data.routes[0].coordinates.length, 3);
+      assert.ok(data.routes[0].lengthMeters > 0, "panjang dihitung saat dibaca");
+    });
+
+    test("panjang TIDAK disimpan di database — dihitung dari geometri", async () => {
+      // Angka tersimpan cepat berubah menjadi "sumber kebenaran" yang dipakai
+      // menagih atau menghitung rugi-rugi, padahal ini gambar tangan surveyor.
+      const t = await withRoute(tag("K"));
+      const stored = await db.fiberRoute.findUnique({ where: { id: t.route.id } });
+      assert.ok(!("lengthMeters" in (stored as object)), "tidak ada kolom panjang");
+    });
+
+    test("rute ikut diekspor dan pulang-pergi mempertahankan jenisnya", async () => {
+      const t = await withRoute(tag("L"));
+      const xml = await exportFtthKml();
+      assert.match(xml, /<LineString>/);
+      assert.ok(xml.includes(t.route.name));
+
+      const preview = await previewKmlImport(xml);
+      const back = preview.routes.find((r) => r.name === t.route.name);
+      assert.ok(back, "rute terbaca kembali");
+      assert.equal(back!.routeType, "FEEDER", "feeder kembali sebagai feeder");
+      assert.equal(back!.action, "KEEP", "sudah ada — tidak ditimpa");
+      assert.equal(back!.pointCount, 3, "seluruh simpul utuh");
+    });
+
+    test("peta tetap jalan tanpa rute sama sekali", async () => {
+      await topology(tag("M"));
+      const data = await loadNetworkMap();
+      assert.deepEqual(data.routes, []);
+    });
+  });
 });
