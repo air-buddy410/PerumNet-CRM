@@ -30,7 +30,7 @@ export default async function ApplicationsPage({
     <div>
       <PageHeader
         title="Application Inventory"
-        subtitle="Aplikasi dengan repository, owner, environment, dan metode deployment (PRD §38.2)."
+        subtitle="Kelola aplikasi beserta repository, owner, environment, dan metode deployment."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

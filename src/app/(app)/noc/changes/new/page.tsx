@@ -20,7 +20,7 @@ export default async function NewChangePage({
       <BackLink href="/noc/changes" label="Kembali ke daftar change" />
       <PageHeader
         title="Change Request Baru"
-        subtitle="Rollback plan wajib kecuali Standard (rule 21). Approval mengikuti matrix per jenis change (§48)."
+        subtitle="Rencana rollback wajib untuk perubahan non-standar. Persetujuan mengikuti jenis perubahan."
       />
       <Flash error={sp.error} />
 

@@ -29,7 +29,7 @@ export default async function ServersPage({
     <div>
       <PageHeader
         title="Server Inventory"
-        subtitle="Server per environment dengan owner, tujuan, dan criticality (PRD §38.1)."
+        subtitle="Kelola server berdasarkan environment, owner, tujuan, dan tingkat kritikalitas."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

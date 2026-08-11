@@ -38,7 +38,7 @@ export default async function PackagesPage({
     <MasterCrud
       entity="packages"
       title="Paket Internet"
-      subtitle="Master paket layanan — dasar quotation & subscription (Phase 2)."
+      subtitle="Kelola paket layanan yang digunakan untuk quotation dan subscription."
       extraHeaders={["Kecepatan", "Harga/bulan", "Biaya Instalasi"]}
       rows={rows}
       editRow={editRow}

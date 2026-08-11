@@ -25,7 +25,7 @@ export default async function DeploymentsPage({
     <div>
       <PageHeader
         title="Deployment Management"
-        subtitle="Production wajib change record, rollback plan, testing, backup terverifikasi, dan approval (PRD §42, rule 24–26)."
+        subtitle="Deployment production memerlukan change record, rencana rollback, hasil testing, backup terverifikasi, dan persetujuan."
         action={
           canCreate ? (
             <Link href="/it/deployments/new" className="btn-primary">

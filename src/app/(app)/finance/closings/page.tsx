@@ -29,7 +29,7 @@ export default async function ClosingsPage({
     <div>
       <PageHeader
         title="Closing Kas"
-        subtitle={`Harian: bandingkan kas fisik vs sistem (variance wajib alasan). Bulanan: mengunci periode (PRD §27). ${varianceCount} closing dengan variance.`}
+        subtitle={`Harian: bandingkan kas fisik dengan sistem dan beri alasan untuk setiap selisih. Bulanan: kunci periode. ${varianceCount} closing dengan selisih.`}
       />
       <Flash ok={sp.ok} error={sp.error} />
 

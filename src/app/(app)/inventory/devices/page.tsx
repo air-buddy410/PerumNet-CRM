@@ -42,7 +42,7 @@ export default async function DevicesPage({
     <div>
       <PageHeader
         title="Perangkat Serialized"
-        subtitle="Setiap perangkat memiliki tepat satu lokasi & satu penanggung jawab aktif (PRD §53)."
+        subtitle="Setiap perangkat memiliki satu lokasi dan satu penanggung jawab aktif."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

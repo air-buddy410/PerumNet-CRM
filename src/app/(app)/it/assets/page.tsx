@@ -33,7 +33,7 @@ export default async function ItAssetsPage({
     <div>
       <PageHeader
         title="Domain, SSL, License & Subscription"
-        subtitle="Aset digital dengan tanggal kedaluwarsa dan pengingat perpanjangan (PRD §45)."
+        subtitle="Pantau aset digital, tanggal kedaluwarsa, dan pengingat perpanjangan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

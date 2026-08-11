@@ -4,15 +4,30 @@ import CrmAppShell from "@/components/app-shell";
 import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
 import { logout } from "@/lib/auth";
-import { unreadCount } from "@/lib/notify";
+import { notificationMenuData } from "@/lib/notification-menu";
 import { PERMISSIONS } from "@/lib/constants";
+import type { NotificationMenuData } from "@/components/notification-menu";
+import { openNotificationAction, markAllReadAction } from "./notifications/actions";
 
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   const can = (p: string) => user.permissions.has(p);
-  const unread = await unreadCount(user.id);
+  let notificationError: string | undefined;
+  let notificationData: NotificationMenuData = {
+    unreadCount: 0,
+    items: [],
+    hasMore: false,
+  };
+
+  try {
+    notificationData = await notificationMenuData(user.id);
+  } catch {
+    notificationError = "Coba lagi atau buka halaman notifikasi untuk memeriksa aktivitas.";
+  }
+
+  const unread = notificationData.unreadCount;
 
   const groups: NavGroup[] = [];
 
@@ -74,6 +89,13 @@ export default async function AppLayout({
   if (inventoryItems.length)
     groups.push({ title: "Inventory", items: inventoryItems });
 
+  if (can(PERMISSIONS.RECOVERY_PICKUP)) {
+    groups.push({
+      title: "Portal Lapangan",
+      items: [{ href: "/portal/recoveries", label: "Penarikan Saya" }],
+    });
+  }
+
   if (can(PERMISSIONS.WORK_ORDERS_VIEW)) {
     groups.push({
       title: "Operasional",
@@ -86,7 +108,7 @@ export default async function AppLayout({
       title: "Helpdesk",
       items: [
         { href: "/helpdesk/tickets", label: "Tiket Pelanggan" },
-        { href: "/helpdesk/dispatch", label: "Dispatch Board" },
+        { href: "/helpdesk/dispatch", label: "Ticket Wall" },
         { href: "/helpdesk/categories", label: "Kategori & Workflow" },
       ],
     });
@@ -261,6 +283,10 @@ export default async function AppLayout({
       navigation={<SidebarNav groups={groups} />}
       user={{ name: user.name, email: user.email }}
       mustChangePassword={user.mustChangePassword}
+      notificationData={notificationData}
+      notificationError={notificationError}
+      openNotificationAction={openNotificationAction}
+      markAllReadAction={markAllReadAction}
       profileMenuAction={
         <form action={logoutAction}>
           <button type="submit" role="menuitem" className="crm-signout-button">

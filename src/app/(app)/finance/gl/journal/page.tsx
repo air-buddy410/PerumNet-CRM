@@ -27,7 +27,7 @@ export default async function JournalPage({
     <div>
       <PageHeader
         title="Jurnal Umum"
-        subtitle="Append-only — koreksi lewat jurnal balik, tidak pernah edit (§5). Jurnal otomatis dari invoice/pembayaran + jurnal manual."
+        subtitle="Jurnal hanya dapat ditambah; koreksi dilakukan melalui jurnal balik. Jurnal berasal dari invoice, pembayaran, atau input manual."
         action={
           canPost ? (
             <Link href="/finance/gl/journal/new" className="btn-primary">

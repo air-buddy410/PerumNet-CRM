@@ -33,7 +33,7 @@ export default async function InvoicesPage({
     <div>
       <PageHeader
         title="Invoices"
-        subtitle="Tagihan pelanggan (gap G1). Invoice terbit bersifat immutable — koreksi via void + invoice pengganti."
+        subtitle="Kelola tagihan pelanggan. Invoice yang terbit tidak dapat diedit; koreksi dilakukan dengan void dan invoice pengganti."
         action={
           canCreate ? (
             <Link href="/billing/invoices/new" className="btn-primary">

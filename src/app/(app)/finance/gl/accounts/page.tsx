@@ -35,7 +35,7 @@ export default async function AccountsPage({
     <div>
       <PageHeader
         title="Chart of Accounts"
-        subtitle="Akun berjenjang gaya 1-10100 (§5). Saldo = turunan jurnal, bukan kolom tersimpan. Cashbook Fase 4 dijembatani lewat pemetaan akun."
+        subtitle="Akun berjenjang dengan saldo yang diturunkan dari jurnal. Cashbook terhubung melalui pemetaan akun."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

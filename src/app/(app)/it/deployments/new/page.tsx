@@ -28,7 +28,7 @@ export default async function NewDeploymentPage({
       <BackLink href="/it/deployments" label="Kembali ke daftar deployment" />
       <PageHeader
         title="Deployment Baru"
-        subtitle="Production: change record, rollback plan, hasil testing, backup terverifikasi, dan maintenance window wajib sebelum diajukan (§42)."
+        subtitle="Sebelum diajukan ke production, lengkapi change record, rencana rollback, hasil testing, backup terverifikasi, dan jadwal maintenance."
       />
       <Flash error={sp.error} />
 

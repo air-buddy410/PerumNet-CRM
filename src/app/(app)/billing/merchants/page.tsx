@@ -29,7 +29,7 @@ export default async function MerchantsPage({
     <div>
       <PageHeader
         title="Merchant & Kolektor"
-        subtitle="Unit penagih / mitra BUMDES (keputusan §11.1). Fee komisi menjadi Hutang Fee di GL Fase 11 — rekap di bawah adalah basisnya."
+        subtitle="Kelola unit penagih dan mitra BUMDES; fee komisi direkap sebagai hutang fee."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

@@ -35,7 +35,7 @@ export default async function LedgerPage({
     <div>
       <PageHeader
         title="Buku Besar"
-        subtitle="Mutasi per akun dengan saldo berjalan — murni query di atas jurnal (§5)."
+        subtitle="Lihat mutasi per akun dan saldo berjalan yang dihitung dari jurnal."
       />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">

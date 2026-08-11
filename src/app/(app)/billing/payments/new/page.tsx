@@ -43,7 +43,7 @@ export default async function NewPaymentPage({
       <BackLink href="/billing/payments" label="Kembali ke daftar pembayaran" />
       <PageHeader
         title="Catat Pembayaran"
-        subtitle="Jumlah alokasi wajib sama dengan nominal pembayaran (§3.2). Pembayaran gateway dibuat otomatis dari webhook bundle."
+        subtitle="Total alokasi harus sama dengan nominal pembayaran. Pembayaran gateway dibuat otomatis dari webhook."
       />
       <Flash error={sp.error} />
 

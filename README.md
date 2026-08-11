@@ -317,7 +317,7 @@ npm run db:setup   # buat schema + seed data awal
 npm run dev
 ```
 
-Buka http://localhost:3000 — login awal:
+Buka http://localhost:3300 — login awal:
 
 | Username | Password |
 |---|---|

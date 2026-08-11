@@ -37,7 +37,7 @@ export default async function MaintenancePage({
     <div>
       <PageHeader
         title="Network Maintenance"
-        subtitle="Setiap maintenance memiliki tujuan, risiko, jadwal, PIC, dan approval (PRD §34)."
+        subtitle="Catat tujuan, risiko, jadwal, PIC, dan persetujuan untuk setiap maintenance."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

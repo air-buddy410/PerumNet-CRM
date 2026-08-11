@@ -29,7 +29,7 @@ export default async function CashbooksPage({
     <div>
       <PageHeader
         title="Cashbooks"
-        subtitle={`Saldo hanya berubah lewat transaksi posted (PRD §7.1). Total kas aktif: ${formatRupiah(total)}.`}
+        subtitle={`Saldo hanya berubah melalui transaksi yang diposting. Total kas aktif: ${formatRupiah(total)}.`}
       />
       <Flash ok={sp.ok} error={sp.error} />
 

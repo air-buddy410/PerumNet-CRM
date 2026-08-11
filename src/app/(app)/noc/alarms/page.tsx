@@ -51,7 +51,7 @@ export default async function AlarmsPage({
     <div>
       <PageHeader
         title="Alarms"
-        subtitle={`Alarm manual/monitoring (PRD §31). ${openCount} alarm belum clear. Alarm dapat dieskalasi menjadi incident.`}
+        subtitle={`Alarm manual dan monitoring. ${openCount} alarm belum ditangani. Alarm dapat dieskalasikan menjadi incident.`}
       />
       <Flash ok={sp.ok} error={sp.error} />
 

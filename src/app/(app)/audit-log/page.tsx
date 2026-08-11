@@ -47,7 +47,7 @@ export default async function AuditLogPage({
     <div>
       <PageHeader
         title="Audit Log"
-        subtitle={`${total} entri · append-only, tidak dapat diubah atau dihapus dari aplikasi (PRD §51)`}
+        subtitle={`${total} entri · catatan audit hanya dapat ditambah dan tidak dapat diubah atau dihapus.`}
       />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">

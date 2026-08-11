@@ -35,7 +35,7 @@ export default async function AccessPage({
     <div>
       <PageHeader
         title="Access Management"
-        subtitle="Permintaan, pemberian, dan pencabutan akses sistem (PRD §40, rule 28–30)."
+        subtitle="Kelola permintaan, pemberian, dan pencabutan akses sistem."
         action={
           <Link href="/it/access/new" className="btn-primary">
             Minta Akses

@@ -32,7 +32,7 @@ export default async function OpnamePage({
     <div>
       <PageHeader
         title="Stock Opname"
-        subtitle="Hitung fisik vs sistem. Variance wajib alasan + approval Supervisor → Owner (PRD §21). Item serialized direkonsiliasi per unit lewat write-off."
+        subtitle="Bandingkan stok fisik dengan sistem. Selisih wajib memiliki alasan dan persetujuan Supervisor → Owner. Item berserial direkonsiliasi per unit melalui write-off."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

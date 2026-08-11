@@ -188,7 +188,8 @@ export default async function TerminationDetailPage({
             ) : trm.recovery.items.length === 0 ? (
               <EmptyState message="Tidak ada perangkat milik PERUMNET pada langganan ini." />
             ) : (
-              <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
                     <th className="th">Serial</th>
@@ -207,7 +208,8 @@ export default async function TerminationDetailPage({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
           </div>
         </div>

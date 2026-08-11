@@ -31,7 +31,7 @@ export default async function SubscriptionsPage({
     <div>
       <PageHeader
         title="Subscriptions"
-        subtitle="Aktivasi layanan hanya oleh pemegang izin aktivasi — bukan Sales (business rule 17)."
+        subtitle="Aktivasi layanan dilakukan oleh petugas yang memiliki izin aktivasi."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

@@ -29,7 +29,7 @@ export default async function EmployeesPage({
     <div>
       <PageHeader
         title="Karyawan"
-        subtitle="Master karyawan dengan hierarki atasan — dipakai approval berjenjang izin/lembur (§8)."
+        subtitle="Kelola data karyawan dan struktur atasan untuk pengajuan izin serta lembur."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

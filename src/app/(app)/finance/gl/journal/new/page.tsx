@@ -44,7 +44,7 @@ export default async function NewJournalPage({
           <p className="label">Baris Jurnal (isi akun untuk baris yang dipakai)</p>
           <div className="space-y-2">
             {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="grid grid-cols-[1fr_8rem_8rem_1fr] gap-2">
+              <div key={i} className="crm-journal-line-grid grid grid-cols-[1fr_8rem_8rem_1fr] gap-2">
                 <select name={`line${i}_accountId`} className="input" defaultValue="">
                   <option value="">— akun —</option>
                   {accounts.map((a) => (

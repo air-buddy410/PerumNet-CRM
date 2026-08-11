@@ -44,7 +44,7 @@ export default async function CustodyPage() {
     <div>
       <PageHeader
         title="Technician Custody"
-        subtitle={`Virtual inventory perangkat & material yang dibawa teknisi (PRD §17). Custody > ${CUSTODY_OVERDUE_DAYS} hari ditandai overdue.`}
+        subtitle={`Pantau perangkat dan material yang dibawa teknisi. Custody lebih dari ${CUSTODY_OVERDUE_DAYS} hari ditandai terlambat.`}
       />
 
       {overdueCount > 0 && (
@@ -61,7 +61,8 @@ export default async function CustodyPage() {
           {devices.length === 0 ? (
             <EmptyState message="Tidak ada perangkat dalam custody." />
           ) : (
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
                   <th className="th">SN</th>
@@ -94,7 +95,8 @@ export default async function CustodyPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
 
@@ -105,7 +107,8 @@ export default async function CustodyPage() {
           {bulkLevels.length === 0 ? (
             <EmptyState message="Tidak ada material bulk dalam custody." />
           ) : (
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
                   <th className="th">Teknisi</th>
@@ -124,7 +127,8 @@ export default async function CustodyPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           )}
         </div>
       </div>

@@ -52,7 +52,8 @@ export default async function CampaignDetailPage({
         {campaign.leads.length === 0 ? (
           <EmptyState message="Belum ada lead." />
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
                 <th className="th">Nomor</th>
@@ -77,7 +78,8 @@ export default async function CampaignDetailPage({
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
     </div>

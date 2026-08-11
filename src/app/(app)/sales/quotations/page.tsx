@@ -23,7 +23,7 @@ export default async function QuotationsPage({
     <div>
       <PageHeader
         title="Quotations"
-        subtitle="Quotation Diterima bersifat immutable — revisi selalu membuat versi baru (PRD §11, rule 16). Diskon memerlukan approval."
+        subtitle="Quotation yang diterima tidak dapat diedit; revisi membuat versi baru. Diskon memerlukan persetujuan."
         action={
           user.permissions.has(PERMISSIONS.QUOTATIONS_CREATE) ? (
             <Link href="/sales/quotations/new" className="btn-primary">+ Quotation</Link>

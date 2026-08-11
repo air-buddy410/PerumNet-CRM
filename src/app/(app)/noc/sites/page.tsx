@@ -34,7 +34,7 @@ export default async function SitesPage({
     <div>
       <PageHeader
         title="Network Sites"
-        subtitle="POP, ODP, ODC, tower, dan lokasi infrastruktur (PRD §28.1)."
+        subtitle="Kelola POP, ODP, ODC, tower, dan lokasi infrastruktur jaringan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

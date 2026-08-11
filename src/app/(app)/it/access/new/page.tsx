@@ -20,7 +20,7 @@ export default async function NewAccessPage({
       <BackLink href="/it/access" label="Kembali ke access management" />
       <PageHeader
         title="Permintaan Akses Baru"
-        subtitle="Akses production wajib approval (rule 28); akses sementara wajib expiry (rule 29). Jangan tulis password/secret (rule 31)."
+        subtitle="Akses production memerlukan persetujuan. Akses sementara wajib memiliki masa berlaku. Jangan masukkan password atau secret."
       />
       <Flash error={sp.error} />
 

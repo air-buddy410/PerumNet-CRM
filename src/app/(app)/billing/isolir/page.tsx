@@ -46,7 +46,7 @@ export default async function IsolirPage({
     <div>
       <PageHeader
         title="Isolir & Dunning"
-        subtitle="Isolir adalah event bercatat lewat antrian router — tidak pernah langsung dari UI (DESIGN-PHASE-8 §4). Pemulihan otomatis saat tunggakan lunas."
+        subtitle="Permintaan isolir dicatat melalui antrean router dan dipulihkan otomatis setelah tunggakan lunas."
         action={
           canManage ? (
             <form action={evaluateDunningAction}>

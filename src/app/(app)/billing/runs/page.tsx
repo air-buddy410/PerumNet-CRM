@@ -28,7 +28,7 @@ export default async function InvoiceRunsPage({
     <div>
       <PageHeader
         title="Invoice Runs"
-        subtitle="Batch tagihan bulanan — idempoten: dijalankan ulang tidak menggandakan invoice (gap G4)."
+        subtitle="Proses tagihan bulanan yang aman dijalankan ulang tanpa menggandakan invoice."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

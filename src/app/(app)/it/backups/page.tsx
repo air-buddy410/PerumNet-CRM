@@ -31,7 +31,7 @@ export default async function BackupsPage({
     <div>
       <PageHeader
         title="Backup & Disaster Recovery"
-        subtitle="Backup wajib retention & lokasi; target production wajib terenkripsi; backup kritikal wajib diverifikasi (PRD §44, rule 27)."
+        subtitle="Catat masa simpan dan lokasi backup. Backup production wajib terenkripsi dan backup kritikal wajib diverifikasi."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

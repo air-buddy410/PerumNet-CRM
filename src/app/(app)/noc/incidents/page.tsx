@@ -49,7 +49,7 @@ export default async function IncidentsPage({
     <div>
       <PageHeader
         title="Incidents & Outages"
-        subtitle="Durasi outage dihitung otomatis dari deteksi → pulih (PRD §32). Incident besar ditutup NOC Manager."
+        subtitle="Durasi gangguan dihitung dari deteksi hingga pulih. Incident besar ditutup oleh NOC Manager."
         action={
           user.permissions.has(PERMISSIONS.INCIDENTS_CREATE) ? (
             <Link href="/noc/incidents/new" className="btn-primary">+ Incident</Link>
