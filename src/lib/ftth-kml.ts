@@ -20,6 +20,15 @@ export interface KmlImportRow {
   name: string;
   latitude: number;
   longitude: number;
+  /**
+   * Folder asal titik ini di dalam KML (Fase 35).
+   *
+   * Ditampilkan karena importer ini masih menyasar ODP SAJA. Berkas survei
+   * lengkap memuat POP dan MS di folder terpisah, dan tanpa keterangan folder
+   * petugas tidak punya cara melihat bahwa "SPOP Abang" akan tersimpan sebagai
+   * ODP. Impor multi-jenis menyusul di Fase 36.
+   */
+  folder: string | null;
   /** MATCH = kode cocok ODP yang ada · NEW = belum ada · DUPLICATE = ganda di berkas */
   action: "MATCH" | "NEW" | "DUPLICATE";
   odpId: string | null;
@@ -67,6 +76,7 @@ export async function previewKmlImport(xml: string): Promise<KmlImportPreview> {
         name: p.name,
         latitude: p.latitude,
         longitude: p.longitude,
+        folder: p.folder,
         action: "DUPLICATE",
         odpId: null,
         currentLatitude: null,
@@ -81,6 +91,7 @@ export async function previewKmlImport(xml: string): Promise<KmlImportPreview> {
       name: p.name,
       latitude: p.latitude,
       longitude: p.longitude,
+      folder: p.folder,
       action: odp ? "MATCH" : "NEW",
       odpId: odp?.id ?? null,
       currentLatitude: odp?.latitude ?? null,
