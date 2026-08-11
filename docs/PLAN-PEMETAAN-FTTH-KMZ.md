@@ -1,7 +1,9 @@
 # Rencana — Pemetaan FTTH: POP, MS/ODC, ODP, dan Pelanggan PPPoE
 
 **Tanggal:** 2026-08-12
-**Status:** rencana untuk direview — belum ada kode yang ditulis
+**Status:** SELESAI (2026-08-12). Fase 35, 36, 38, dan 39 sudah di `main`.
+Seluruh keputusan D1–D5 terjawab. Sisa pekerjaan hanya lapisan visual di
+frontend — lihat `HANDOFF-BACKEND-KE-FRONTEND.md` §5b.
 **Pertanyaan asal:** bisakah pemetaan POP, MS/ODC, ODP, dan pelanggan PPPoE
 dilakukan lewat berkas KMZ dan input manual?
 
