@@ -16,8 +16,7 @@ const ROLES: { code: string; name: string; description: string }[] = [
   { code: "operational_coordinator", name: "Operational Coordinator", description: "Work order, penjadwalan, penugasan teknisi, verifikasi instalasi." },
   { code: "technician", name: "Technician", description: "Pelaksanaan work order, custody perangkat, foto & checklist." },
   { code: "project_manager", name: "Project Manager", description: "Proyek, BoM, material & biaya proyek, rekonsiliasi." },
-  { code: "noc_manager", name: "NOC Manager", description: "Kesehatan jaringan, SLA incident, approval network change, maintenance." },
-  { code: "noc_engineer", name: "NOC Engineer", description: "Monitoring, alarm, incident ticket, troubleshooting, eskalasi." },
+  { code: "noc", name: "NOC", description: "Satu kesatuan NOC: monitoring, alarm, incident, maintenance, network change, FTTH & peta jaringan." },
   { code: "it_manager", name: "IT Manager / DevOps Lead", description: "Server & aplikasi, approval deployment production, backup & DR, akses." },
   { code: "developer", name: "Developer", description: "Pengembangan aplikasi, PR, testing, release note, migration." },
   { code: "devops_engineer", name: "DevOps Engineer", description: "CI/CD, deployment, container, monitoring aplikasi, backup, rollback." },
@@ -88,6 +87,7 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   { code: "projects.close", module: "projects", action: "close", description: "Menutup proyek (setelah rekonsiliasi)" },
   // Phase 5 — NOC
   { code: "noc.view", module: "noc", action: "view", description: "Melihat network inventory, IPAM, alarm, incident, maintenance, change" },
+  { code: "noc_map.view", module: "noc", action: "view", description: "Melihat peta jaringan beserta titik pelanggan (Fase 23)" },
   { code: "net_inventory.manage", module: "noc", action: "inventory", description: "Mengelola site, perangkat jaringan, dan link" },
   { code: "ipam.manage", module: "noc", action: "ipam", description: "Mengelola subnet & alokasi IP" },
   { code: "alarms.manage", module: "noc", action: "alarm", description: "Membuat, acknowledge, dan clear alarm" },
@@ -170,7 +170,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
-  noc_manager: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage"],
+  // Fase 22: noc_manager + noc_engineer dilebur. Permission = gabungan keduanya.
+  // Segregation of duties TIDAK hilang — post-review change tetap menolak
+  // eksekutornya sendiri (ditegakkan per-record di lib/noc.ts, bukan per-peran).
+  noc: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage", "noc_map.view"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
   operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
@@ -179,7 +182,6 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage", "channels.view", "channels.manage"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "devices.writeoff", "opname.manage"],
   technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
-  noc_engineer: [...BASE, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "maintenance.manage", "changes.create", "changes.implement", "ftth.manage"],
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
   it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],
@@ -266,10 +268,10 @@ const APPROVAL_RULES: {
   { module: "petty_cash", subtype: null, name: "Petty Cash ≤ Rp500.000", min: 0, max: 500_000, steps: [SUP] },
   { module: "petty_cash", subtype: null, name: "Petty Cash Rp500.001–Rp2.000.000", min: 500_001, max: 2_000_000, steps: [SUP, R("finance")] },
   { module: "petty_cash", subtype: null, name: "Petty Cash > Rp2.000.000", min: 2_000_001, max: null, steps: [SUP, R("finance"), OWN] },
-  { module: "network_change", subtype: "standard", name: "Standard Change", min: 0, max: null, steps: [R("noc_manager")] },
-  { module: "network_change", subtype: "normal", name: "Normal Change", min: 0, max: null, steps: [R("noc_manager"), OWN] },
-  { module: "network_change", subtype: "major", name: "Major Change", min: 0, max: null, steps: [R("noc_manager"), R("it_manager"), OWN] },
-  { module: "network_change", subtype: "emergency", name: "Emergency Change (post-review wajib)", min: 0, max: null, steps: [R("noc_manager")] },
+  { module: "network_change", subtype: "standard", name: "Standard Change", min: 0, max: null, steps: [R("noc")] },
+  { module: "network_change", subtype: "normal", name: "Normal Change", min: 0, max: null, steps: [R("noc"), OWN] },
+  { module: "network_change", subtype: "major", name: "Major Change", min: 0, max: null, steps: [R("noc"), R("it_manager"), OWN] },
+  { module: "network_change", subtype: "emergency", name: "Emergency Change (post-review wajib)", min: 0, max: null, steps: [R("noc")] },
   { module: "deployment", subtype: "staging", name: "Deployment Staging", min: 0, max: null, steps: [R("it_manager")] },
   { module: "deployment", subtype: "production_minor", name: "Production Minor", min: 0, max: null, steps: [R("it_manager")] },
   { module: "deployment", subtype: "production_major", name: "Production Major", min: 0, max: null, steps: [R("it_manager"), OWN] },
@@ -278,7 +280,7 @@ const APPROVAL_RULES: {
   { module: "quotation_discount", subtype: null, name: "Diskon Quotation > Rp500.000", min: 500_001, max: null, steps: [R("sales_manager"), OWN] },
   { module: "stock_opname", subtype: null, name: "Adjustment Stock Opname", min: 0, max: null, steps: [SUP, OWN] },
   { module: "device_writeoff", subtype: null, name: "Write-off Perangkat (Lost/Damaged)", min: 0, max: null, steps: [SUP, OWN] },
-  { module: "network_maintenance", subtype: null, name: "Network Maintenance", min: 0, max: null, steps: [R("noc_manager")] },
+  { module: "network_maintenance", subtype: null, name: "Network Maintenance", min: 0, max: null, steps: [R("noc")] },
   // Phase 6: akses production wajib approval IT Manager (rule 28).
   { module: "access_request", subtype: "production", name: "Akses Production", min: 0, max: null, steps: [R("it_manager")] },
   // Phase 14: berjenjang — atasan (supervisor divisi pengaju) lalu HRD.
@@ -303,6 +305,42 @@ async function main() {
       update: { module: p.module, action: p.action, description: p.description },
       create: p,
     });
+  }
+
+  // ── Fase 22: migrasi peran NOC lama → peran tunggal `noc` ──────
+  // Dijalankan setelah peran di-seed dan sebelum permission dipetakan, agar
+  // database yang sudah berisi user tidak kehilangan aksesnya saat upgrade.
+  const legacyNocRoles = await db.role.findMany({
+    where: { code: { in: ["noc_manager", "noc_engineer"] } },
+    select: { id: true, code: true },
+  });
+  if (legacyNocRoles.length) {
+    console.log("Migrasi peran NOC lama → peran tunggal `noc`...");
+    const unified = await db.role.findUnique({ where: { code: "noc" } });
+    if (unified) {
+      const legacyIds = legacyNocRoles.map((r) => r.id);
+      const holders = await db.userRole.findMany({
+        where: { roleId: { in: legacyIds } },
+        select: { userId: true },
+      });
+      for (const { userId } of holders) {
+        await db.userRole.upsert({
+          where: { userId_roleId: { userId, roleId: unified.id } },
+          update: {},
+          create: { userId, roleId: unified.id },
+        });
+      }
+      await db.userRole.deleteMany({ where: { roleId: { in: legacyIds } } });
+      await db.rolePermission.deleteMany({ where: { roleId: { in: legacyIds } } });
+      // Step approval yang masih menunjuk peran lama dialihkan, bukan dihapus —
+      // request yang sedang berjalan tidak boleh kehilangan approvernya.
+      await db.approvalRuleStep.updateMany({
+        where: { roleId: { in: legacyIds } },
+        data: { roleId: unified.id },
+      });
+      await db.role.deleteMany({ where: { id: { in: legacyIds } } });
+      console.log(`  ${holders.length} penugasan user dialihkan ke peran \`noc\`.`);
+    }
   }
 
   console.log("Mapping role permissions...");

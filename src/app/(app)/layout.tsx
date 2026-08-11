@@ -147,7 +147,8 @@ export default async function AppLayout({
         { href: "/noc/devices", label: "Perangkat Jaringan" },
         { href: "/noc/links", label: "Links" },
         { href: "/noc/ipam", label: "IPAM" },
-        { href: "/noc/ftth", label: "FTTH (OLT/ODP)" },
+        { href: "/noc/map", label: "Peta Jaringan" },
+      { href: "/noc/ftth", label: "FTTH (OLT/ODP)" },
         { href: "/noc/access-jobs", label: "Antrian Router" },
       ],
     });
