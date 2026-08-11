@@ -493,17 +493,6 @@ export const INSPECTION_CHECKLIST = [
   ["accessories", "Adaptor & aksesori lengkap"],
 ] as const;
 
-/// Status perangkat yang TIDAK BOLEH dialokasikan ke work order (PRD §13.9).
-export const DEVICE_STATUSES_UNAVAILABLE = [
-  "RECOVERY_PENDING",
-  "RETURN_IN_TRANSIT",
-  "QUARANTINED",
-  "RMA",
-  "DAMAGED",
-  "LOST",
-  "SCRAPPED",
-  "UNDER_INSPECTION",
-] as const;
 
 export const ITEM_UNITS = ["pcs", "meter", "roll", "box", "set"] as const;
 

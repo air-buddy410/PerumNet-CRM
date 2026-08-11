@@ -65,7 +65,7 @@ export const TASKS: TaskDefinition[] = [
     code: "recovery.sla",
     name: "Pantau SLA penarikan perangkat",
     description:
-      "Menandai penarikan yang melewati batas SLA dan memberi tahu pemegang izin eskalasi.",
+      "Memperingatkan H-1 ke teknisi/koordinator dan memberi tahu pemegang izin eskalasi saat batas SLA terlewat.",
     defaultIntervalSec: 3600,
     enabledByDefault: true,
     run: async () => {

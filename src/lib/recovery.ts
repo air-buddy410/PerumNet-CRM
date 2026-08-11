@@ -80,7 +80,28 @@ export function isOverdue(
   recovery: { status: string; slaDueAt: Date | null },
   now: Date
 ): boolean {
-  if (!recovery.slaDueAt) return false;
-  if (["COMPLETED", "CLOSED_UNRECOVERED"].includes(recovery.status)) return false;
-  return recovery.slaDueAt <= now;
+  return slaPhase(recovery, now) === "BREACHED";
+}
+
+// ── Fase SLA penarikan (PRD §14) ────────────────────────────────
+// PRD menuntut peringatan H-1 DAN peringatan saat batas terlewat. Keduanya
+// dibedakan karena penerimanya berbeda: H-1 masih urusan teknisi dan
+// koordinator supaya sempat dikejar; yang sudah lewat baru urusan pemegang
+// izin eskalasi.
+
+/** Berapa lama sebelum batas SLA peringatan pertama dibunyikan. */
+export const SLA_WARNING_HOURS = 24;
+
+export type SlaPhase = "OK" | "DUE_SOON" | "BREACHED";
+
+export function slaPhase(
+  recovery: { status: string; slaDueAt: Date | null },
+  now: Date,
+  warningHours: number = SLA_WARNING_HOURS
+): SlaPhase {
+  if (!recovery.slaDueAt) return "OK";
+  if (["COMPLETED", "CLOSED_UNRECOVERED"].includes(recovery.status)) return "OK";
+  if (recovery.slaDueAt <= now) return "BREACHED";
+  const warnAt = new Date(recovery.slaDueAt.getTime() - warningHours * 60 * 60 * 1000);
+  return now >= warnAt ? "DUE_SOON" : "OK";
 }

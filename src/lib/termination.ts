@@ -43,7 +43,14 @@ const ACTIVE_RECOVERY_STATUSES = [
 
 export interface TerminationSnapshot {
   takenAt: string;
-  customer: { number: string; name: string; phone: string; address: string };
+  customer: {
+    number: string;
+    name: string;
+    phone: string;
+    address: string;
+    latitude: number | null;
+    longitude: number | null;
+  };
   service: {
     serviceNumber: string;
     package: string;
@@ -57,16 +64,23 @@ export interface TerminationSnapshot {
     vlan: string | null;
     odp: string | null;
     odpPort: number | null;
+    router: string | null;
   };
   devices: {
     serialNumber: string;
     macAddress: string | null;
     itemName: string;
+    itemCategory: string | null;
     ownership: string;
     status: string;
+    condition: string;
     included: boolean;
     excludedReason: string | null;
   }[];
+  /// Gudang penerima & SLA yang berlaku ikut dipotret (§11.2): kebijakan SLA
+  /// bisa diubah kapan saja, sedangkan berita acara harus tetap menunjukkan
+  /// aturan yang berlaku saat pengajuan.
+  receiving: { warehouse: string | null; slaDays: number | null; minAttempts: number | null };
   outstandingInvoices: {
     number: string;
     total: string;
@@ -85,7 +99,8 @@ export interface TerminationSnapshot {
  * kelak bisa dibuktikan bahwa pengecualian itu memang disengaja.
  */
 export async function buildTerminationSnapshot(
-  subscriptionId: string
+  subscriptionId: string,
+  receiving?: { warehouseName: string; slaDays: number; minAttempts: number }
 ): Promise<TerminationSnapshot | null> {
   const sub = await db.subscription.findUnique({
     where: { id: subscriptionId },
@@ -93,7 +108,8 @@ export async function buildTerminationSnapshot(
       customer: true,
       package: true,
       odpPort: { include: { odp: true } },
-      devices: { include: { item: true } },
+      devices: { include: { item: { include: { category: true } } } },
+      router: { select: { hostname: true } },
       // Tagihan yang belum lunas ikut dipotret: §11.2 menuntut kondisi
       // finansial pelanggan terekam saat pengajuan, bukan dicari ulang nanti.
       invoices: {
@@ -118,6 +134,8 @@ export async function buildTerminationSnapshot(
       name: sub.customer.name,
       phone: sub.customer.phone,
       address: sub.customer.address,
+      latitude: sub.customer.latitude,
+      longitude: sub.customer.longitude,
     },
     service: {
       serviceNumber: sub.serviceNumber,
@@ -132,16 +150,24 @@ export async function buildTerminationSnapshot(
       vlan: sub.vlan,
       odp: sub.odpPort?.odp.code ?? null,
       odpPort: sub.odpPort?.portNumber ?? null,
+      router: sub.router?.hostname ?? null,
     },
     devices: sub.devices.map((d) => ({
       serialNumber: d.serialNumber,
       macAddress: d.macAddress,
       itemName: d.item.name,
+      itemCategory: d.item.category?.name ?? null,
       ownership: d.ownership,
       status: d.status,
+      condition: d.condition,
       included: isRecoverable(d),
       excludedReason: recoveryExclusionReason(d),
     })),
+    receiving: {
+      warehouse: receiving?.warehouseName ?? null,
+      slaDays: receiving?.slaDays ?? null,
+      minAttempts: receiving?.minAttempts ?? null,
+    },
     outstandingInvoices: sub.invoices.map((i) => ({
       number: i.invoiceNumber,
       total: i.totalAmount.toString(),
@@ -186,11 +212,12 @@ export async function createTermination(
 
   const warehouse = await db.warehouse.findUnique({
     where: { id: data.warehouseToId },
-    select: { id: true, isActive: true },
+    select: { id: true, name: true, isActive: true },
   });
   if (!warehouse?.isActive) {
     return { ok: false, error: "Gudang penerima tidak valid atau nonaktif." };
   }
+  const slaSetting = await db.deviceRecoverySetting.findFirst({ where: { isActive: true } });
 
   const active = await db.customerTermination.findFirst({
     where: {
@@ -206,7 +233,11 @@ export async function createTermination(
     };
   }
 
-  const snapshot = await buildTerminationSnapshot(data.subscriptionId);
+  const snapshot = await buildTerminationSnapshot(data.subscriptionId, {
+    warehouseName: warehouse.name,
+    slaDays: slaSetting?.slaDays ?? 7,
+    minAttempts: slaSetting?.minAttempts ?? 3,
+  });
   if (!snapshot) return { ok: false, error: "Gagal menyusun snapshot langganan." };
 
   const termination = await db.$transaction(async (tx) => {

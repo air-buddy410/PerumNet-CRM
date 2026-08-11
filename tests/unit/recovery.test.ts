@@ -7,6 +7,7 @@ import {
   notReturnedBlocker,
   canDeclareNotReturned,
   isOverdue,
+  slaPhase,
 } from "@/lib/recovery";
 
 describe("isRecoverable", () => {
@@ -154,6 +155,54 @@ describe("isOverdue", () => {
     // sudah tuntas dan petugas berhenti mempercayainya.
     for (const status of ["COMPLETED", "CLOSED_UNRECOVERED"]) {
       assert.equal(isOverdue({ status, slaDueAt: past }, now), false, status);
+    }
+  });
+});
+
+describe("slaPhase — H-1 vs sudah terlewat", () => {
+  const due = new Date("2026-08-11T12:00:00Z");
+  const dri = { status: "ASSIGNED", slaDueAt: due };
+
+  test("jauh sebelum batas → aman", () => {
+    assert.equal(slaPhase(dri, new Date("2026-08-09T12:00:00Z")), "OK");
+  });
+
+  test("tepat 24 jam sebelum batas → sudah masuk peringatan", () => {
+    assert.equal(slaPhase(dri, new Date("2026-08-10T12:00:00Z")), "DUE_SOON");
+  });
+
+  test("sedetik sebelum ambang peringatan → masih aman", () => {
+    assert.equal(slaPhase(dri, new Date("2026-08-10T11:59:59Z")), "OK");
+  });
+
+  test("sudah lewat batas → BREACHED, bukan DUE_SOON", () => {
+    assert.equal(slaPhase(dri, new Date("2026-08-11T12:00:01Z")), "BREACHED");
+  });
+
+  test("tepat pada batas → BREACHED", () => {
+    // Tidak boleh ada titik waktu yang tidak masuk fase mana pun.
+    assert.equal(slaPhase(dri, due), "BREACHED");
+  });
+
+  test("yang sudah selesai tidak pernah berbunyi", () => {
+    for (const status of ["COMPLETED", "CLOSED_UNRECOVERED"]) {
+      assert.equal(slaPhase({ status, slaDueAt: due }, new Date("2026-08-20T00:00:00Z")), "OK", status);
+    }
+  });
+
+  test("tanpa batas SLA → aman, bukan dianggap terlambat", () => {
+    assert.equal(slaPhase({ status: "ASSIGNED", slaDueAt: null }, due), "OK");
+  });
+
+  test("ambang peringatan bisa disetel", () => {
+    assert.equal(slaPhase(dri, new Date("2026-08-09T13:00:00Z"), 48), "DUE_SOON");
+    assert.equal(slaPhase(dri, new Date("2026-08-09T13:00:00Z"), 12), "OK");
+  });
+
+  test("isOverdue tetap sejalan dengan slaPhase", () => {
+    for (const at of ["2026-08-09T12:00:00Z", "2026-08-10T18:00:00Z", "2026-08-12T00:00:00Z"]) {
+      const now = new Date(at);
+      assert.equal(isOverdue(dri, now), slaPhase(dri, now) === "BREACHED", at);
     }
   });
 });
