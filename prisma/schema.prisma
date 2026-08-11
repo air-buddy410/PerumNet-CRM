@@ -28,6 +28,11 @@ model User {
   divisionId         String?
   isActive           Boolean  @default(true)
   mustChangePassword Boolean  @default(false)
+  /// Fase 34 — penanda generasi sesi. Dinaikkan saat password diganti atau
+  /// akun dipulihkan paksa, sehingga token JWT lama otomatis ditolak.
+  /// Tanpa ini, ganti password TIDAK mengusir sesi di perangkat lain — dan
+  /// justru itu alasan orang mengganti password saat akunnya disusupi.
+  sessionEpoch       Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

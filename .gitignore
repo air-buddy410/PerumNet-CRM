@@ -30,3 +30,6 @@ prisma/*.db-journal
 
 # uploads (bukti/lampiran — di luar git)
 /uploads/
+
+# direktori build terpisah antar-proses (NEXT_DIST_DIR)
+.next-*
