@@ -40,6 +40,24 @@ export interface TaskDefinition {
 /** Batas sewa: pekerjaan yang terkunci lebih lama dari ini dianggap terbengkalai. */
 export const LEASE_TIMEOUT_MS = 10 * 60 * 1000;
 
+/**
+ * Menegakkan satu aturan: kegagalan TOTAL adalah kegagalan tugas.
+ *
+ * Sebagian gagal tetap dianggap berhasil — itu memang sebagian, dan
+ * keterangannya sudah menyebutkan yang gagal. Tetapi bila tidak ada satu pun
+ * yang berhasil padahal ada pekerjaan, melaporkannya SUCCESS membuat kegagalan
+ * lolos dari perhatian justru saat paling perlu dilihat.
+ *
+ * Cacat ini baru ketahuan saat worker benar-benar dijalankan, bukan dari tes.
+ */
+export function assertNotTotalFailure(
+  succeeded: number,
+  attempted: number,
+  summary: string
+): void {
+  if (attempted > 0 && succeeded === 0) throw new Error(summary);
+}
+
 export const TASKS: TaskDefinition[] = [
   {
     code: "probe.run",
@@ -67,11 +85,11 @@ export const TASKS: TaskDefinition[] = [
       const results = await pollAllRouters();
       const ok = results.filter((r) => r.ok).length;
       const failed = results.filter((r) => !r.ok);
-      return {
-        detail:
-          `${ok}/${results.length} router berhasil` +
-          (failed.length ? ` · gagal: ${failed.map((f) => f.error).join("; ").slice(0, 200)}` : ""),
-      };
+      const summary =
+        `${ok}/${results.length} router berhasil` +
+        (failed.length ? ` · gagal: ${failed.map((f) => f.error).join("; ").slice(0, 200)}` : "");
+      assertNotTotalFailure(ok, results.length, summary);
+      return { detail: summary };
     },
   },
   {
@@ -83,7 +101,11 @@ export const TASKS: TaskDefinition[] = [
     run: async () => {
       const result = await runOutboundQueue(null);
       if (!result.ok) throw new Error(result.error);
-      return { detail: `${result.data?.sent ?? 0} terkirim · ${result.data?.failed ?? 0} gagal` };
+      const sent = result.data?.sent ?? 0;
+      const failed = result.data?.failed ?? 0;
+      const summary = `${sent} terkirim · ${failed} gagal`;
+      assertNotTotalFailure(sent, sent + failed, summary);
+      return { detail: summary };
     },
   },
   {
@@ -95,7 +117,11 @@ export const TASKS: TaskDefinition[] = [
     run: async () => {
       const result = await runQueuedJobs(null);
       if (!result.ok) throw new Error(result.error);
-      return { detail: `${result.data?.success ?? 0} sukses · ${result.data?.failed ?? 0} gagal` };
+      const success = result.data?.success ?? 0;
+      const failed = result.data?.failed ?? 0;
+      const summary = `${success} sukses · ${failed} gagal`;
+      assertNotTotalFailure(success, success + failed, summary);
+      return { detail: summary };
     },
   },
   {

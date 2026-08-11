@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isDue, isLeaseExpired, LEASE_TIMEOUT_MS, TASKS } from "@/lib/scheduler";
+import { isDue, isLeaseExpired, assertNotTotalFailure, LEASE_TIMEOUT_MS, TASKS } from "@/lib/scheduler";
 
 const now = new Date("2026-08-11T10:00:00Z");
 
@@ -68,5 +68,26 @@ describe("registry tugas", () => {
       TASKS.some((t) => t.code.includes("invoice")),
       false
     );
+  });
+});
+
+describe("assertNotTotalFailure", () => {
+  test("tidak ada pekerjaan → bukan kegagalan", () => {
+    assert.doesNotThrow(() => assertNotTotalFailure(0, 0, "0/0"));
+  });
+
+  test("semua berhasil → lolos", () => {
+    assert.doesNotThrow(() => assertNotTotalFailure(3, 3, "3/3"));
+  });
+
+  test("sebagian gagal tetap dianggap berhasil", () => {
+    // Keterangannya sudah menyebut yang gagal; ini memang sebagian.
+    assert.doesNotThrow(() => assertNotTotalFailure(1, 3, "1/3"));
+  });
+
+  test("KEGAGALAN TOTAL dilempar sebagai kegagalan tugas", () => {
+    // Cacat asli: 0/1 router berhasil tetapi tugas dilaporkan SUCCESS,
+    // sehingga kegagalan lolos dari perhatian.
+    assert.throws(() => assertNotTotalFailure(0, 1, "0/1 router berhasil"), /0\/1/);
   });
 });
