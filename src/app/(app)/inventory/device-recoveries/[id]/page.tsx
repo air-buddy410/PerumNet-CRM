@@ -13,6 +13,16 @@ import {
 } from "@/lib/constants";
 import { notReturnedBlocker } from "@/lib/recovery";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { RecoveryInspectionForm } from "@/components/recovery-inspection-form";
+import { RecoveryAttemptForm } from "@/components/recovery-attempt-form";
+import { RecoveryEvidencePanel, type RecoveryEvidenceItem } from "@/components/recovery-evidence-panel";
+import { RecoveryPickupForm } from "@/components/recovery-pickup-form";
+import {
+  recoveryEvidence,
+  recoverySignatures,
+  loadRecoveryDetail,
+  RECOVERY_SIGNATURE_ROLES,
+} from "@/lib/device-recovery";
 import {
   assignRecoveryAction,
   recordAttemptAction,
@@ -21,6 +31,8 @@ import {
   receiveDevicesAction,
   inspectDeviceAction,
   markNotReturnedAction,
+  attachEvidenceAction,
+  signPickupAction,
 } from "../actions";
 
 export const metadata = { title: "Detail Penarikan" };
@@ -36,28 +48,11 @@ export default async function RecoveryDetailPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const dri = await db.deviceRecoveryIssue.findUnique({
-    where: { id },
-    include: {
-      termination: {
-        include: {
-          customer: true,
-          subscription: { select: { id: true, serviceNumber: true } },
-        },
-      },
-      warehouseTo: true,
-      assignee: { select: { name: true } },
-      workOrder: { select: { id: true, woNumber: true, status: true } },
-      items: {
-        include: {
-          device: { include: { item: { select: { name: true } } } },
-          inspection: { include: { inspector: { select: { name: true } } } },
-        },
-        orderBy: { snapshotSerial: "asc" },
-      },
-      attempts: { include: { byUser: { select: { name: true } } }, orderBy: { attemptAt: "desc" } },
-    },
-  });
+  // Pembatasan akses hidup di service layer, bukan di halaman ini: teknisi
+  // hanya boleh membuka penarikan yang ditugaskan kepadanya (§9.2 FR-PICK-002).
+  // Mengembalikan null diperlakukan sebagai tidak ditemukan — membedakan
+  // "tidak berhak" dari "tidak ada" memberi tahu penebak bahwa id itu nyata.
+  const dri = await loadRecoveryDetail(user, id);
   if (!dri) notFound();
 
   const setting = await db.deviceRecoverySetting.findFirst({ where: { isActive: true } });
@@ -66,6 +61,20 @@ export default async function RecoveryDetailPage({
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+
+  const [attemptEvidenceRows, itemEvidenceRows, signatures] = await Promise.all([
+    Promise.all(dri.attempts.map(async (attempt) => [attempt.id, await recoveryEvidence("ATTEMPT", attempt.id)] as const)),
+    Promise.all(dri.items.map(async (item) => [
+      item.id,
+      {
+        pickup: await recoveryEvidence("PICKUP", item.id),
+        inspection: await recoveryEvidence("INSPECTION", item.id),
+      },
+    ] as const)),
+    recoverySignatures(dri.id),
+  ]);
+  const attemptEvidence = new Map(attemptEvidenceRows);
+  const itemEvidence = new Map(itemEvidenceRows);
 
   const can = (p: string) => user.permissions.has(p);
   const isClosed = ["COMPLETED", "CLOSED_UNRECOVERED"].includes(dri.status);
@@ -178,38 +187,35 @@ export default async function RecoveryDetailPage({
                         <summary className="cursor-pointer text-sm font-medium">
                           Inspeksi perangkat ini
                         </summary>
-                        <form action={inspectDeviceAction} className="mt-3 space-y-3">
-                          <input type="hidden" name="recoveryId" value={dri.id} />
-                          <input type="hidden" name="itemId" value={it.id} />
-                          <div className="grid gap-1 sm:grid-cols-2">
-                            {INSPECTION_CHECKLIST.map(([key, label]) => (
-                              <label key={key} className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" name={`chk_${key}`} className="rounded" />
-                                {label}
-                              </label>
-                            ))}
-                          </div>
-                          <select name="decision" className="input" defaultValue="LAYAK_DIGUNAKAN">
-                            {INSPECTION_DECISIONS.map((d) => (
-                              <option key={d} value={d}>{statusLabel(d)}</option>
-                            ))}
-                          </select>
-                          <textarea
-                            name="note"
-                            rows={2}
-                            className="input"
-                            placeholder="Catatan inspeksi (wajib)"
-                            required
-                          />
-                          <p className="text-xs text-slate-500">
-                            Hanya keputusan <strong>Layak Digunakan</strong> yang mengembalikan
-                            barang ke stok tersedia, dan selalu sebagai barang SECOND.
-                          </p>
-                          <button type="submit" className="btn-primary w-full justify-center">
-                            Simpan Keputusan
-                          </button>
-                        </form>
+                        <RecoveryInspectionForm
+                          action={inspectDeviceAction}
+                          recoveryId={dri.id}
+                          itemId={it.id}
+                          checklist={INSPECTION_CHECKLIST}
+                          decisions={INSPECTION_DECISIONS}
+                          statusLabel={statusLabel}
+                        />
                       </details>
+                    )}
+
+                    <RecoveryEvidencePanel
+                      action={attachEvidenceAction}
+                      recoveryId={dri.id}
+                      kind="PICKUP"
+                      entityId={it.id}
+                      title="Bukti penarikan"
+                      items={serializeEvidence(itemEvidence.get(it.id)?.pickup ?? [])}
+                      canUpload={can(PERMISSIONS.RECOVERY_PICKUP)}
+                    />
+                    {can(PERMISSIONS.RECOVERY_INSPECT) && (
+                      <RecoveryEvidencePanel
+                        action={attachEvidenceAction}
+                        recoveryId={dri.id}
+                        kind="INSPECTION"
+                        entityId={it.id}
+                        title="Bukti inspeksi"
+                        items={serializeEvidence(itemEvidence.get(it.id)?.inspection ?? [])}
+                      />
                     )}
 
                     {can(PERMISSIONS.RECOVERY_ESCALATE) && it.status === "RECOVERY_PENDING" && (
@@ -260,6 +266,15 @@ export default async function RecoveryDetailPage({
                     <p className="mt-0.5 text-xs text-slate-500">
                       {a.note || "-"} · oleh {a.byUser.name}
                     </p>
+                    <RecoveryEvidencePanel
+                      action={attachEvidenceAction}
+                      recoveryId={dri.id}
+                      kind="ATTEMPT"
+                      entityId={a.id}
+                      title="Bukti kunjungan"
+                      items={serializeEvidence(attemptEvidence.get(a.id) ?? [])}
+                      canUpload={can(PERMISSIONS.RECOVERY_PICKUP)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -268,6 +283,33 @@ export default async function RecoveryDetailPage({
         </div>
 
         <div className="space-y-6">
+          <div className="card p-5">
+            <h2 className="mb-1 text-sm font-medium">Tanda tangan serah-terima</h2>
+            <p className="mb-3 text-xs text-slate-500">Nama penanda tangan dicatat melalui kontrak dokumen yang tersedia.</p>
+            {signatures.length > 0 && (
+              <ul className="mb-4 space-y-2">
+                {signatures.map((signature) => (
+                  <li key={signature.id} className="rounded-lg bg-slate-50 p-3 text-xs">
+                    <strong>{signature.role === "CUSTOMER" ? "Pelanggan" : "Teknisi"}: {signature.signerName}</strong>
+                    <span className="block text-slate-400">{formatDateTime(signature.signedAt)}</span>
+                    {signature.attachment && <a href={`/api/files/${signature.attachment.id}`} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">Buka lampiran tanda tangan</a>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {can(PERMISSIONS.RECOVERY_PICKUP) ? (
+              <form action={signPickupAction} className="space-y-3">
+                <input type="hidden" name="recoveryId" value={dri.id} />
+                <select name="role" className="input" defaultValue="CUSTOMER">
+                  {RECOVERY_SIGNATURE_ROLES.map((role) => <option key={role} value={role}>{role === "CUSTOMER" ? "Pelanggan" : "Teknisi"}</option>)}
+                </select>
+                <input name="signerName" className="input" placeholder="Nama penanda tangan" required />
+                <p className="text-xs text-slate-500">Upload gambar tanda tangan belum tersedia pada kontrak saat ini.</p>
+                <button type="submit" className="btn-secondary w-full justify-center">Simpan tanda tangan</button>
+              </form>
+            ) : signatures.length === 0 ? <p className="text-xs text-slate-500">Belum ada tanda tangan.</p> : null}
+          </div>
+
           {can(PERMISSIONS.RECOVERY_ASSIGN) && ["OPEN", "ASSIGNED"].includes(dri.status) && (
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Tugaskan Teknisi</h2>
@@ -290,55 +332,14 @@ export default async function RecoveryDetailPage({
           {can(PERMISSIONS.RECOVERY_PICKUP) && !isClosed && (
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Catat Kunjungan</h2>
-              <form action={recordAttemptAction} className="space-y-3">
-                <input type="hidden" name="recoveryId" value={dri.id} />
-                <select name="result" className="input" defaultValue="TIDAK_DI_TEMPAT">
-                  {RECOVERY_ATTEMPT_RESULTS.map(([code, label]) => (
-                    <option key={code} value={code}>{label}</option>
-                  ))}
-                </select>
-                <textarea name="note" rows={2} className="input" placeholder="Keterangan" />
-                <button type="submit" className="btn-secondary w-full justify-center">
-                  Simpan Kunjungan
-                </button>
-              </form>
+              <RecoveryAttemptForm action={recordAttemptAction} recoveryId={dri.id} results={RECOVERY_ATTEMPT_RESULTS} />
             </div>
           )}
 
           {can(PERMISSIONS.RECOVERY_PICKUP) && pending.length > 0 && (
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Tarik Perangkat</h2>
-              <form action={pickupDevicesAction} className="space-y-4">
-                <input type="hidden" name="recoveryId" value={dri.id} />
-                {pending.map((it) => (
-                  <div key={it.id} className="rounded-lg border border-slate-200 p-3">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" name="pick" value={it.id} className="rounded" />
-                      {it.snapshotSerial}
-                    </label>
-                    <input
-                      name={`serial_${it.id}`}
-                      className="input mt-2 text-xs"
-                      defaultValue={it.snapshotSerial}
-                      placeholder="Serial yang ditemukan"
-                    />
-                    <input
-                      name={`mac_${it.id}`}
-                      className="input mt-2 text-xs"
-                      defaultValue={it.snapshotMac ?? ""}
-                      placeholder="MAC (opsional)"
-                    />
-                    <input
-                      name={`note_${it.id}`}
-                      className="input mt-2 text-xs"
-                      placeholder="Keterangan bila serial berbeda"
-                    />
-                  </div>
-                ))}
-                <button type="submit" className="btn-primary w-full justify-center">
-                  Simpan Penarikan
-                </button>
-              </form>
+              <RecoveryPickupForm action={pickupDevicesAction} recoveryId={dri.id} items={pending} />
             </div>
           )}
 
@@ -392,4 +393,13 @@ export default async function RecoveryDetailPage({
       </div>
     </div>
   );
+}
+
+function serializeEvidence(items: Array<{ id: string; filename: string; mimeType: string; createdAt: Date }>): RecoveryEvidenceItem[] {
+  return items.map((item) => ({
+    id: item.id,
+    filename: item.filename,
+    mimeType: item.mimeType,
+    createdAt: item.createdAt.toISOString(),
+  }));
 }
