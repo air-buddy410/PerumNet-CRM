@@ -50,6 +50,8 @@ export default async function AppLayout({
     crmItems.push({ href: "/crm/customers", label: "Customers" });
   if (can(PERMISSIONS.SUBSCRIPTIONS_VIEW))
     crmItems.push({ href: "/crm/subscriptions", label: "Subscriptions" });
+  if (can(PERMISSIONS.TERMINATION_VIEW))
+    crmItems.push({ href: "/crm/terminations", label: "Terminasi" });
   if (crmItems.length) groups.push({ title: "CRM", items: crmItems });
 
   const inventoryItems = [];
@@ -61,6 +63,7 @@ export default async function AppLayout({
       { href: "/inventory/requests", label: "Permintaan Material" },
       { href: "/inventory/returns", label: "Pengembalian" },
       { href: "/inventory/devices", label: "Perangkat" },
+      { href: "/inventory/device-recoveries", label: "Penarikan Perangkat" },
       { href: "/inventory/items", label: "Item Master" },
       { href: "/inventory/warehouses", label: "Gudang" },
       { href: "/inventory/opname", label: "Stock Opname" }

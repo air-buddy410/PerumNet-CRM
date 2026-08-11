@@ -130,6 +130,12 @@ model User {
   materialDecided  MaterialRequest[] @relation("MrqDecider")
   slotLedgerEntries SlotLedger[] @relation("SlotLedgerCreator")
   warehouseScopes UserWarehouseScope[] @relation("WarehouseScopeUser")
+  terminationsCreated CustomerTermination[] @relation("TerminationCreator")
+  terminationsDecided CustomerTermination[] @relation("TerminationDecider")
+  recoveriesAssigned  DeviceRecoveryIssue[] @relation("RecoveryAssignee")
+  recoveryItemsReceived DeviceRecoveryItem[] @relation("RecoveryReceiver")
+  recoveryAttempts    DeviceRecoveryAttempt[] @relation("RecoveryAttemptUser")
+  deviceInspections   DeviceInspection[] @relation("DeviceInspector")
 }
 
 model Division {
@@ -544,6 +550,7 @@ model Customer {
   gatewayTxs    PaymentGatewayTx[]
   customerTickets CustomerTicket[]
   outboundMessages OutboundMessage[]
+  terminations CustomerTermination[]
 }
 
 model Subscription {
@@ -588,6 +595,7 @@ model Subscription {
 
   @@index([status])
   pppoeSessions PppoeSession[]
+  terminations CustomerTermination[]
 }
 
 // Bukti/lampiran generik (foto survey, nota, dsb.)
@@ -637,6 +645,8 @@ model Warehouse {
   racks      Rack[]
   stockSlots StockSlot[]
   userScopes UserWarehouseScope[] @relation("WarehouseScope")
+  terminationsIn CustomerTermination[] @relation("TerminationWarehouse")
+  recoveriesIn   DeviceRecoveryIssue[] @relation("RecoveryWarehouse")
 }
 
 model Item {
@@ -768,7 +778,13 @@ model SerializedDevice {
   serialNumber    String    @unique
   macAddress      String?
   itemId          String
-  condition       String    @default("GOOD") // GOOD | DAMAGED
+  /// Fase 28 (PRD terminasi §13.1) — COMPANY = milik PERUMNET dan WAJIB ditarik
+  /// saat pelanggan terminasi; CUSTOMER = milik pelanggan dan TIDAK BOLEH masuk
+  /// recovery. Default COMPANY mengikuti saran konservatif PRD §20.2; perangkat
+  /// milik pelanggan harus dikoreksi lewat jalur ber-audit sebelum modul
+  /// terminasi dipakai produksi.
+  ownership       String    @default("COMPANY") // COMPANY | CUSTOMER
+  condition       String    @default("GOOD") // GOOD | SECOND | DAMAGED
   status          String    @default("AVAILABLE") // AVAILABLE|IN_CUSTODY|INSTALLED|UNDER_INSPECTION|DAMAGED|LOST|SCRAPPED
   warehouseId     String? // terisi saat berada di gudang
   custodianId     String? // terisi saat dibawa teknisi
@@ -791,6 +807,7 @@ model SerializedDevice {
   @@index([status])
   @@index([custodianId])
   returnRequestLines ReturnRequestLine[]
+  recoveryItems DeviceRecoveryItem[]
 }
 
 // Riwayat perangkat — append-only.
@@ -847,6 +864,7 @@ model WorkOrder {
   @@index([status])
   @@index([technicianId])
   materialRequests MaterialRequest[]
+  deviceRecovery DeviceRecoveryIssue?
 }
 
 // Pemakaian material bulk pada WO — mengurangi custody teknisi.
@@ -2801,4 +2819,152 @@ model ScheduledTaskRun {
   task ScheduledTask @relation(fields: [taskId], references: [id])
 
   @@index([taskId, startedAt])
+}
+
+/// Fase 28 (PRD terminasi §11) — ambang SLA dan minimal percobaan sebelum
+/// perangkat boleh dinyatakan tidak kembali. Disimpan sebagai data, bukan
+/// konstanta di kode, karena §22 Q-003 masih terbuka soal SLA per wilayah.
+model DeviceRecoverySetting {
+  id          String   @id @default(cuid())
+  name        String   @default("Default")
+  slaDays     Int      @default(7)
+  minAttempts Int      @default(3)
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+}
+
+// ═══════ Fase 29–32: Terminasi Pelanggan & Recovery Perangkat ═══════
+// Sumber: PRD-terminasi-pelanggan-dan-recovery-perangkat.md
+//
+// Menempel pada mesin yang sudah ada, bukan membangun ulang:
+//  - penomoran lewat DocumentSequence (Fase 16), bukan count()+1
+//  - persetujuan lewat ApprovalRequest (Fase 1) beserta SoD-nya
+//  - penarikan lewat WorkOrder tipe DEVICE_RETRIEVAL yang SUDAH ada
+//  - bukti & tanda tangan lewat Attachment + DocumentSignature (Fase 18)
+//  - seluruh mutasi stok lewat StockTransaction yang diposting (Fase 3/16)
+
+model CustomerTermination {
+  id                String    @id @default(cuid())
+  terminationNumber String    @unique // TRM-YYYYMM-####
+  customerId        String
+  subscriptionId    String
+  reason            String
+  reasonCategory    String    @default("CUSTOMER_REQUEST") // CUSTOMER_REQUEST|NON_PAYMENT|RELOCATION|FRAUD|OTHER
+  effectiveDate     DateTime
+  warehouseToId     String // gudang penerima hasil penarikan
+  status            String    @default("DRAFT") // DRAFT|SUBMITTED|APPROVED|EFFECTIVE|REJECTED|CANCELLED
+  /// Snapshot §11.2 — potret pelanggan, layanan, jaringan, dan perangkat pada
+  /// saat pengajuan. Sengaja disimpan utuh: master data boleh berubah, berita
+  /// acara tidak boleh ikut berubah setelah ditandatangani.
+  snapshot          Json?
+  approvalRequestId String?   @unique
+  decidedById       String?
+  decidedAt         DateTime?
+  decisionNote      String?
+  cancelReason      String?
+  effectiveAt       DateTime?
+  createdById       String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  customer     Customer             @relation(fields: [customerId], references: [id])
+  subscription Subscription         @relation(fields: [subscriptionId], references: [id])
+  warehouseTo  Warehouse            @relation("TerminationWarehouse", fields: [warehouseToId], references: [id])
+  createdBy    User                 @relation("TerminationCreator", fields: [createdById], references: [id])
+  decidedBy    User?                @relation("TerminationDecider", fields: [decidedById], references: [id])
+  recovery     DeviceRecoveryIssue?
+
+  @@index([status, effectiveDate])
+  @@index([customerId])
+}
+
+model DeviceRecoveryIssue {
+  id             String @id @default(cuid())
+  recoveryNumber String @unique // DRI-YYYYMM-####
+  terminationId  String @unique
+  workOrderId    String @unique
+  warehouseToId  String
+  status         String @default("OPEN") // OPEN|ASSIGNED|IN_PROGRESS|PARTIAL|RECOVERED|INSPECTION|COMPLETED|CLOSED_UNRECOVERED
+  assigneeId     String?
+  scheduledAt    DateTime?
+  slaDueAt       DateTime?
+  /// Gerbang §13.5 — port ODP hanya boleh dilepas setelah pemutusan fisik
+  /// dikonfirmasi. Tanpa ini, port bisa dijual ke pelanggan lain padahal
+  /// kabelnya masih tersambung.
+  physicalDisconnectedAt   DateTime?
+  physicalDisconnectedById String?
+  completedAt              DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  termination CustomerTermination     @relation(fields: [terminationId], references: [id])
+  workOrder   WorkOrder               @relation(fields: [workOrderId], references: [id])
+  warehouseTo Warehouse               @relation("RecoveryWarehouse", fields: [warehouseToId], references: [id])
+  assignee    User?                   @relation("RecoveryAssignee", fields: [assigneeId], references: [id])
+  items       DeviceRecoveryItem[]
+  attempts    DeviceRecoveryAttempt[]
+
+  @@index([status, slaDueAt])
+}
+
+model DeviceRecoveryItem {
+  id         String @id @default(cuid())
+  recoveryId String
+  deviceId   String
+  /// Snapshot saat pengajuan — pembanding untuk mendeteksi perangkat tertukar
+  /// di lapangan (§13.4). Tidak ikut berubah bila master data diperbarui.
+  snapshotSerial   String
+  snapshotMac      String?
+  snapshotItemName String
+  actualSerial     String?
+  actualMac        String?
+  mismatchNote     String? // wajib bila actual ≠ snapshot
+  status           String  @default("RECOVERY_PENDING") // RECOVERY_PENDING|PICKED_UP|RECEIVED|INSPECTED|NOT_RETURNED
+  finalDecision    String? // LAYAK_DIGUNAKAN|PERLU_PERBAIKAN|RUSAK|SCRAP|TIDAK_KEMBALI
+  pickedUpAt       DateTime?
+  receivedAt       DateTime?
+  receivedById     String?
+  notReturnedNote  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  recovery   DeviceRecoveryIssue @relation(fields: [recoveryId], references: [id])
+  device     SerializedDevice    @relation(fields: [deviceId], references: [id])
+  receivedBy User?               @relation("RecoveryReceiver", fields: [receivedById], references: [id])
+  inspection DeviceInspection?
+
+  @@unique([recoveryId, deviceId])
+  @@index([status])
+  @@index([deviceId])
+}
+
+model DeviceRecoveryAttempt {
+  id         String   @id @default(cuid())
+  recoveryId String
+  attemptAt  DateTime @default(now())
+  result     String // BERHASIL|TIDAK_DI_TEMPAT|DITOLAK|GAGAL_LAIN
+  note       String?
+  latitude   Float?
+  longitude  Float?
+  byUserId   String
+
+  recovery DeviceRecoveryIssue @relation(fields: [recoveryId], references: [id])
+  byUser   User                @relation("RecoveryAttemptUser", fields: [byUserId], references: [id])
+
+  @@index([recoveryId, attemptAt])
+}
+
+model DeviceInspection {
+  id          String   @id @default(cuid())
+  itemId      String   @unique // DeviceRecoveryItem
+  /// Checklist §13.7 — casing, boot, reset, LAN, WiFi, optical, aksesori.
+  /// Json supaya butir pemeriksaan bisa bertambah tanpa migrasi.
+  checklist   Json
+  decision    String // LAYAK_DIGUNAKAN|PERLU_PERBAIKAN|RUSAK|SCRAP
+  note        String
+  inspectorId String
+  inspectedAt DateTime @default(now())
+
+  item      DeviceRecoveryItem @relation(fields: [itemId], references: [id])
+  inspector User               @relation("DeviceInspector", fields: [inspectorId], references: [id])
 }

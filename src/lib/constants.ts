@@ -65,6 +65,18 @@ export const PERMISSIONS = {
   STOCK_REVERSE: "stock.reverse",
   STOCK_RECEIVE: "stock.receive", // menerima transfer antar gudang (Fase 17)
   SLOT_APPROVE: "slot.approve", // perpindahan alokasi di atas ambang (Fase 20)
+  // Fase 28 — terminasi pelanggan & recovery perangkat (PRD §12)
+  TERMINATION_CREATE: "termination.create",
+  TERMINATION_VIEW: "termination.view",
+  TERMINATION_APPROVE: "termination.approve",
+  TERMINATION_CANCEL: "termination.cancel",
+  RECOVERY_ASSIGN: "device_recovery.assign",
+  RECOVERY_PICKUP: "device_recovery.pickup",
+  RECOVERY_RECEIVE: "device_recovery.receive",
+  RECOVERY_INSPECT: "device_recovery.inspect",
+  RECOVERY_DISPOSE: "device_recovery.dispose",
+  RECOVERY_ESCALATE: "device_recovery.escalate",
+  DEVICE_OWNERSHIP_MANAGE: "devices.ownership", // koreksi kepemilikan, ber-audit
   DEVICES_WRITEOFF: "devices.writeoff", // ajukan & finalisasi lost/damaged
   CUSTODY_VIEW: "custody.view",
   WORK_ORDERS_VIEW: "work_orders.view",
@@ -387,6 +399,112 @@ export const TRACKING_TYPES = [
   ["BULK", "Bulk (kuantitas)"],
 ] as const;
 
+/// Fase 28 — kepemilikan perangkat. Hanya COMPANY yang boleh masuk recovery.
+export const DEVICE_OWNERSHIPS = [
+  ["COMPANY", "Milik PERUMNET"],
+  ["CUSTOMER", "Milik Pelanggan"],
+] as const;
+
+/// Kondisi perangkat. SECOND dipakai untuk perangkat hasil penarikan yang
+/// dinyatakan layak — PRD §13.8: hasil layak TIDAK PERNAH kembali jadi NEW.
+export const DEVICE_CONDITIONS = [
+  ["GOOD", "Baik"],
+  ["SECOND", "Layak pakai ulang"],
+  ["DAMAGED", "Rusak"],
+] as const;
+
+// ── Fase 29–32: terminasi & recovery ────────────────────────────
+
+export const TERMINATION_STATUSES = [
+  "DRAFT",
+  "SUBMITTED",
+  "APPROVED",
+  "EFFECTIVE",
+  "REJECTED",
+  "CANCELLED",
+] as const;
+
+/// Status terminasi yang sudah selesai — tidak boleh diubah lagi.
+export const TERMINATION_FINAL_STATUSES = ["EFFECTIVE", "REJECTED", "CANCELLED"] as const;
+
+export const TERMINATION_REASONS = [
+  ["CUSTOMER_REQUEST", "Permintaan pelanggan"],
+  ["NON_PAYMENT", "Tunggakan"],
+  ["RELOCATION", "Pindah alamat"],
+  ["FRAUD", "Pelanggaran / fraud"],
+  ["OTHER", "Lainnya"],
+] as const;
+
+export const RECOVERY_STATUSES = [
+  "OPEN",
+  "ASSIGNED",
+  "IN_PROGRESS",
+  "PARTIAL",
+  "RECOVERED",
+  "INSPECTION",
+  "COMPLETED",
+  "CLOSED_UNRECOVERED",
+] as const;
+
+export const RECOVERY_ITEM_STATUSES = [
+  "RECOVERY_PENDING",
+  "PICKED_UP",
+  "RECEIVED",
+  "INSPECTED",
+  "NOT_RETURNED",
+] as const;
+
+export const RECOVERY_ATTEMPT_RESULTS = [
+  ["BERHASIL", "Berhasil"],
+  ["TIDAK_DI_TEMPAT", "Pelanggan tidak di tempat"],
+  ["DITOLAK", "Ditolak pelanggan"],
+  ["GAGAL_LAIN", "Gagal — sebab lain"],
+] as const;
+
+/// Keputusan akhir per perangkat (PRD §13.8). Hanya LAYAK_DIGUNAKAN yang
+/// mengembalikan barang ke stok tersedia, dan selalu sebagai SECOND.
+export const RECOVERY_DECISIONS = [
+  ["LAYAK_DIGUNAKAN", "Layak digunakan"],
+  ["PERLU_PERBAIKAN", "Perlu perbaikan"],
+  ["RUSAK", "Rusak"],
+  ["SCRAP", "Scrap"],
+  ["TIDAK_KEMBALI", "Tidak kembali"],
+] as const;
+
+/// Keputusan yang boleh keluar dari inspeksi gudang. TIDAK_KEMBALI TIDAK ada
+/// di sini — perangkat yang tidak pernah sampai gudang mustahil diinspeksi,
+/// dan jalurnya lewat eskalasi SLA, bukan lewat form inspeksi.
+export const INSPECTION_DECISIONS = [
+  "LAYAK_DIGUNAKAN",
+  "PERLU_PERBAIKAN",
+  "RUSAK",
+  "SCRAP",
+] as const;
+
+/// Butir checklist inspeksi (PRD §13.7). Disimpan sebagai data supaya butir
+/// bisa bertambah tanpa migrasi.
+export const INSPECTION_CHECKLIST = [
+  ["casing", "Fisik / casing utuh"],
+  ["boot", "Menyala & boot normal"],
+  ["reset", "Berhasil factory reset"],
+  ["lan", "Port LAN berfungsi"],
+  ["wifi", "WiFi berfungsi"],
+  ["optical", "Level optik normal"],
+  ["accessories", "Adaptor & aksesori lengkap"],
+] as const;
+
+/// Status perangkat yang TIDAK BOLEH dialokasikan ke work order (PRD §13.9).
+export const DEVICE_STATUSES_UNAVAILABLE = [
+  "RECOVERY_PENDING",
+  "RETURN_IN_TRANSIT",
+  "QUARANTINED",
+  "RMA",
+  "DAMAGED",
+  "LOST",
+  "SCRAPPED",
+  "UNDER_INSPECTION",
+] as const;
+
 export const ITEM_UNITS = ["pcs", "meter", "roll", "box", "set"] as const;
 
 export const TX_TYPES = {
@@ -428,6 +546,13 @@ export const MATERIAL_TYPES = [
 export const DEVICE_STATUSES = [
   "AVAILABLE",
   "IN_TRANSIT", // Fase 17: dikirim antar gudang, belum diterima
+  // Fase 28 — alur terminasi & recovery. RETURN_IN_TRANSIT sengaja DIBEDAKAN
+  // dari IN_TRANSIT: yang satu perpindahan antar gudang, yang satu penarikan
+  // dari pelanggan. Menyatukannya akan mengaburkan laporan keduanya.
+  "RECOVERY_PENDING", // terminasi disetujui, menunggu ditarik teknisi
+  "RETURN_IN_TRANSIT", // sudah ditarik, belum sampai gudang
+  "QUARANTINED", // diterima gudang, belum lulus inspeksi
+  "RMA", // perlu perbaikan — tidak tersedia untuk WO
   "IN_CUSTODY",
   "INSTALLED",
   "UNDER_INSPECTION",
@@ -916,6 +1041,31 @@ export const STATUS_LABELS: Record<string, string> = {
   UNDER_INSPECTION: "Inspeksi Write-off",
   DAMAGED: "Rusak",
   SCRAPPED: "Scrap",
+  // Fase 17 — transfer antar gudang
+  IN_TRANSIT: "Dalam Perjalanan",
+  // Fase 29–32 — terminasi & recovery
+  EFFECTIVE: "Berlaku",
+  RECOVERED: "Tertarik Penuh",
+  INSPECTION: "Inspeksi Gudang",
+  CLOSED_UNRECOVERED: "Ditutup — Tidak Kembali",
+  PICKED_UP: "Diambil Teknisi",
+  RECEIVED: "Diterima Gudang",
+  INSPECTED: "Sudah Diinspeksi",
+  NOT_RETURNED: "Tidak Kembali",
+  LAYAK_DIGUNAKAN: "Layak Digunakan",
+  PERLU_PERBAIKAN: "Perlu Perbaikan",
+  RUSAK: "Rusak",
+  SCRAP: "Scrap",
+  TIDAK_KEMBALI: "Tidak Kembali",
+  CUSTOMER_REQUEST: "Permintaan Pelanggan",
+  NON_PAYMENT: "Tunggakan",
+  RELOCATION: "Pindah Alamat",
+  FRAUD: "Pelanggaran / Fraud",
+  // Fase 28 — terminasi & recovery perangkat
+  RECOVERY_PENDING: "Menunggu Penarikan",
+  RETURN_IN_TRANSIT: "Perjalanan Pulang",
+  QUARANTINED: "Karantina",
+  RMA: "RMA ke Vendor",
   OPEN: "Terbuka",
   CLOSED: "Ditutup",
   SERIALIZED: "Serialized",
@@ -982,6 +1132,7 @@ export const STATUS_LABELS: Record<string, string> = {
   WRITTEN_OFF: "Dihapusbukukan",
   PREVIEW: "Preview",
   PENDING: "Menunggu",
+  APPROVED: "Disetujui",
   // Phase 10
   QUEUED: "Antri",
   RUNNING: "Berjalan",
@@ -1019,6 +1170,22 @@ export const STATUS_LABELS: Record<string, string> = {
 export function statusLabel(code: string | null | undefined): string {
   if (!code) return "-";
   return STATUS_LABELS[code] ?? code;
+}
+
+/// Beberapa kode status berarti hal berbeda tergantung modul: PARTIAL di
+/// billing berarti "dibayar sebagian", di recovery berarti "sebagian
+/// perangkat tertarik". STATUS_LABELS global tidak bisa memuat keduanya,
+/// jadi modul recovery memakai peta sendiri lalu jatuh ke peta global.
+const RECOVERY_STATUS_LABELS: Record<string, string> = {
+  ASSIGNED: "Ditugaskan ke Teknisi",
+  IN_PROGRESS: "Penarikan Berjalan",
+  PARTIAL: "Sebagian Tertarik",
+  COMPLETED: "Selesai",
+};
+
+export function recoveryStatusLabel(code: string | null | undefined): string {
+  if (!code) return "-";
+  return RECOVERY_STATUS_LABELS[code] ?? statusLabel(code);
 }
 
 export function formatRupiah(amount: bigint | number | null | undefined): string {

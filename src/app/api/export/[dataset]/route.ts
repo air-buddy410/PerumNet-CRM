@@ -22,6 +22,85 @@ interface Dataset {
 }
 
 const DATASETS: Record<string, Dataset> = {
+  terminations: {
+    permission: PERMISSIONS.TERMINATION_VIEW,
+    filename: "terminasi-pelanggan",
+    run: async () => {
+      const rows = await db.customerTermination.findMany({
+        include: {
+          customer: true,
+          subscription: true,
+          warehouseTo: true,
+          recovery: { select: { recoveryNumber: true, status: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: MAX_ROWS,
+      });
+      type Row = (typeof rows)[number];
+      return {
+        rows,
+        columns: [
+          { header: "Nomor", value: (r: Row) => r.terminationNumber },
+          { header: "Pelanggan", value: (r: Row) => r.customer.name },
+          { header: "Layanan", value: (r: Row) => r.subscription.serviceNumber },
+          { header: "Kategori", value: (r: Row) => r.reasonCategory },
+          { header: "Alasan", value: (r: Row) => r.reason },
+          { header: "Tanggal Berlaku", value: (r: Row) => r.effectiveDate },
+          { header: "Status", value: (r: Row) => r.status },
+          { header: "Gudang Penerima", value: (r: Row) => r.warehouseTo.name },
+          { header: "Nomor Penarikan", value: (r: Row) => r.recovery?.recoveryNumber ?? "" },
+          { header: "Status Penarikan", value: (r: Row) => r.recovery?.status ?? "" },
+          { header: "Dibuat", value: (r: Row) => r.createdAt },
+        ] as CsvColumn<never>[],
+      };
+    },
+  },
+
+  "device-recoveries": {
+    permission: PERMISSIONS.INVENTORY_VIEW,
+    filename: "penarikan-perangkat",
+    run: async () => {
+      // Satu baris per PERANGKAT, bukan per surat: pertanyaan yang biasanya
+      // diajukan ke data ini adalah "unit mana yang belum kembali", dan itu
+      // tidak terjawab oleh rekap per dokumen.
+      const rows = await db.deviceRecoveryItem.findMany({
+        include: {
+          device: { include: { item: true } },
+          inspection: true,
+          recovery: {
+            include: {
+              assignee: true,
+              termination: { include: { customer: true, subscription: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: MAX_ROWS,
+      });
+      type Row = (typeof rows)[number];
+      return {
+        rows,
+        columns: [
+          { header: "Nomor Penarikan", value: (r: Row) => r.recovery.recoveryNumber },
+          { header: "Terminasi", value: (r: Row) => r.recovery.termination.terminationNumber },
+          { header: "Pelanggan", value: (r: Row) => r.recovery.termination.customer.name },
+          { header: "Layanan", value: (r: Row) => r.recovery.termination.subscription.serviceNumber },
+          { header: "Teknisi", value: (r: Row) => r.recovery.assignee?.name ?? "" },
+          { header: "Serial (catatan)", value: (r: Row) => r.snapshotSerial },
+          { header: "Serial (lapangan)", value: (r: Row) => r.actualSerial ?? "" },
+          { header: "Serial Cocok", value: (r: Row) => (!r.actualSerial ? "" : r.actualSerial === r.snapshotSerial ? "YA" : "TIDAK") },
+          { header: "Item", value: (r: Row) => r.snapshotItemName },
+          { header: "Status", value: (r: Row) => r.status },
+          { header: "Keputusan", value: (r: Row) => r.finalDecision ?? "" },
+          { header: "Batas SLA", value: (r: Row) => r.recovery.slaDueAt },
+          { header: "Diambil", value: (r: Row) => r.pickedUpAt },
+          { header: "Diterima", value: (r: Row) => r.receivedAt },
+          { header: "Diinspeksi", value: (r: Row) => r.inspection?.inspectedAt ?? null },
+        ] as CsvColumn<never>[],
+      };
+    },
+  },
+
   stock: {
     permission: PERMISSIONS.INVENTORY_VIEW,
     filename: "posisi-stock",

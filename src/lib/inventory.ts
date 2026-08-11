@@ -4,6 +4,7 @@ import { submitApprovalRequest } from "@/lib/approval";
 import { PERMISSIONS, TX_PREFIX, statusLabel } from "@/lib/constants";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
 import { assertWarehouseInScope } from "@/lib/slots";
+import { RECOVERY_TERMINAL_STATUSES } from "@/lib/recovery";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Inventory Engine ────────────────────────────────────────────
@@ -510,7 +511,18 @@ export async function postTransaction(
             const device = await prisma.serializedDevice.findUnique({
               where: { id: line.deviceId! },
             });
-            if (!device || device.status !== "IN_CUSTODY" || device.custodianId !== tx.custodianId) {
+            // Fase 30–31: perangkat hasil penarikan pelanggan juga pulang lewat
+            // jalur ini, tetapi statusnya sengaja dibedakan supaya asal-usulnya
+            // tetap terbaca (RETURN_IN_TRANSIT = di jalan, QUARANTINED = sudah
+            // sampai meja karantina dan menunggu inspeksi). Rantai custody-nya
+            // sama: barang tetap tanggung jawab teknisi sampai transaksi ini
+            // diposting, jadi pemeriksaan custodian TIDAK dilonggarkan.
+            const RETURNABLE = ["IN_CUSTODY", "RETURN_IN_TRANSIT", "QUARANTINED"];
+            if (
+              !device ||
+              !RETURNABLE.includes(device.status) ||
+              device.custodianId !== tx.custodianId
+            ) {
               throw new Error(
                 `Perangkat ${device?.serialNumber ?? "?"} tidak berada dalam custody teknisi tersebut.`
               );
@@ -1515,4 +1527,75 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
   }
 
   return out;
+}
+
+// ── Kepemilikan perangkat (Fase 28, PRD terminasi §13.1) ────────
+// Hanya perangkat ber-ownership COMPANY yang boleh masuk proses penarikan
+// saat pelanggan terminasi. Backfill memberi seluruh perangkat lama nilai
+// COMPANY — pilihan konservatif sesuai PRD §20.2 — sehingga perangkat milik
+// pelanggan HARUS dikoreksi lewat jalur ini sebelum modul terminasi dipakai.
+//
+// Koreksi wajib beralasan dan tercatat: mengubah kepemilikan berarti mengubah
+// apakah sebuah barang boleh ditarik dari rumah orang.
+
+export const DEVICE_OWNERSHIP_VALUES = ["COMPANY", "CUSTOMER"] as const;
+
+export async function setDeviceOwnership(
+  user: CurrentUser,
+  deviceId: string,
+  ownership: string,
+  reason: string
+): Promise<Result> {
+  if (!user.permissions.has(PERMISSIONS.DEVICE_OWNERSHIP_MANAGE)) {
+    return { ok: false, error: "Anda tidak memiliki izin mengubah kepemilikan perangkat." };
+  }
+  if (!DEVICE_OWNERSHIP_VALUES.includes(ownership as never)) {
+    return { ok: false, error: "Kepemilikan harus COMPANY atau CUSTOMER." };
+  }
+  if (!reason?.trim()) {
+    return { ok: false, error: "Alasan perubahan kepemilikan wajib diisi." };
+  }
+
+  const device = await db.serializedDevice.findUnique({
+    where: { id: deviceId },
+    include: { item: { select: { name: true } } },
+  });
+  if (!device) return { ok: false, error: "Perangkat tidak ditemukan." };
+  if (device.ownership === ownership) {
+    return { ok: false, error: `Kepemilikan sudah ${ownership}.` };
+  }
+
+  await db.serializedDevice.update({
+    where: { id: deviceId },
+    data: { ownership },
+  });
+  await logAudit({
+    userId: user.id,
+    action: "DEVICE_OWNERSHIP_CHANGE",
+    module: "inventory",
+    entityType: "SerializedDevice",
+    entityId: deviceId,
+    description: `Kepemilikan ${device.serialNumber} (${device.item.name}): ${device.ownership} → ${ownership}. Alasan: ${reason.trim()}`,
+  });
+  return { ok: true, id: deviceId };
+}
+
+/**
+ * Perangkat yang boleh masuk proses penarikan saat terminasi.
+ * Dipakai Fase 29 saat menyusun daftar item recovery.
+ *
+ * Kriterianya sengaja disusun dari konstanta yang sama dengan
+ * `isRecoverable()` di lib/recovery.ts, supaya query dan predikat yang diuji
+ * tidak bisa berbeda diam-diam.
+ */
+export async function recoverableDevicesOf(subscriptionId: string) {
+  return db.serializedDevice.findMany({
+    where: {
+      subscriptionId,
+      ownership: "COMPANY", // PRD §13.1 — milik pelanggan tidak boleh ditarik
+      status: { notIn: [...RECOVERY_TERMINAL_STATUSES] },
+    },
+    include: { item: { select: { name: true, code: true } } },
+    orderBy: { serialNumber: "asc" },
+  });
 }

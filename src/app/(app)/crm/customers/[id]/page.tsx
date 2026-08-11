@@ -33,6 +33,13 @@ export default async function CustomerDetailPage({
         salesOwner: true,
         lead: true,
         subscriptions: { include: { package: true }, orderBy: { createdAt: "desc" } },
+        terminations: {
+          include: {
+            subscription: { select: { serviceNumber: true } },
+            recovery: { select: { id: true, recoveryNumber: true, status: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
     }),
     db.area.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -173,6 +180,56 @@ export default async function CustomerDetailPage({
           </table>
         )}
       </div>
+
+      {customer.terminations.length > 0 && (
+        <div className="card mt-6">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-medium">Riwayat Terminasi ({customer.terminations.length})</h2>
+          </div>
+          <table className="w-full">
+            <thead className="border-b border-slate-100 bg-slate-50/60">
+              <tr>
+                <th className="th">Nomor</th>
+                <th className="th">Layanan</th>
+                <th className="th">Berlaku</th>
+                <th className="th">Penarikan</th>
+                <th className="th">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {customer.terminations.map((t) => (
+                <tr key={t.id} className="hover:bg-slate-50">
+                  <td className="td">
+                    <Link
+                      href={`/crm/terminations/${t.id}`}
+                      className="font-medium text-brand-600 hover:underline"
+                    >
+                      {t.terminationNumber}
+                    </Link>
+                  </td>
+                  <td className="td font-mono text-xs">{t.subscription.serviceNumber}</td>
+                  <td className="td whitespace-nowrap text-xs">{formatDateTime(t.effectiveDate)}</td>
+                  <td className="td text-xs">
+                    {t.recovery ? (
+                      <Link
+                        href={`/inventory/device-recoveries/${t.recovery.id}`}
+                        className="text-brand-600 hover:underline"
+                      >
+                        {t.recovery.recoveryNumber}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="td">
+                    <Badge value={t.status} label={statusLabel(t.status)} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
