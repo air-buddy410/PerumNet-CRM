@@ -24,22 +24,41 @@ export default async function PppoeMonitorPage({
   const sp = await searchParams;
 
   const summary = await pppoeSummary();
-  const sessions = await db.pppoeSession.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.q ? { username: { contains: sp.q, mode: "insensitive" as const } } : {}),
-    },
-    include: {
-      router: { include: { networkDevice: { select: { hostname: true } } } },
-      subscription: {
-        select: { serviceNumber: true, customer: { select: { name: true } } },
-      },
-    },
-    orderBy: [{ status: "asc" }, { username: "asc" }],
-    take: 300,
-  });
 
-  const unmatched = sessions.filter((s) => !s.subscriptionId).length;
+  const baseWhere = {
+    ...(sp.q ? { username: { contains: sp.q, mode: "insensitive" as const } } : {}),
+  };
+  const include = {
+    router: { include: { networkDevice: { select: { hostname: true } } } },
+    subscription: {
+      select: { serviceNumber: true, customer: { select: { name: true } } },
+    },
+  };
+
+  // Urutan berdasarkan KEMENDESAKAN, bukan alfabet. Mengurutkan status secara
+  // alfabetis menaruh DISABLED di paling atas — akun yang memang sengaja
+  // dimatikan — sementara pelanggan OFFLINE yang sedang bermasalah tenggelam
+  // di bawah. Yang perlu ditindaklanjuti harus terlihat lebih dulu.
+  const PRIORITAS = ["OFFLINE", "DISABLED", "ONLINE"] as const;
+  const LIMIT = 300;
+  const batches = [];
+  let terkumpul = 0;
+  for (const status of sp.status ? [sp.status] : PRIORITAS) {
+    if (terkumpul >= LIMIT) break;
+    const batch = await db.pppoeSession.findMany({
+      where: { ...baseWhere, status },
+      include,
+      orderBy: { username: "asc" },
+      take: LIMIT - terkumpul,
+    });
+    terkumpul += batch.length;
+    batches.push(batch);
+  }
+  const sessions = batches.flat();
+
+  // Dihitung dari seluruh data, bukan dari 300 baris yang sedang tampil —
+  // kalau tidak, angkanya berbohong tentang cakupannya.
+  const unmatched = await db.pppoeSession.count({ where: { subscriptionId: null } });
   const failedRuns = summary.lastRuns.filter((r) => r.status === "FAILED");
 
   return (
