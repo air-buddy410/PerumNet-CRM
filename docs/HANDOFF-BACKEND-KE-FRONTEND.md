@@ -1,6 +1,6 @@
 # Handoff Backend → Frontend (Luna)
 
-**Tanggal:** 2026-08-12
+**Tanggal:** 2026-08-12 (diperbarui setelah Fase 35–39)
 **Untuk:** pengerjaan frontend PerumNet CRM
 **Dari:** sisi backend (Opus)
 **Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
@@ -24,6 +24,7 @@ ingatan.
 | 3 | Simpan kontak di halaman profil | action belum ada | ✅ siap |
 | 4 | Tombol ganti password | kontrak `auth` belum ada | ✅ siap — **tapi lihat §4, ada yang perlu disepakati** |
 | 5 | **Peta status PPPoE** (offline diwarnai, hitungan, pemilih router) | data belum menyatu | ✅ siap |
+| 5b | **Lapisan POP, MS/ODC, dan rute kabel di peta** | data belum dirakit | ✅ siap — lihat §5b |
 | 6 | Unggah foto bukti + tanda tangan + koordinat penarikan | action belum ada | ✅ siap |
 | 7 | Checklist inspeksi ya/tidak | — | ⚠️ perlu dibuat, lihat §6 |
 | 8 | Penyaringan teknisi & pencarian serial di daftar penarikan | — | ⚠️ perlu dibuat |
@@ -190,6 +191,53 @@ Yang **belum ada dan tidak bisa ditampilkan**: `los` (loss of signal). Itu
 status optik ONU yang hanya bisa dibaca dari OLT lewat SNMP/telnet, sedangkan
 kita baru menarik data dari MikroTik.
 
+## 5b. Lapisan peta FTTH lengkap — SIAP (Fase 38–39)
+
+`loadNetworkMap()` sekarang merakit SELURUH jenis simpul jaringan, bukan hanya
+ODP dan pelanggan. Semuanya aditif — komponen peta yang ada tetap jalan.
+
+```ts
+sites  : MapSite[]    // POP dan mini-POP
+routes : MapRoute[]   // rute kabel: feeder, distribusi, drop core
+odps[].role           // "MS" | "ODP" — pembeda ikon
+```
+
+```ts
+interface MapSite  { id, code, name, type, latitude, longitude, status }
+interface MapRoute { id, name, routeType, coordinates: [lng,lat][], lengthMeters }
+```
+
+Yang perlu diketahui saat menyajikannya:
+
+- **POP bukan simpul distribusi.** Dia tidak punya port maupun okupansi, jadi
+  sengaja dipisah dari `odps` alih-alih dipaksa masuk bentuk yang sama. Beri
+  ikon tersendiri; jangan tampilkan indikator okupansi untuknya.
+- **`role` membedakan MS dari ODP.** Keduanya berbagi tabel karena sama-sama
+  punya port dan induk PON — yang membedakan hanya posisinya di rantai. Sistem
+  pembanding memakai warna berbeda untuk "Parent ODP" dan "ODP/Dispoint";
+  polanya sama.
+- **Kaskade tetap dari `cascades`**, bukan diturunkan dari `role`.
+- **`routes` adalah lapisan visual, bukan sumber kebenaran.** Geometrinya
+  digambar tangan surveyor. `lengthMeters` adalah jumlah jarak lurus antar
+  simpul — **bukan panjang kabel sebenarnya**. Kalau ditampilkan, sebut sebagai
+  perkiraan; jangan disandingkan dengan angka yang terkesan resmi.
+- `routeType` bernilai `FEEDER` | `DISTRIBUTION` | `DROP` | `OTHER`. Bedakan
+  ketebalan atau gaya garisnya; `OTHER` berarti jenisnya memang belum
+  ditentukan, bukan jenis keempat.
+
+### Impor KMZ — halaman sudah ada, tidak perlu dibuat
+
+`/noc/ftth/kml` sudah menerima `.kml` maupun `.kmz`, menebak jenis titik dari
+folder, menampilkan pratinjau, dan mengimpor POP/MS/ODP beserta rute kabel.
+Halaman itu bukan bagian dari pekerjaan frontend ini — cukup pastikan tabelnya
+lolos kontrak responsive.
+
+Satu hal yang penting dipahami bila kelak menyentuh alurnya: impor **hanya
+mengisi koordinat yang kosong dan tidak pernah menimpa**. Baris berlabel
+"Dipertahankan" menampilkan jarak antara titik di berkas dan koordinat
+tersimpan — itu disengaja, supaya perbedaan tetap terlihat tanpa ada yang
+diubah diam-diam.
+
 ## 6. Bukti lapangan penarikan — SIAP
 
 Seluruh action ada di `app/(app)/inventory/device-recoveries/actions.ts`.
@@ -260,7 +308,17 @@ satunya lewat menu CRM.
 Tautkan ke `/crm/terminations/new?subscriptionId=<id>`; halaman itu sudah
 menerima parameter tersebut.
 
-### 7.4 Portal teknisi `/portal/recoveries`
+### 7.4 Lapisan peta FTTH
+
+Datanya sudah lengkap (§5b); yang kurang lapisan visualnya:
+
+- ikon terpisah untuk POP, MS, dan ODP
+- garis rute kabel, dibedakan menurut `routeType`
+- pemilih koordinat di peta untuk input manual (klik untuk menaruh titik).
+  Form cukup mengirim `latitude`/`longitude`; server sudah memvalidasi
+  rentangnya dan menolak `(0,0)` karena itu keluaran khas GPS yang gagal.
+
+### 7.5 Portal teknisi `/portal/recoveries`
 
 Belum ada. Teknisi memakai halaman gudang. Portal Fase 19 sudah ada sebagai
 pola yang bisa diikuti.
