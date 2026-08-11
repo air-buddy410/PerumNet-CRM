@@ -12,7 +12,10 @@ import {
   receiveDevices,
   inspectDevice,
   markNotReturned,
+  attachRecoveryEvidence,
+  signRecoveryPickup,
   type PickupLine,
+  type EvidenceKind,
 } from "@/lib/device-recovery";
 
 function back(
@@ -43,9 +46,16 @@ export async function assignRecoveryAction(formData: FormData): Promise<void> {
 export async function recordAttemptAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.RECOVERY_PICKUP);
   const id = String(formData.get("recoveryId") ?? "");
+  // Koordinat dikirim form bila peramban mengizinkan geolokasi; kalau tidak
+  // ada, kunjungan tetap boleh tercatat — menolak catatan hanya karena GPS
+  // mati akan membuat kunjungan tidak tercatat sama sekali.
+  const lat = formData.get("latitude");
+  const lng = formData.get("longitude");
   const result = await recordAttempt(user, id, {
     result: String(formData.get("result") ?? ""),
     note: String(formData.get("note") ?? ""),
+    latitude: lat ? Number(lat) : null,
+    longitude: lng ? Number(lng) : null,
   });
   revalidatePath("/inventory/device-recoveries");
   back(id, result, "Kunjungan tercatat.");
@@ -116,4 +126,39 @@ export async function markNotReturnedAction(formData: FormData): Promise<void> {
   );
   revalidatePath("/inventory/device-recoveries");
   back(id, result, "Perangkat dinyatakan tidak kembali.");
+}
+
+// ── Bukti lapangan (Fase 33) ────────────────────────────────────
+// Kontrak untuk form: setiap aksi di bawah membaca nama field yang tertulis
+// di sini. Unggahan memakai <form encType="multipart/form-data">.
+
+/** field: recoveryId, kind (ATTEMPT|PICKUP|INSPECTION), entityId, file */
+export async function attachEvidenceAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.INVENTORY_VIEW);
+  const id = String(formData.get("recoveryId") ?? "");
+  const kind = String(formData.get("kind") ?? "") as EvidenceKind;
+  const entityId = String(formData.get("entityId") ?? "");
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    back(id, { ok: false, error: "Pilih berkas terlebih dahulu." }, "");
+  }
+  const result = await attachRecoveryEvidence(user, kind, entityId, file as File);
+  revalidatePath("/inventory/device-recoveries");
+  back(id, result, "Bukti tersimpan.");
+}
+
+/** field: recoveryId, role (CUSTOMER|TECHNICIAN), signerName, attachmentId? */
+export async function signPickupAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.RECOVERY_PICKUP);
+  const id = String(formData.get("recoveryId") ?? "");
+  const attachmentId = String(formData.get("attachmentId") ?? "");
+  const result = await signRecoveryPickup(
+    user,
+    id,
+    String(formData.get("role") ?? ""),
+    String(formData.get("signerName") ?? ""),
+    attachmentId || undefined
+  );
+  revalidatePath("/inventory/device-recoveries");
+  back(id, result, "Tanda tangan tersimpan.");
 }
