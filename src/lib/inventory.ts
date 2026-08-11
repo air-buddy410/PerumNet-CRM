@@ -1097,6 +1097,32 @@ export async function postOpname(
     };
   }
 
+  // Fase 20 (F11): saldo tidak boleh berubah sejak snapshot diambil. Kalau
+  // ada mutasi di tengah sesi, selisih hasil hitung menjadi tidak bermakna —
+  // sesi harus dihitung ulang, bukan dipaksa diposting.
+  const currentLevels = await db.stockLevel.findMany({
+    where: { warehouseId: session.warehouseId },
+    select: { itemId: true, onHand: true },
+  });
+  const currentMap = new Map(currentLevels.map((l) => [l.itemId, l.onHand]));
+  const drifted = session.lines.filter((l) => (currentMap.get(l.itemId) ?? 0) !== l.systemQty);
+  if (drifted.length) {
+    const names = await db.item.findMany({
+      where: { id: { in: drifted.slice(0, 3).map((l) => l.itemId) } },
+      select: { id: true, name: true },
+    });
+    const detail = names
+      .map((n) => {
+        const line = drifted.find((l) => l.itemId === n.id)!;
+        return `${n.name} (snapshot ${line.systemQty}, sekarang ${currentMap.get(n.id) ?? 0})`;
+      })
+      .join("; ");
+    return {
+      ok: false,
+      error: `Saldo berubah sejak sesi opname dibuka pada ${drifted.length} item — ${detail}. Buat sesi baru agar hitungannya sahih.`,
+    };
+  }
+
   const deltas = session.lines
     .filter((l) => (l.countedQty ?? 0) !== l.systemQty)
     .map((l) => ({ itemId: l.itemId, qty: (l.countedQty ?? 0) - l.systemQty }));

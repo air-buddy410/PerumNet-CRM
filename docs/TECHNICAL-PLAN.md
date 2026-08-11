@@ -193,6 +193,8 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 
 | **19. Portal Permintaan Material** | MaterialRequest dari lapangan, keputusan admin membuat draft pengeluaran + reservasi | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F7; teknisi/vendor mengajukan sendiri lewat /portal, pengaju tidak boleh memutuskan sendiri, penolakan wajib beralasan; persetujuan langsung mereservasi stock sehingga ketersediaan divalidasi saat keputusan, bukan saat serah terima; katalog portal tanpa data harga internal) |
 
+| **20. Slot, Lokasi Fisik & Opname Ketat** | StockSlot + ledger alokasi, Rack→Bin, tipe & koordinat gudang, gerbang snapshot opname | ✅ selesai (PRD-WAREHOUSE-ENHANCEMENT F9/F10/F11; sisa belum dialokasikan adalah TURUNAN onHand − alokasi bernama sehingga tidak bisa menyimpang dari saldo; ledger slot append-only; perpindahan di atas ambang butuh izin khusus; slot sistem & slot berisi tidak bisa dinonaktifkan; opname menolak diposting bila saldo berubah sejak snapshot) |
+
 Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dari riset banding terhadap sistem helpdesk lama — lihat `FEATURE-GAP-ANALYSIS-HELPDESK-V2.md` (gap G1–G23) dan `DESIGN-PHASE-8-BILLING-AND-BEYOND.md`. Keputusan desain §11 yang diambil selama implementasi tercatat di `DECISIONS-PHASE-8.md`, termasuk satu yang masih menunggu pemilik proyek: **retensi data identitas (foto selfie & jejak lokasi absensi)**.
 
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
