@@ -2,7 +2,11 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { notifyUsers, notifyPermission } from "@/lib/notify";
 import { releasePort } from "@/lib/ftth";
-import { createDraftTransaction, postTransaction } from "@/lib/inventory";
+import {
+  createDraftTransaction,
+  postTransaction,
+  cancelDraftTransaction,
+} from "@/lib/inventory";
 import { PERMISSIONS, RECOVERY_ATTEMPT_RESULTS } from "@/lib/constants";
 import { notReturnedBlocker } from "@/lib/recovery";
 import type { CurrentUser } from "@/lib/rbac";
@@ -27,6 +31,10 @@ import type { CurrentUser } from "@/lib/rbac";
 type Result<T = undefined> =
   | { ok: true; id: string; data?: T }
   | { ok: false; error: string };
+
+/// Klien di dalam transaksi Prisma — dipakai agar pencatatan hasil inspeksi
+/// bisa menumpang transaksi yang sama dengan perubahan saldo stok.
+type TxClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
 export interface PickupLine {
   itemId: string;
@@ -496,10 +504,61 @@ export async function inspectDevice(
     };
   }
 
-  // Barang yang masuk gudang HARUS lewat transaksi yang diposting, bukan
-  // tulis saldo langsung — aturan inti modul inventory sejak Fase 3.
+  // Seluruh akibat inspeksi ditulis dalam SATU transaksi bersama perubahan
+  // saldo. Dua hal bergantung padanya:
+  //
+  //  1. Gagal di tengah tidak boleh menyisakan stok yang sudah bertambah
+  //     tanpa catatan inspeksi. Kalau itu terjadi, perangkat mentok: sudah
+  //     dilepas dari custody teknisi, jadi percobaan ulang ditolak, padahal
+  //     stoknya terlanjur terhitung.
+  //  2. `DeviceInspection.itemId` unik, dan penulisannya berada di dalam
+  //     transaksi yang sama. Dua inspektur yang menekan tombol bersamaan
+  //     karena itu tidak bisa sama-sama lolos: yang kedua melanggar unique
+  //     constraint dan SELURUH transaksinya — termasuk penambahan stok —
+  //     ikut dibatalkan. Satu perangkat tidak akan pernah terhitung dua kali.
+  const writeOutcome = async (prisma: TxClient, txId: string | null) => {
+    // Sengaja dituliskan paling awal: inilah penjaga balapannya.
+    await prisma.deviceInspection.create({
+      data: {
+        itemId,
+        checklist: data.checklist as unknown as object,
+        decision: data.decision,
+        note: data.note.trim(),
+        inspectorId: user.id,
+      },
+    });
+    await prisma.deviceRecoveryItem.update({
+      where: { id: itemId },
+      data: { status: "INSPECTED", finalDecision: data.decision },
+    });
+    // Status & kondisi akhir ditimpa setelah mesin stok selesai: transaksi
+    // pengembalian hanya mengenal GOOD/DAMAGED, sedangkan modul ini punya
+    // kosakata sendiri (SECOND, RMA, SCRAPPED) yang harus menang.
+    await prisma.serializedDevice.update({
+      where: { id: item.deviceId },
+      data: {
+        status: effect.finalStatus,
+        condition: effect.finalCondition,
+        ...(effect.condition ? {} : { custodianId: null, warehouseId: null }),
+      },
+    });
+    await prisma.deviceMovement.create({
+      data: {
+        deviceId: item.deviceId,
+        action: "RECOVERY_INSPECTED",
+        fromNote: "Karantina",
+        toNote: effect.label,
+        txId,
+        byUserId: user.id,
+        note: data.note.trim(),
+      },
+    });
+  };
+
   let txId: string | null = null;
   if (effect.condition) {
+    // Barang yang masuk gudang HARUS lewat transaksi yang diposting, bukan
+    // tulis saldo langsung — aturan inti modul inventory sejak Fase 3.
     const draft = await createDraftTransaction(
       user,
       "STOCK_RETURN",
@@ -512,48 +571,22 @@ export async function inspectDevice(
       [{ itemId: item.device.itemId, qty: 1, deviceIds: [item.deviceId], condition: effect.condition }]
     );
     if (!draft.ok) return draft;
-    const posted = await postTransaction(user, draft.id);
-    if (!posted.ok) return posted;
+    const posted = await postTransaction(user, draft.id, {
+      afterPost: async (prisma, tx) => {
+        await writeOutcome(prisma, tx.id);
+      },
+    });
+    if (!posted.ok) {
+      // Draft yang gagal diposting tidak boleh menumpuk setiap kali dicoba
+      // ulang. Pembatalannya lewat jalur resmi, bukan hapus paksa.
+      await cancelDraftTransaction(user, draft.id);
+      return posted;
+    }
     txId = draft.id;
+  } else {
+    // SCRAP tidak menyentuh saldo — tidak ada barang yang masuk gudang.
+    await db.$transaction(async (tx) => writeOutcome(tx, null));
   }
-
-  await db.$transaction(async (tx) => {
-    await tx.deviceInspection.create({
-      data: {
-        itemId,
-        checklist: data.checklist as unknown as object,
-        decision: data.decision,
-        note: data.note.trim(),
-        inspectorId: user.id,
-      },
-    });
-    await tx.deviceRecoveryItem.update({
-      where: { id: itemId },
-      data: { status: "INSPECTED", finalDecision: data.decision },
-    });
-    // Status & kondisi akhir ditimpa SETELAH posting: transaksi pengembalian
-    // hanya mengenal GOOD/DAMAGED, sedangkan modul ini punya kosakata sendiri
-    // (SECOND, RMA, SCRAPPED) yang harus menang.
-    await tx.serializedDevice.update({
-      where: { id: item.deviceId },
-      data: {
-        status: effect.finalStatus,
-        condition: effect.finalCondition,
-        ...(effect.condition ? {} : { custodianId: null, warehouseId: null }),
-      },
-    });
-    await tx.deviceMovement.create({
-      data: {
-        deviceId: item.deviceId,
-        action: "RECOVERY_INSPECTED",
-        fromNote: "Karantina",
-        toNote: effect.label,
-        txId,
-        byUserId: user.id,
-        note: data.note.trim(),
-      },
-    });
-  });
 
   await logAudit({
     userId: user.id,
