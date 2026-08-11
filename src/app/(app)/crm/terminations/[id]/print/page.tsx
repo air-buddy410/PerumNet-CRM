@@ -6,13 +6,31 @@ import type { TerminationSnapshot } from "@/lib/termination";
 
 export const metadata = { title: "Berita Acara Terminasi" };
 
-// Berita acara cetak A4 (PRD §17).
+// Berita acara cetak A4 (PRD §17, FR-UI-004: "tanpa sidebar").
 //
-// Gaya cetak sengaja ditulis lokal di halaman ini, bukan di globals.css:
-// berkas gaya global dipegang alur kerja frontend tersendiri, dan halaman
-// cetak tidak perlu menitipkan apa pun ke sana.
+// Halaman ini berada di dalam layout aplikasi, jadi sidebar dan header ikut
+// terbawa. Alih-alih menyebut nama kelas milik app-shell — yang bukan milik
+// alur kerja ini dan bisa berubah sewaktu-waktu — seluruh isi halaman
+// disembunyikan saat mencetak, lalu HANYA lembar berita acara dimunculkan
+// kembali. Cara ini tetap benar berapa pun kali app-shell diubah.
+//
+// Gaya cetak ditulis lokal di halaman ini, bukan di globals.css: berkas gaya
+// global dipegang alur kerja frontend tersendiri.
 const PRINT_CSS = `
   @page { size: A4; margin: 18mm 16mm; }
+  @media print {
+    body * { visibility: hidden !important; }
+    .ba-sheet, .ba-sheet * { visibility: visible !important; }
+    .ba-sheet {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  }
   .ba-sheet { max-width: 180mm; margin: 0 auto; color: #111; font-size: 12px; line-height: 1.5; }
   .ba-sheet h1 { font-size: 16px; font-weight: 700; text-align: center; margin-bottom: 2px; }
   .ba-sheet h2 { font-size: 12px; font-weight: 700; margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; }

@@ -5,6 +5,7 @@ import { notifyPermission, notifyUsers } from "@/lib/notify";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
 import { PERMISSIONS, APPROVAL_STATUS, TERMINATION_REASONS } from "@/lib/constants";
 import { isRecoverable, recoveryExclusionReason } from "@/lib/recovery";
+import { decidingStep } from "@/lib/approval-decision";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Mesin Terminasi Pelanggan (Fase 29, PRD §11) ────────────────
@@ -314,7 +315,22 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
 
   const approval = await db.approvalRequest.findUnique({
     where: { id: trm.approvalRequestId },
-    select: { status: true, requestNumber: true, resolvedAt: true },
+    select: {
+      status: true,
+      requestNumber: true,
+      resolvedAt: true,
+      steps: {
+        orderBy: { stepOrder: "asc" },
+        select: {
+          stepOrder: true,
+          status: true,
+          actedById: true,
+          actedAt: true,
+          note: true,
+          actedBy: { select: { name: true } },
+        },
+      },
+    },
   });
   if (!approval) return { ok: false, error: "Approval request tidak ditemukan." };
 
@@ -322,10 +338,20 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
     return { ok: false, error: "Approval masih menunggu keputusan." };
   }
 
+  // Yang tercatat sebagai pemutus HARUS orang yang benar-benar memutuskan di
+  // approval engine — bukan siapa pun yang kebetulan menekan tombol "terapkan
+  // keputusan" di halaman ini. Keduanya sering berbeda orang, dan berita acara
+  // yang menyebut nama yang salah lebih buruk daripada tidak menyebut nama.
+  const decider = decidingStep(approval.steps, approval.status);
+  const decidedById = decider?.actedById ?? null;
+  const decidedAt = decider?.actedAt ?? approval.resolvedAt ?? new Date();
+  const decisionNote = decider?.note ?? null;
+  const deciderName = decider?.actedBy?.name ?? "tidak diketahui";
+
   if (approval.status === APPROVAL_STATUS.REJECTED) {
     await db.customerTermination.update({
       where: { id },
-      data: { status: "REJECTED", decidedById: user.id, decidedAt: approval.resolvedAt ?? new Date() },
+      data: { status: "REJECTED", decidedById, decidedAt, decisionNote },
     });
     await logAudit({
       userId: user.id,
@@ -333,12 +359,16 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
       module: "termination",
       entityType: "CustomerTermination",
       entityId: id,
-      description: `${trm.terminationNumber} ditolak lewat ${approval.requestNumber}`,
+      description:
+        `${trm.terminationNumber} ditolak oleh ${deciderName} lewat ${approval.requestNumber}` +
+        (decisionNote ? ` — ${decisionNote}` : ""),
     });
     await notifyUsers([trm.createdById], {
       type: "TERMINATION_REJECTED",
       title: `Terminasi ditolak: ${trm.terminationNumber}`,
-      body: `Pengajuan terminasi ${trm.subscription.serviceNumber} ditolak.`,
+      body:
+        `Pengajuan terminasi ${trm.subscription.serviceNumber} ditolak oleh ${deciderName}` +
+        (decisionNote ? ` — ${decisionNote}` : "."),
       link: `/crm/terminations/${id}`,
       module: "termination",
     });
@@ -377,7 +407,6 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
 
   const setting = await db.deviceRecoverySetting.findFirst({ where: { isActive: true } });
   const slaDays = setting?.slaDays ?? 7;
-  const decidedAt = approval.resolvedAt ?? new Date();
   const slaDueAt = new Date(decidedAt.getTime() + slaDays * 24 * 60 * 60 * 1000);
 
   const recoveryId = await db.$transaction(async (tx) => {
@@ -454,7 +483,7 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
 
     await tx.customerTermination.update({
       where: { id: trm.id },
-      data: { status: "APPROVED", decidedById: user.id, decidedAt },
+      data: { status: "APPROVED", decidedById, decidedAt, decisionNote },
     });
     return dri.id;
   });
@@ -465,7 +494,7 @@ export async function syncTerminationDecision(user: CurrentUser, id: string): Pr
     module: "termination",
     entityType: "CustomerTermination",
     entityId: id,
-    description: `${trm.terminationNumber} disetujui; penarikan dibuat untuk ${eligible.length} perangkat`,
+    description: `${trm.terminationNumber} disetujui oleh ${deciderName}; penarikan dibuat untuk ${eligible.length} perangkat`,
     metadata: { excluded: devices.length - eligible.length },
   });
   await notifyPermission(PERMISSIONS.RECOVERY_ASSIGN, {

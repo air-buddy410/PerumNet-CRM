@@ -98,12 +98,16 @@ export default async function TerminationDetailPage({
                   {trm.createdBy.name} · {formatDateTime(trm.createdAt)}
                 </dd>
               </div>
-              {trm.decidedBy && (
+              {(trm.decidedBy || trm.decidedAt) && (
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-slate-400">Keputusan</dt>
                   <dd className="mt-0.5 text-sm">
-                    {trm.decidedBy.name} · {formatDateTime(trm.decidedAt)}
+                    {trm.decidedBy?.name ?? "approver tidak tercatat"} ·{" "}
+                    {formatDateTime(trm.decidedAt)}
                   </dd>
+                  {trm.decisionNote && (
+                    <dd className="mt-0.5 text-xs text-slate-500">“{trm.decisionNote}”</dd>
+                  )}
                 </div>
               )}
               {trm.cancelReason && (
