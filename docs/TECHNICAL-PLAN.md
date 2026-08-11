@@ -210,6 +210,8 @@ Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dar
 
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
+**Tes:** `npm test` — test runner bawaan Node (`node:test`) lewat `tsx`, tanpa dependensi baru. Saat ini 41 tes unit atas fungsi murni (KML, klasifikasi PPPoE, okupansi & proyeksi peta, penomoran dokumen, pembulatan PPN). Tes integrasi berbasis database belum ada dan butuh database tersendiri — lihat `tests/README.md`.
+
 ---
 
 ## 9. Risiko Teknis & Keputusan yang Perlu Ditentukan
