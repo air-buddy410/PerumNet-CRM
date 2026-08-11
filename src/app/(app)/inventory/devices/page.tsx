@@ -9,7 +9,13 @@ export const metadata = { title: "Perangkat" };
 export default async function DevicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string; q?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+    status?: string;
+    q?: string;
+    ownership?: string;
+  }>;
 }) {
   await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
@@ -17,6 +23,7 @@ export default async function DevicesPage({
   const devices = await db.serializedDevice.findMany({
     where: {
       ...(sp.status ? { status: sp.status } : {}),
+      ...(sp.ownership ? { ownership: sp.ownership } : {}),
       ...(sp.q
         ? {
             OR: [
@@ -53,6 +60,14 @@ export default async function DevicesPage({
             ))}
           </select>
         </div>
+        <div>
+          <label className="label" htmlFor="ownership">Kepemilikan</label>
+          <select id="ownership" name="ownership" className="input w-52" defaultValue={sp.ownership ?? ""}>
+            <option value="">Semua kepemilikan</option>
+            <option value="COMPANY">Milik PERUMNET</option>
+            <option value="CUSTOMER">Milik Pelanggan</option>
+          </select>
+        </div>
         <button type="submit" className="btn-secondary">Filter</button>
       </form>
 
@@ -66,6 +81,7 @@ export default async function DevicesPage({
                 <th className="th">Serial Number</th>
                 <th className="th">Item</th>
                 <th className="th">Lokasi / Penanggung Jawab</th>
+                <th className="th">Kepemilikan</th>
                 <th className="th">Status</th>
               </tr>
             </thead>
@@ -86,6 +102,9 @@ export default async function DevicesPage({
                     </td>
                     <td className="td">{d.item.name}</td>
                     <td className="td text-xs">{location}</td>
+                    <td className="td text-xs">
+                      {d.ownership === "COMPANY" ? "PERUMNET" : "Pelanggan"}
+                    </td>
                     <td className="td">
                       <Badge value={d.status} label={statusLabel(d.status)} />
                     </td>

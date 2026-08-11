@@ -768,7 +768,13 @@ model SerializedDevice {
   serialNumber    String    @unique
   macAddress      String?
   itemId          String
-  condition       String    @default("GOOD") // GOOD | DAMAGED
+  /// Fase 28 (PRD terminasi §13.1) — COMPANY = milik PERUMNET dan WAJIB ditarik
+  /// saat pelanggan terminasi; CUSTOMER = milik pelanggan dan TIDAK BOLEH masuk
+  /// recovery. Default COMPANY mengikuti saran konservatif PRD §20.2; perangkat
+  /// milik pelanggan harus dikoreksi lewat jalur ber-audit sebelum modul
+  /// terminasi dipakai produksi.
+  ownership       String    @default("COMPANY") // COMPANY | CUSTOMER
+  condition       String    @default("GOOD") // GOOD | SECOND | DAMAGED
   status          String    @default("AVAILABLE") // AVAILABLE|IN_CUSTODY|INSTALLED|UNDER_INSPECTION|DAMAGED|LOST|SCRAPPED
   warehouseId     String? // terisi saat berada di gudang
   custodianId     String? // terisi saat dibawa teknisi
@@ -2801,4 +2807,16 @@ model ScheduledTaskRun {
   task ScheduledTask @relation(fields: [taskId], references: [id])
 
   @@index([taskId, startedAt])
+}
+
+/// Fase 28 (PRD terminasi §11) — ambang SLA dan minimal percobaan sebelum
+/// perangkat boleh dinyatakan tidak kembali. Disimpan sebagai data, bukan
+/// konstanta di kode, karena §22 Q-003 masih terbuka soal SLA per wilayah.
+model DeviceRecoverySetting {
+  id          String   @id @default(cuid())
+  name        String   @default("Default")
+  slaDays     Int      @default(7)
+  minAttempts Int      @default(3)
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
 }

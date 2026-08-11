@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
-import { requestWriteoffAction, finalizeWriteoffAction } from "../actions";
+import { requestWriteoffAction, finalizeWriteoffAction, setOwnershipAction } from "../actions";
 
 export const metadata = { title: "Detail Perangkat" };
 
@@ -41,6 +41,7 @@ export default async function DeviceDetailPage({
   });
 
   const canWriteoff = user.permissions.has(PERMISSIONS.DEVICES_WRITEOFF);
+  const canSetOwnership = user.permissions.has(PERMISSIONS.DEVICE_OWNERSHIP_MANAGE);
   const location =
     device.warehouse?.name ??
     (device.custodian ? `Teknisi: ${device.custodian.name}` : null) ??
@@ -84,6 +85,15 @@ export default async function DeviceDetailPage({
                 <dd className="mt-0.5 text-sm">{device.condition}</dd>
               </div>
               <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Kepemilikan</dt>
+                <dd className="mt-0.5 text-sm">
+                  <Badge
+                    value={device.ownership === "COMPANY" ? "ACTIVE" : "PENDING"}
+                    label={device.ownership === "COMPANY" ? "Milik PERUMNET" : "Milik Pelanggan"}
+                  />
+                </dd>
+              </div>
+              <div>
                 <dt className="text-xs uppercase tracking-wide text-slate-400">Terdaftar</dt>
                 <dd className="mt-0.5 text-sm">{formatDateTime(device.createdAt)}</dd>
               </div>
@@ -122,6 +132,39 @@ export default async function DeviceDetailPage({
         </div>
 
         <div className="space-y-6">
+          {canSetOwnership && (
+            <div className="card p-5">
+              <h2 className="mb-3 text-sm font-medium">Koreksi Kepemilikan</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Perangkat lama otomatis tercatat <strong>Milik PERUMNET</strong> saat migrasi.
+                Hanya perangkat milik PERUMNET yang boleh ditarik saat pelanggan terminasi
+                (PRD §13.1), jadi perangkat milik pelanggan wajib dikoreksi di sini sebelum
+                proses terminasi dijalankan. Perubahan dicatat di audit log.
+              </p>
+              <form action={setOwnershipAction} className="space-y-3">
+                <input type="hidden" name="deviceId" value={device.id} />
+                <select
+                  name="ownership"
+                  className="input"
+                  defaultValue={device.ownership === "COMPANY" ? "CUSTOMER" : "COMPANY"}
+                >
+                  <option value="COMPANY">Milik PERUMNET (boleh ditarik)</option>
+                  <option value="CUSTOMER">Milik Pelanggan (tidak boleh ditarik)</option>
+                </select>
+                <textarea
+                  name="reason"
+                  rows={2}
+                  className="input"
+                  placeholder="Alasan koreksi (wajib) — mis. dibeli sendiri oleh pelanggan"
+                  required
+                />
+                <button type="submit" className="btn-secondary w-full justify-center">
+                  Simpan Kepemilikan
+                </button>
+              </form>
+            </div>
+          )}
+
           {canWriteoff && ["AVAILABLE", "IN_CUSTODY", "INSTALLED"].includes(device.status) && (
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Lapor Hilang / Rusak</h2>
