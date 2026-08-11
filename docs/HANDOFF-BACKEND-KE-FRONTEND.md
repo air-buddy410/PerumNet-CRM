@@ -1,0 +1,293 @@
+# Handoff Backend → Frontend (Luna)
+
+**Tanggal:** 2026-08-12
+**Untuk:** pengerjaan frontend PerumNet CRM
+**Dari:** sisi backend (Opus)
+**Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
+
+Semua yang diminta pada handoff §13 **sudah tersedia di `main`**, ditambah
+beberapa hal yang muncul dari audit dan dari perbandingan dengan sistem lama.
+Dokumen ini menyebut nama fungsi, nama field form, dan batas perilakunya —
+supaya tidak perlu menebak dari kode.
+
+Semua nama di bawah sudah diverifikasi langsung dari sumbernya, bukan dari
+ingatan.
+
+---
+
+## 0. Ringkasan: apa yang sekarang bisa dikerjakan
+
+| # | Pekerjaan | Blocker sebelumnya | Sekarang |
+|---|---|---|---|
+| 1 | Dropdown notifikasi | loader belum ada | ✅ siap |
+| 2 | **Entity search** (pelanggan, tiket, invoice, perangkat…) | endpoint belum ada | ✅ siap |
+| 3 | Simpan kontak di halaman profil | action belum ada | ✅ siap |
+| 4 | Tombol ganti password | kontrak `auth` belum ada | ✅ siap — **tapi lihat §4, ada yang perlu disepakati** |
+| 5 | **Peta status PPPoE** (offline diwarnai, hitungan, pemilih router) | data belum menyatu | ✅ siap |
+| 6 | Unggah foto bukti + tanda tangan + koordinat penarikan | action belum ada | ✅ siap |
+| 7 | Checklist inspeksi ya/tidak | — | ⚠️ perlu dibuat, lihat §6 |
+| 8 | Penyaringan teknisi & pencarian serial di daftar penarikan | — | ⚠️ perlu dibuat |
+| 9 | Tombol "Ajukan Terminasi" di Customer 360 | — | ⚠️ perlu dibuat |
+| 10 | Portal teknisi `/portal/recoveries` | — | ⚠️ perlu dibuat |
+
+---
+
+## 1. Dropdown notifikasi — SIAP
+
+```ts
+import { notificationMenuData, NOTIFICATION_MENU_LIMIT } from "@/lib/notification-menu";
+
+const data = await notificationMenuData(user.id);          // limit bawaan 5
+const data = await notificationMenuData(user.id, 10);      // maksimal 20
+```
+
+Mengembalikan `NotificationMenuData` persis seperti kontrak §13:
+`{ unreadCount, items[], hasMore }`.
+
+Yang perlu diketahui:
+
+- **`href` bisa bernilai `null`.** Tautan yang tersimpan di database divalidasi
+  sebagai path internal; URL absolut, `//host`, dan skema `javascript:` ditolak
+  menjadi `null`. Tampilkan item itu **tanpa** tautan, jangan dipaksa jadi `#`.
+- `hasMore` sudah jujur — dihitung dengan mengambil satu baris lebih banyak.
+- Notifikasi yang sudah dibaca **tetap tampil** di daftar; `unreadCount` hanya
+  menghitung yang belum dibaca.
+- Action `openNotificationAction` dan `markAllReadAction` di
+  `app/(app)/notifications/actions.ts` tidak berubah, tetap dipakai.
+
+## 2. Entity search — SIAP (ini yang menghalangi fase berikutnya)
+
+**Endpoint:** `GET /api/search?q=<kata kunci>`
+
+```jsonc
+{ "results": [ { "id", "type", "module", "title", "subtitle", "href" } ] }
+```
+
+Atau langsung dari server component:
+
+```ts
+import { searchEntities, isSearchable } from "@/lib/search";
+const results = await searchEntities(user, q);
+```
+
+Cakupan: pelanggan, langganan, perangkat serial, tiket, invoice, work order,
+terminasi.
+
+Yang perlu diketahui:
+
+- **Minimal 2 karakter.** Di bawah itu mengembalikan `[]` tanpa menyentuh
+  database. Pakai `isSearchable(q)` untuk memutuskan empty state.
+- **Hasilnya sudah dipagari izin.** Jenis yang izinnya tidak dipegang user
+  tidak ikut dicari sama sekali. Tidak perlu menyaring lagi di UI.
+- Maksimal 5 per jenis, 20 total.
+- `href` selalu path internal yang sudah divalidasi — aman dipakai langsung.
+- Balasan memakai `Cache-Control: private, no-store`; jangan di-cache di sisi
+  klien, isinya bergantung pada izin pemanggil.
+
+## 3. Profil — SIAP
+
+```ts
+import { profileView } from "@/lib/profile";
+const view = await profileView(user.id);   // ProfileView | null
+```
+
+Bentuknya persis kontrak §13: `{ user, employee, auth }`. `employee` bernilai
+`null` bila akun belum ditautkan ke data kepegawaian — itu keadaan wajar, bukan
+error.
+
+**Action simpan kontak:**
+
+```
+action: updateContactAction   (app/(app)/profile/actions.ts)
+field : name, phone
+```
+
+Hanya nama tampilan dan telepon yang bisa diubah. Email, username, role,
+divisi, NIK, dan jabatan sengaja **tidak** bisa disentuh dari sini — semuanya
+berkonsekuensi RBAC atau kepegawaian.
+
+Validasi yang sudah ditegakkan server (UI tidak perlu mengulang, tapi boleh
+memberi umpan balik lebih awal):
+nama wajib & maksimal 100 karakter · telepon `^[0-9+()\s-]{6,25}$` ·
+menyimpan tanpa perubahan ditolak.
+
+## 4. Ganti password & identitas — SIAP, TAPI PERLU DISEPAKATI
+
+```ts
+view.auth.provider                 // "LOCAL" | "MAILSERVER"
+view.auth.passwordChangeAvailable  // boolean
+```
+
+Aktifkan tombol ganti password **hanya** bila `passwordChangeAvailable === true`,
+persis seperti yang kamu tulis di §11.
+
+⚠️ **Perbedaan yang perlu diputuskan PO.** Halaman profil menampilkan status
+"akun email terpusat / menunggu integrasi", sedangkan kontrak hari ini
+melaporkan `provider: "LOCAL"` dan `passwordChangeAvailable: true`.
+
+Itu **bukan kelalaian** — itu keadaan sebenarnya: password CRM hari ini memang
+disimpan lokal sebagai hash bcrypt, dan `changePasswordAction` benar-benar
+bekerja. Melaporkan `MAILSERVER` sekarang berarti berbohong kepada UI.
+
+Begitu penyedia identitas resmi dipasang, cukup set `AUTH_PROVIDER=MAILSERVER`
+di environment: tombol otomatis nonaktif, dan server pun **menolak** mengganti
+password. Jadi tidak ada yang bisa mengubah hash lokal lalu merasa aman padahal
+kredensial sebenarnya tidak berubah.
+
+**Yang perlu diputuskan:** apakah sekarang mau langsung `MAILSERVER` (tombol
+mati, teks "menunggu integrasi" jadi benar) atau tetap `LOCAL` (teksnya yang
+perlu disesuaikan).
+
+Catatan tambahan: mengganti password sekarang **mematikan seluruh sesi lain**
+di perangkat lain. Sesi di perangkat yang sedang dipakai diterbitkan ulang
+otomatis, jadi pengguna tidak terlempar keluar setelah mengganti passwordnya
+sendiri. Tidak ada yang perlu diubah di UI untuk ini.
+
+## 5. Peta status PPPoE — SIAP
+
+`loadNetworkMap()` sekarang mengembalikan keadaan sambungan langsung dari
+router. Seluruh tambahan bersifat **aditif** — komponen peta yang ada tetap
+jalan tanpa diubah.
+
+**Per pelanggan** (`MapCustomer`):
+
+```ts
+pppoeUsername : string | null
+linkStatus    : "ONLINE" | "OFFLINE" | "DISABLED" | "UNKNOWN"
+lastSeenAt    : string | null   // ISO — dasar "offline sejak"
+routerId      : string | null
+routerName    : string | null
+```
+
+**Tingkat peta** (`NetworkMapData`):
+
+```ts
+linkCounts   : { ONLINE, OFFLINE, DISABLED, UNKNOWN }
+routers      : { id, name, lastPolledAt }[]
+lastSyncedAt : string | null
+```
+
+**Filter** (`MapFilter`): `routerId`, `linkStatus` — selain `siteId`, `oltId`,
+`minOccupancy`, `subscriptionStatus` yang sudah ada.
+
+Yang perlu diketahui, dan ini penting untuk penyajiannya:
+
+- **`UNKNOWN` bukan `OFFLINE`.** Langganan tanpa sesi router — misalnya
+  routernya belum didaftarkan — bukan pelanggan yang jaringannya mati. Beri
+  warna/label berbeda; jangan digabung ke hitungan offline.
+- **`linkStatus` berbeda dari `status`.** `status` adalah status langganan
+  (ACTIVE/ISOLATED/…); `linkStatus` adalah keadaan sambungan menurut router.
+  Pelanggan ACTIVE bisa saja OFFLINE — justru itu yang perlu terlihat.
+- **`linkCounts` dihitung dari titik yang tampil**, bukan seluruh tabel. Jadi
+  angkanya selalu cocok dengan yang bisa diklik, termasuk saat filter aktif.
+- **Tampilkan `lastSyncedAt`.** Peta status tanpa keterangan waktu justru
+  paling menyesatkan ketika poller-nya mati — layar terlihat normal padahal
+  datanya basi.
+- **Saringan router menyaring pelanggan saja**, ODP tetap tampil. Itu memang
+  disengaja: topologi bukan milik satu router.
+
+Yang **belum ada dan tidak bisa ditampilkan**: `los` (loss of signal). Itu
+status optik ONU yang hanya bisa dibaca dari OLT lewat SNMP/telnet, sedangkan
+kita baru menarik data dari MikroTik.
+
+## 6. Bukti lapangan penarikan — SIAP
+
+Seluruh action ada di `app/(app)/inventory/device-recoveries/actions.ts`.
+Form unggahan wajib `encType="multipart/form-data"`.
+
+| Action | Field yang dibaca |
+|---|---|
+| `attachEvidenceAction` | `recoveryId`, `kind` (`ATTEMPT`\|`PICKUP`\|`INSPECTION`), `entityId`, `file` |
+| `signPickupAction` | `recoveryId`, `role` (`CUSTOMER`\|`TECHNICIAN`), `signerName`, `attachmentId?` |
+| `recordAttemptAction` | + `latitude`, `longitude` (opsional) |
+
+Untuk menampilkan: `recoveryEvidence(kind, entityId)` dan
+`recoverySignatures(recoveryId)` di `@/lib/device-recovery`. Gambar dibuka lewat
+`/api/files/<id>`.
+
+Yang perlu diketahui:
+
+- **`entityId` berbeda per `kind`.** `ATTEMPT` → id kunjungan; `PICKUP` dan
+  `INSPECTION` → id **baris perangkat** (`DeviceRecoveryItem`), bukan id
+  inspeksi. Bukti inspeksi sengaja dijangkarkan ke perangkat karena foto harus
+  sudah ada **sebelum** keputusan dibuat.
+- **Inspeksi menolak keputusan tanpa foto.** Urutannya wajib: unggah dulu, baru
+  simpan keputusan. Kalau tidak, server menolak dengan pesan yang jelas.
+- Berkas dibatasi JPG/PNG/WebP/PDF, maksimal 5MB, dan isinya diperiksa — bukan
+  cuma ekstensinya. Tampilkan pesan galat dari server apa adanya.
+- Koordinat opsional. Yang di luar rentang wajar dan `(0,0)` ditolak, karena
+  `(0,0)` adalah keluaran khas GPS yang gagal mengunci.
+- `/api/files/<id>` tanpa sesi akan **redirect ke `/login`**, bukan 401. Jadi
+  `<img>` yang gagal akan tampil sebagai gambar rusak — pertimbangkan
+  `onError` untuk menampilkan placeholder yang jelas.
+
+---
+
+## 7. Yang perlu DIBUAT di frontend
+
+Backend-nya sudah siap semua; yang berikut murni pekerjaan UI.
+
+### 7.1 Kendali checklist inspeksi — ya/tidak, bukan kotak centang
+
+Server sudah menolak checklist yang tidak lengkap atau memuat butir asing.
+Tetapi **kotak centang tidak bisa membedakan "dijawab tidak" dari "belum
+dijawab"** — keduanya terkirim sebagai `false`.
+
+Untuk pemeriksaan yang menentukan nasib aset, bedanya berarti. Perlu kendali
+ya/tidak eksplisit per butir, dan tombol simpan baru aktif setelah semuanya
+terjawab.
+
+Daftar butirnya dari `INSPECTION_CHECKLIST` di `@/lib/constants` — jangan
+ditulis ulang manual, supaya tidak lepas sinkron dengan validasi server.
+
+### 7.2 Daftar penarikan: penyaringan teknisi & pencarian serial/MAC
+
+Halaman `/inventory/device-recoveries` sekarang hanya menyaring status dan
+"terlambat". Perlu ditambah:
+
+- **Penyaringan teknisi.** Teknisi saat ini melihat SELURUH penarikan, padahal
+  §9.2 FR-PICK-002 menghendaki dia melihat tugasnya sendiri. Datanya ada di
+  `assigneeId`.
+- **Pencarian serial/MAC** (FR-UI-001). Ada di `DeviceRecoveryItem.snapshotSerial`
+  dan `actualSerial`.
+
+### 7.3 Tombol "Ajukan Terminasi" di Customer 360
+
+FR-TERM-001 menghendaki aksi ini ada di halaman pelanggan. Sekarang riwayat
+terminasi sudah tampil di sana, tapi tombol pengajuannya belum — jalur satu-
+satunya lewat menu CRM.
+
+Tautkan ke `/crm/terminations/new?subscriptionId=<id>`; halaman itu sudah
+menerima parameter tersebut.
+
+### 7.4 Portal teknisi `/portal/recoveries`
+
+Belum ada. Teknisi memakai halaman gudang. Portal Fase 19 sudah ada sebagai
+pola yang bisa diikuti.
+
+---
+
+## 8. Catatan kerja bersama
+
+**Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
+`NEXT_DIST_DIR=.next-luna` supaya `.next` tidak lagi diperebutkan dua proses.
+Bawaannya tetap `.next`, jadi tidak wajib. Malam ini `.next` sempat dua kali
+tertimpa dan gejalanya menyesatkan — `Cannot find module './5611.js'` sama
+sekali tidak menunjuk penyebabnya.
+
+**Setelah ganti branch, jalankan `npx prisma generate`.** Klien Prisma yang
+tertinggal dari branch lain menghasilkan galat seperti
+`column "sessionEpoch" does not exist` — terlihat seperti masalah database,
+padahal cuma klien yang basi.
+
+**Working directory masih dipakai bersama.** Selama itu, hindari `git add -A`
+dan `git checkout -- .`; keduanya bisa menyapu pekerjaan yang belum tersimpan
+milik proses lain. `git worktree` per pengguna menyelesaikannya untuk seterusnya.
+
+**Menjalankan tes:**
+
+```bash
+npm test                 # unit, tanpa database
+npm run test:integration # butuh database tes terpisah
+npm run test:all         # keduanya
+```
