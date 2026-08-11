@@ -476,6 +476,12 @@ export async function postTransaction(
           if (err) throw new Error(err);
         } else if (tx.type === "STOCK_ISSUE") {
           if (isSerialized) {
+            // Di sinilah PRD terminasi §13.9 ditegakkan: perangkat berstatus
+            // RECOVERY_PENDING, RETURN_IN_TRANSIT, QUARANTINED, RMA, DAMAGED,
+            // LOST, atau SCRAPPED tidak bisa dikeluarkan ke teknisi. Yang
+            // dipakai adalah daftar-PUTIH (hanya AVAILABLE) — bukan daftar
+            // status terlarang, karena daftar terlarang harus diperbarui
+            // setiap kali ada status baru dan diam-diam bocor kalau lupa.
             const device = await prisma.serializedDevice.findUnique({
               where: { id: line.deviceId! },
             });

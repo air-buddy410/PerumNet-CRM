@@ -7,8 +7,12 @@ import {
   postTransaction,
   cancelDraftTransaction,
 } from "@/lib/inventory";
-import { PERMISSIONS, RECOVERY_ATTEMPT_RESULTS } from "@/lib/constants";
-import { notReturnedBlocker } from "@/lib/recovery";
+import {
+  PERMISSIONS,
+  RECOVERY_ATTEMPT_RESULTS,
+  INSPECTION_CHECKLIST,
+} from "@/lib/constants";
+import { notReturnedBlocker, slaPhase } from "@/lib/recovery";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Mesin Penarikan Perangkat (Fase 30, PRD §13) ────────────────
@@ -41,6 +45,29 @@ export interface PickupLine {
   actualSerial: string;
   actualMac?: string;
   mismatchNote?: string;
+}
+
+/**
+ * Menjelaskan ketidakcocokan antara perangkat di lapangan dan catatan.
+ * Mengembalikan null bila keduanya cocok.
+ *
+ * MAC hanya dibandingkan bila teknisi benar-benar mengisinya — memaksa
+ * keterangan hanya karena kolom opsional dikosongkan akan membuat orang
+ * mengisi asal supaya formnya lolos.
+ */
+function describeMismatch(
+  item: { snapshotSerial: string; snapshotMac: string | null },
+  line: PickupLine
+): string | null {
+  const serial = line.actualSerial.trim();
+  const mac = line.actualMac?.trim();
+  if (serial !== item.snapshotSerial) {
+    return `Serial ${serial} berbeda dari catatan (${item.snapshotSerial})`;
+  }
+  if (mac && item.snapshotMac && mac.toLowerCase() !== item.snapshotMac.toLowerCase()) {
+    return `MAC ${mac} berbeda dari catatan (${item.snapshotMac})`;
+  }
+  return null;
 }
 
 export async function assignRecovery(
@@ -198,60 +225,78 @@ export async function pickupDevices(
     if (!actual) {
       return { ok: false, error: `Serial yang ditemukan untuk ${item.snapshotSerial} wajib diisi.` };
     }
-    if (actual !== item.snapshotSerial && !line.mismatchNote?.trim()) {
-      return {
-        ok: false,
-        error: `Serial ${actual} berbeda dari catatan (${item.snapshotSerial}) — keterangan wajib diisi.`,
-      };
+    // Serial DAN MAC sama-sama dibandingkan (§9.2 FR-PICK-005). MAC yang
+    // berbeda dengan serial yang cocok tetap berarti ada yang tidak beres —
+    // casing bisa saja dipindah, atau catatannya yang salah sejak awal.
+    const mismatch = describeMismatch(item, line);
+    if (mismatch && !line.mismatchNote?.trim()) {
+      return { ok: false, error: `${mismatch} — keterangan wajib diisi.` };
     }
     prepared.push({ item, line });
   }
 
-  await db.$transaction(async (tx) => {
-    for (const { item, line } of prepared) {
-      await tx.deviceRecoveryItem.update({
-        where: { id: item.id },
-        data: {
-          status: "PICKED_UP",
-          actualSerial: line.actualSerial.trim(),
-          actualMac: line.actualMac?.trim() || null,
-          mismatchNote: line.mismatchNote?.trim() || null,
-          pickedUpAt: new Date(),
-        },
-      });
-      await tx.serializedDevice.update({
-        where: { id: item.deviceId },
-        data: {
-          status: "RETURN_IN_TRANSIT",
-          custodianId,
-          subscriptionId: null,
-          customerId: null,
-          warehouseId: null,
-        },
-      });
-      await tx.deviceMovement.create({
-        data: {
-          deviceId: item.deviceId,
-          action: "RECOVERY_PICKED_UP",
-          fromNote: "Terpasang di pelanggan",
-          toNote: "Dibawa teknisi — perjalanan pulang",
-          workOrderId: dri.workOrderId,
-          byUserId: user.id,
-          note: line.mismatchNote?.trim() || null,
-        },
-      });
-    }
+  try {
+    await db.$transaction(async (tx) => {
+      for (const { item, line } of prepared) {
+        // Status diperiksa ULANG di dalam UPDATE, bukan hanya saat validasi
+        // di atas. Dua teknisi yang menyimpan bersamaan sama-sama membaca
+        // RECOVERY_PENDING; yang membedakan hanya siapa yang benar-benar
+        // berhasil mengubahnya. Pola bersyarat ini sama dengan penguncian
+        // tugas di worker Fase 27.
+        const claimed = await tx.deviceRecoveryItem.updateMany({
+          where: { id: item.id, status: "RECOVERY_PENDING" },
+          data: {
+            status: "PICKED_UP",
+            actualSerial: line.actualSerial.trim(),
+            actualMac: line.actualMac?.trim() || null,
+            mismatchNote: line.mismatchNote?.trim() || null,
+            pickedUpAt: new Date(),
+          },
+        });
+        if (claimed.count === 0) {
+          throw new Error(
+            `${item.snapshotSerial} baru saja dicatat oleh proses lain — muat ulang halaman.`
+          );
+        }
+        await tx.serializedDevice.update({
+          where: { id: item.deviceId },
+          data: {
+            status: "RETURN_IN_TRANSIT",
+            custodianId,
+            subscriptionId: null,
+            customerId: null,
+            warehouseId: null,
+          },
+        });
+        await tx.deviceMovement.create({
+          data: {
+            deviceId: item.deviceId,
+            action: "RECOVERY_PICKED_UP",
+            fromNote: "Terpasang di pelanggan",
+            toNote: "Dibawa teknisi — perjalanan pulang",
+            workOrderId: dri.workOrderId,
+            byUserId: user.id,
+            note: line.mismatchNote?.trim() || null,
+          },
+        });
+      }
 
-    const remaining = dri.items.filter(
-      (i) => i.status === "RECOVERY_PENDING" && !prepared.some((p) => p.item.id === i.id)
-    ).length;
-    await tx.deviceRecoveryIssue.update({
-      where: { id: recoveryId },
-      data: { status: remaining > 0 ? "PARTIAL" : "RECOVERED" },
+      // Sisa dihitung dari kondisi TERKINI di dalam transaksi, bukan dari
+      // data yang dibaca sebelum transaksi dimulai — kalau tidak, penarikan
+      // paralel bisa menyimpulkan "masih ada sisa" padahal sudah habis.
+      const stillPending = await tx.deviceRecoveryItem.count({
+        where: { recoveryId, status: "RECOVERY_PENDING" },
+      });
+      await tx.deviceRecoveryIssue.update({
+        where: { id: recoveryId },
+        data: { status: stillPending > 0 ? "PARTIAL" : "RECOVERED" },
+      });
     });
-  });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Penarikan gagal disimpan." };
+  }
 
-  const mismatches = prepared.filter((p) => p.line.actualSerial.trim() !== p.item.snapshotSerial);
+  const mismatches = prepared.filter((p) => describeMismatch(p.item, p.line) !== null);
   await logAudit({
     userId: user.id,
     action: "RECOVERY_PICKUP",
@@ -261,8 +306,10 @@ export async function pickupDevices(
     description: `${dri.recoveryNumber}: ${prepared.length} perangkat diambil${mismatches.length ? `, ${mismatches.length} serial tidak cocok` : ""}`,
     metadata: {
       mismatches: mismatches.map((m) => ({
-        expected: m.item.snapshotSerial,
-        found: m.line.actualSerial.trim(),
+        expectedSerial: m.item.snapshotSerial,
+        foundSerial: m.line.actualSerial.trim(),
+        expectedMac: m.item.snapshotMac,
+        foundMac: m.line.actualMac?.trim() || null,
         note: m.line.mismatchNote,
       })),
     },
@@ -481,6 +528,21 @@ export async function inspectDevice(
   }
   if (!data.note?.trim()) {
     return { ok: false, error: "Catatan inspeksi wajib diisi." };
+  }
+  // §9.4 FR-INSP-001: checklist wajib diselesaikan. Yang bisa ditegakkan di
+  // sini adalah KELENGKAPANNYA — setiap butir harus ada dalam catatan, dan
+  // tidak boleh ada butir asing yang diselundupkan. Membedakan "dijawab
+  // tidak" dari "belum dijawab" butuh kendali ya/tidak di form, bukan kotak
+  // centang; selama masih kotak centang, keduanya sama-sama terkirim false.
+  const known = INSPECTION_CHECKLIST.map(([key]) => key as string);
+  const submitted = Object.keys(data.checklist ?? {});
+  const missing = known.filter((k) => !(k in (data.checklist ?? {})));
+  if (missing.length) {
+    return { ok: false, error: `Butir checklist belum lengkap: ${missing.join(", ")}.` };
+  }
+  const unknown = submitted.filter((k) => !known.includes(k));
+  if (unknown.length) {
+    return { ok: false, error: `Butir checklist tidak dikenal: ${unknown.join(", ")}.` };
   }
 
   const item = await db.deviceRecoveryItem.findUnique({
@@ -736,29 +798,109 @@ export async function markNotReturned(
  * apa pun sendiri: menyatakan perangkat hilang adalah keputusan manusia
  * yang butuh izin eskalasi, bukan efek samping sebuah cron.
  */
+/**
+ * Menyapu penarikan yang mendekati atau melewati batas SLA (PRD §14).
+ *
+ * Dipanggil worker Fase 27. Sengaja hanya MEMBERI TAHU, tidak memutuskan
+ * apa pun sendiri: menyatakan perangkat hilang adalah keputusan manusia
+ * yang butuh izin eskalasi, bukan efek samping sebuah cron.
+ *
+ * Dua peringatan yang berbeda penerimanya:
+ *  - H-1 → teknisi penerima tugas dan koordinator, selagi masih sempat dikejar.
+ *  - Lewat batas → pemegang izin eskalasi. Isinya dibedakan lagi berdasarkan
+ *    apakah syarat vonis "tidak kembali" sudah lengkap, karena peringatan
+ *    yang menyuruh mengeskalasi padahal belum boleh hanya melatih orang
+ *    mengabaikannya.
+ *
+ * Tugas ini berjalan tiap jam, jadi setiap penarikan hanya diberitakan
+ * sekali sehari. Tanpa itu, satu penarikan terlambat akan melahirkan 24
+ * notifikasi sehari dan seluruh kanal notifikasi berhenti dipercaya.
+ */
 export async function sweepOverdueRecoveries(): Promise<string> {
   const now = new Date();
-  const overdue = await db.deviceRecoveryIssue.findMany({
+  const setting = await db.deviceRecoverySetting.findFirst({ where: { isActive: true } });
+  const minAttempts = setting?.minAttempts ?? 3;
+
+  const candidates = await db.deviceRecoveryIssue.findMany({
     where: {
       status: { notIn: ["COMPLETED", "CLOSED_UNRECOVERED"] },
-      slaDueAt: { lte: now },
+      slaDueAt: { not: null },
     },
     include: {
-      termination: { select: { terminationNumber: true } },
       items: { where: { status: "RECOVERY_PENDING" }, select: { id: true } },
+      _count: { select: { attempts: true } },
     },
   });
-  if (!overdue.length) return "0 penarikan melewati SLA";
 
-  for (const dri of overdue) {
+  let warned = 0;
+  let breached = 0;
+  let readyToEscalate = 0;
+
+  for (const dri of candidates) {
+    const phase = slaPhase(dri, now);
+    if (phase === "OK") continue;
+    const link = `/inventory/device-recoveries/${dri.id}`;
+    const due = dri.slaDueAt?.toLocaleDateString("id-ID") ?? "-";
+
+    if (phase === "DUE_SOON") {
+      warned++;
+      if (await notifiedRecently("RECOVERY_SLA_DUE_SOON", link)) continue;
+      const audience = dri.assigneeId ? [dri.assigneeId] : [];
+      await notifyUsers(audience, {
+        type: "RECOVERY_SLA_DUE_SOON",
+        title: `Batas penarikan besok: ${dri.recoveryNumber}`,
+        body: `${dri.items.length} perangkat belum tertarik; batas SLA ${due}.`,
+        link,
+        module: "device_recovery",
+      });
+      await notifyPermission(
+        PERMISSIONS.RECOVERY_ASSIGN,
+        {
+          type: "RECOVERY_SLA_DUE_SOON",
+          title: `Batas penarikan besok: ${dri.recoveryNumber}`,
+          body: `${dri.items.length} perangkat belum tertarik; batas SLA ${due}.`,
+          link,
+          module: "device_recovery",
+        },
+        dri.assigneeId ?? undefined
+      );
+      continue;
+    }
+
+    breached++;
+    const canEscalate = dri._count.attempts >= minAttempts;
+    if (canEscalate) readyToEscalate++;
+    if (await notifiedRecently("RECOVERY_SLA_BREACH", link)) continue;
     await notifyPermission(PERMISSIONS.RECOVERY_ESCALATE, {
       type: "RECOVERY_SLA_BREACH",
       title: `SLA terlewat: ${dri.recoveryNumber}`,
-      body: `${dri.items.length} perangkat belum tertarik sejak batas ${dri.slaDueAt?.toLocaleDateString("id-ID")}.`,
-      link: `/inventory/device-recoveries/${dri.id}`,
+      body: canEscalate
+        ? `${dri.items.length} perangkat belum tertarik sejak ${due}. Syarat vonis tidak kembali sudah terpenuhi (${dri._count.attempts} percobaan).`
+        : `${dri.items.length} perangkat belum tertarik sejak ${due}. Baru ${dri._count.attempts} dari ${minAttempts} percobaan — belum bisa dieskalasi, perlu kunjungan lagi.`,
+      link,
       module: "device_recovery",
     });
   }
-  const pending = overdue.reduce((n, d) => n + d.items.length, 0);
-  return `${overdue.length} penarikan melewati SLA (${pending} perangkat belum tertarik)`;
+
+  if (!warned && !breached) return "0 penarikan mendekati atau melewati SLA";
+  return (
+    `${breached} melewati SLA (${readyToEscalate} siap dieskalasi) · ` +
+    `${warned} mendekati batas`
+  );
+}
+
+/**
+ * Apakah pemberitahuan serupa sudah dikirim belakangan ini?
+ *
+ * Dicocokkan pada tipe + tautan, bukan per penerima: yang ingin dicegah
+ * adalah pengulangan tiap jam untuk kasus yang sama, bukan pengiriman ke
+ * beberapa orang sekaligus.
+ */
+async function notifiedRecently(type: string, link: string, hours = 24): Promise<boolean> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const existing = await db.notification.findFirst({
+    where: { type, link, createdAt: { gte: since } },
+    select: { id: true },
+  });
+  return existing !== null;
 }
