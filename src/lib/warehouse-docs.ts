@@ -357,25 +357,17 @@ export async function verifyReturnRequest(
       purpose: `Pengembalian ${request.returnNumber}`,
       referenceNote: request.returnNumber,
     },
+    // Kondisi dibawa per baris. Sebelumnya kondisi ditempel setelah draft
+    // dibuat lewat updateMany berbasis item, sehingga dua baris item yang sama
+    // dengan kondisi berbeda saling menimpa — barang baik ikut tercatat rusak.
     request.lines.map((l) => ({
       itemId: l.itemId,
       qty: l.qty,
       deviceIds: l.deviceId ? [l.deviceId] : undefined,
+      condition: l.condition,
     }))
   );
   if (!draft.ok) return draft;
-
-  // Kondisi barang menempel ke baris transaksi agar posting tahu tujuan dimensinya.
-  for (const line of request.lines) {
-    await db.stockTransactionLine.updateMany({
-      where: {
-        txId: draft.id,
-        itemId: line.itemId,
-        ...(line.deviceId ? { deviceId: line.deviceId } : {}),
-      },
-      data: { condition: line.condition },
-    });
-  }
 
   const posted = await postTransaction(user, draft.id);
   if (!posted.ok) return posted;

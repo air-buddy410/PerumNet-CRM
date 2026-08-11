@@ -129,6 +129,7 @@ model User {
   materialRequests MaterialRequest[] @relation("MrqRequester")
   materialDecided  MaterialRequest[] @relation("MrqDecider")
   slotLedgerEntries SlotLedger[] @relation("SlotLedgerCreator")
+  warehouseScopes UserWarehouseScope[] @relation("WarehouseScopeUser")
 }
 
 model Division {
@@ -298,7 +299,11 @@ model CostCenter {
   journalLines     JournalLine[]
 }
 
+/// Fase 21 (F12) — kategori material dua tingkat: kategori di atas materialType,
+/// mengikuti pengelompokan FTTH (Cable, Connector, Network Device, dst).
 model Category {
+  /// Cable | Connector | Network Device | Passive Device | Power | Consumable | Tools | Other
+  materialType String?
   id       String  @id @default(cuid())
   type     String // EXPENSE | ITEM | TICKET | ... (Phase 1: EXPENSE)
   code     String  @unique
@@ -630,6 +635,7 @@ model Warehouse {
   materialRequests MaterialRequest[] @relation("MrqWarehouse")
   racks      Rack[]
   stockSlots StockSlot[]
+  userScopes UserWarehouseScope[] @relation("WarehouseScope")
 }
 
 model Item {
@@ -639,7 +645,9 @@ model Item {
   categoryId   String?
   brand        String?
   model        String?
-  unit         String  @default("pcs") // pcs | meter | roll | box
+  unit         String  @default("pcs") // pcs | meter | roll | box | set
+  /// Fase 21 (F12) — barcode/QR untuk pemindaian di opname & pengambilan barang.
+  barcode      String? @unique
   trackingType String  @default("BULK") // SERIALIZED | BULK
   minStock     Int     @default(0)
   isActive     Boolean @default(true)
@@ -2615,4 +2623,17 @@ model SlotTransferPolicy {
   name      String
   maxQty    Int // di atas ini butuh izin slot.approve
   isActive  Boolean @default(true)
+}
+
+/// Fase 21 (F12) — pembatasan gudang untuk seorang user. Bila user punya
+/// setidaknya satu baris, ia hanya boleh menyentuh gudang yang terdaftar.
+model UserWarehouseScope {
+  id          String @id @default(cuid())
+  userId      String
+  warehouseId String
+
+  user      User      @relation("WarehouseScopeUser", fields: [userId], references: [id])
+  warehouse Warehouse @relation("WarehouseScope", fields: [warehouseId], references: [id])
+
+  @@unique([userId, warehouseId])
 }

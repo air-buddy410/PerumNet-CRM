@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
 import { PERMISSIONS, TX_PREFIX, statusLabel } from "@/lib/constants";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
+import { assertWarehouseInScope } from "@/lib/slots";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Inventory Engine ────────────────────────────────────────────
@@ -55,6 +56,10 @@ export interface DraftLineInput {
   qty: number;
   serialNumbers?: string[]; // GR item serialized
   deviceIds?: string[]; // issue/return/transfer item serialized
+  /// Kondisi barang untuk STOCK_RETURN: GOOD|USED|DAMAGED|RMA.
+  /// Dibawa per baris sejak awal — item yang sama bisa dikembalikan dengan
+  /// kondisi berbeda dalam satu transaksi.
+  condition?: string | null;
 }
 
 interface DraftHeader {
@@ -73,11 +78,26 @@ async function buildLines(
   type: string,
   lines: DraftLineInput[]
 ): Promise<
-  | { ok: true; rows: { itemId: string; qty: number; deviceId?: string; snInput?: string }[] }
+  | {
+      ok: true;
+      rows: {
+        itemId: string;
+        qty: number;
+        deviceId?: string;
+        snInput?: string;
+        condition?: string | null;
+      }[];
+    }
   | { ok: false; error: string }
 > {
   if (!lines.length) return { ok: false, error: "Minimal satu baris item." };
-  const rows: { itemId: string; qty: number; deviceId?: string; snInput?: string }[] = [];
+  const rows: {
+    itemId: string;
+    qty: number;
+    deviceId?: string;
+    snInput?: string;
+    condition?: string | null;
+  }[] = [];
 
   for (const line of lines) {
     const item = await db.item.findUnique({ where: { id: line.itemId } });
@@ -116,17 +136,19 @@ async function buildLines(
             error: `SN "${pendingDraft.snInput}" sudah ada di draft ${pendingDraft.tx.txNumber}.`,
           };
         }
-        for (const sn of sns) rows.push({ itemId: item.id, qty: 1, snInput: sn });
+        for (const sn of sns) rows.push({ itemId: item.id, qty: 1, snInput: sn, condition: line.condition ?? null });
       } else {
         const deviceIds = (line.deviceIds ?? []).filter(Boolean);
         if (!deviceIds.length) {
           return { ok: false, error: `Item ${item.name}: pilih perangkat (SN).` };
         }
-        for (const deviceId of deviceIds) rows.push({ itemId: item.id, qty: 1, deviceId });
+        for (const deviceId of deviceIds) {
+          rows.push({ itemId: item.id, qty: 1, deviceId, condition: line.condition ?? null });
+        }
       }
     } else {
       if (line.qty <= 0) return { ok: false, error: `Item ${item.name}: qty harus > 0.` };
-      rows.push({ itemId: item.id, qty: line.qty });
+      rows.push({ itemId: item.id, qty: line.qty, condition: line.condition ?? null });
     }
   }
   return { ok: true, rows };
@@ -158,6 +180,13 @@ export async function createDraftTransaction(
       return { ok: false, error: "Gudang asal dan tujuan tidak boleh sama." };
     }
   }
+
+  // Fase 21 (F12): user yang dibatasi scope tidak boleh menyentuh gudang lain.
+  const scopeError = await assertWarehouseInScope(user.id, [
+    header.warehouseFromId,
+    header.warehouseToId,
+  ]);
+  if (scopeError) return { ok: false, error: scopeError };
 
   const built = await buildLines(type, lines);
   if (!built.ok) return built;
@@ -283,11 +312,19 @@ async function consumeReserved(
   qty: number,
   itemName: string
 ): Promise<string | null> {
+  // Draft yang dibuat SEBELUM fitur reservasi ada tidak punya tahanan apa pun.
+  // Tanpa pembatasan ini, posting draft warisan gagal dengan pesan "reservasi
+  // tidak konsisten" dan transaksinya mustahil diselesaikan. Yang dilepas
+  // paling banyak sebesar yang benar-benar sedang ditahan.
+  const level = await prisma.stockLevel.findUnique({
+    where: { itemId_warehouseId: { itemId, warehouseId } },
+  });
+  const release = Math.min(level?.reserved ?? 0, qty);
   return adjustBalance(
     prisma,
     itemId,
     warehouseId,
-    { onHand: -qty, reserved: -qty },
+    { onHand: -qty, reserved: -release },
     itemName
   );
 }
@@ -327,11 +364,21 @@ async function applyReservation(
         }
       }
     }
+    // Saat melepas, jangan pernah melepas lebih dari yang benar-benar ditahan.
+    // Draft warisan (dibuat sebelum fitur reservasi ada) tidak menahan apa pun;
+    // tanpa pembatasan ini draft tersebut mustahil dibatalkan.
+    let delta = sign * line.qty;
+    if (sign === -1) {
+      const level = await prisma.stockLevel.findUnique({
+        where: { itemId_warehouseId: { itemId: line.itemId, warehouseId } },
+      });
+      delta = -Math.min(level?.reserved ?? 0, line.qty);
+    }
     const err = await adjustBalance(
       prisma,
       line.itemId,
       warehouseId,
-      { reserved: sign * line.qty },
+      { reserved: delta },
       line.item.name
     );
     if (err) return err;
@@ -381,6 +428,13 @@ export async function postTransaction(
   if (tx.status !== "DRAFT") {
     return { ok: false, error: "Hanya draft yang bisa diposting. Transaksi posted immutable." };
   }
+  // Scope gudang ditegakkan di setiap jalur yang mengubah saldo, bukan hanya
+  // saat draft dibuat — draft bisa dibuat orang lain lalu diposting user ini.
+  const postScopeError = await assertWarehouseInScope(user.id, [
+    tx.warehouseFromId,
+    tx.warehouseToId,
+  ]);
+  if (postScopeError) return { ok: false, error: postScopeError };
 
   try {
     await db.$transaction(async (prisma) => {
@@ -1203,6 +1257,8 @@ export async function receiveTransfer(
   if (tx.receiveStatus === "RECEIVED") {
     return { ok: false, error: "Transfer ini sudah diterima seluruhnya." };
   }
+  const receiveScopeError = await assertWarehouseInScope(user.id, [tx.warehouseToId]);
+  if (receiveScopeError) return { ok: false, error: receiveScopeError };
 
   const byId = new Map(tx.lines.map((l) => [l.id, l]));
   const toReceive: { line: (typeof tx.lines)[number]; qty: number }[] = [];
