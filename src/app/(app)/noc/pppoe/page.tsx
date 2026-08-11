@@ -47,6 +47,11 @@ export default async function PppoeMonitorPage({
       <PageHeader
         title="Monitor PPPoE"
         subtitle={`Keadaan terakhir yang ditarik dari router. Halaman ini hanya membaca — tidak ada aksi yang menyentuh perangkat.`}
+        action={
+          <a href="/api/export/pppoe" className="btn-secondary">
+            Unduh CSV
+          </a>
+        }
       />
 
       <Flash ok={sp.ok} error={sp.error} />

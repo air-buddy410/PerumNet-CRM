@@ -38,6 +38,11 @@ export default async function CustomersPage({
       <PageHeader
         title="Customers"
         subtitle="Pelanggan berasal dari konversi lead (dengan quotation Accepted) — traceability Lead → Customer terjaga."
+        action={
+          <a href="/api/export/customers" className="btn-secondary">
+            Unduh CSV
+          </a>
+        }
       />
       <Flash ok={sp.ok} error={sp.error} />
 
