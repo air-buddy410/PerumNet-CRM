@@ -236,6 +236,15 @@ export async function resetTransactionalData() {
   await db.documentSequence.deleteMany({});
   await db.subscription.deleteMany({});
   await db.customer.deleteMany({});
+  // Data kepegawaian dibersihkan sebelum user karena Employee menunjuk User.
+  // Relasi atasan menunjuk sesama Employee, jadi ditawar dulu menjadi null —
+  // menghapus semuanya sekaligus akan ditolak foreign key.
+  await db.attendance.deleteMany({});
+  await db.leaveRequest.deleteMany({});
+  await db.overtimeRequest.deleteMany({});
+  await db.shiftSchedule.deleteMany({});
+  await db.employee.updateMany({ data: { supervisorId: null } });
+  await db.employee.deleteMany({});
   await db.userRole.deleteMany({});
   await db.user.deleteMany({});
 }

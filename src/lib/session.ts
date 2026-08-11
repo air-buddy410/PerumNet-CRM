@@ -14,6 +14,11 @@ export interface SessionPayload {
   userId: string;
   username: string;
   name: string;
+  /// Generasi sesi saat token diterbitkan. Dicocokkan dengan User.sessionEpoch
+  /// pada tiap request; token dari generasi lama ditolak. Inilah yang membuat
+  /// ganti password benar-benar mengusir sesi di perangkat lain, meskipun
+  /// JWT-nya sendiri tidak bisa ditarik kembali.
+  epoch?: number;
   [key: string]: unknown;
 }
 

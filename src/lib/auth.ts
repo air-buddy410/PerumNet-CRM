@@ -36,6 +36,7 @@ export async function login(
     userId: user.id,
     username: user.username,
     name: user.name,
+    epoch: user.sessionEpoch,
   });
   await logAudit({
     userId: user.id,

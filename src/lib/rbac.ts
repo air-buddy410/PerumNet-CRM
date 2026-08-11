@@ -37,6 +37,10 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     },
   });
   if (!user || !user.isActive) return null;
+  // Token yang diterbitkan sebelum password terakhir diganti tidak berlaku.
+  // Token lama memakai payload tanpa epoch; diperlakukan sebagai generasi 0
+  // supaya sesi yang sedang berjalan tidak putus saat fitur ini dipasang.
+  if ((session.epoch ?? 0) !== user.sessionEpoch) return null;
 
   const permissions = new Set<string>();
   for (const ur of user.roles) {

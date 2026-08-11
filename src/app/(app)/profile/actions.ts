@@ -5,8 +5,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/rbac";
 import { hashPassword, verifyPassword } from "@/lib/auth";
+import { createSession } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { AUDIT_ACTIONS } from "@/lib/constants";
+import { revalidatePath } from "next/cache";
+import { updateOwnContact, passwordChangeAvailable } from "@/lib/profile";
 
 const schema = z
   .object({
@@ -36,17 +39,41 @@ export async function changePasswordAction(formData: FormData): Promise<void> {
     );
   }
 
+  // Bila identitas dipegang penyedia luar, CRM tidak boleh mengubah password
+  // apa pun — mengubah hash lokal hanya akan memberi rasa aman palsu sementara
+  // kredensial yang sebenarnya tidak berubah.
+  if (!passwordChangeAvailable()) {
+    redirect(
+      "/profile?error=" +
+        encodeURIComponent(
+          "Password dikelola penyedia identitas terpusat, bukan oleh CRM."
+        )
+    );
+  }
+
   const dbUser = await db.user.findUnique({ where: { id: user.id } });
   if (!dbUser || !(await verifyPassword(parsed.data.currentPassword, dbUser.passwordHash))) {
     redirect("/profile?error=" + encodeURIComponent("Password saat ini salah."));
   }
 
-  await db.user.update({
+  // Menaikkan epoch mematikan SELURUH sesi lama, termasuk di perangkat lain.
+  // Inilah yang membuat ganti password berguna saat akun disusupi; tanpa ini
+  // penyusup tetap masuk sampai tokennya kedaluwarsa sendiri.
+  const updated = await db.user.update({
     where: { id: user.id },
     data: {
       passwordHash: await hashPassword(parsed.data.newPassword),
       mustChangePassword: false,
+      sessionEpoch: { increment: 1 },
     },
+  });
+  // Sesi di perangkat INI diterbitkan ulang supaya pengguna tidak ikut
+  // terlempar keluar setelah mengganti passwordnya sendiri.
+  await createSession({
+    userId: updated.id,
+    username: updated.username,
+    name: updated.name,
+    epoch: updated.sessionEpoch,
   });
   await logAudit({
     userId: user.id,
@@ -57,4 +84,28 @@ export async function changePasswordAction(formData: FormData): Promise<void> {
     description: `${user.name} mengganti password sendiri`,
   });
   redirect("/profile?ok=" + encodeURIComponent("Password berhasil diganti."));
+}
+
+// ── Kontrak profil untuk frontend (Fase 34, PRD Frontend §10) ───
+
+/**
+ * Menyimpan kontak milik sendiri. Field: name, phone.
+ *
+ * Hanya nama tampilan dan telepon yang bisa diubah dari sini. Email,
+ * username, role, divisi, NIK, dan jabatan sengaja tidak tersedia — semuanya
+ * berkonsekuensi RBAC atau kepegawaian dan harus lewat modulnya sendiri.
+ */
+export async function updateContactAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const result = await updateOwnContact(user, {
+    name: String(formData.get("name") ?? ""),
+    phone: String(formData.get("phone") ?? "") || null,
+  });
+  revalidatePath("/profile");
+  redirect(
+    "/profile?" +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Kontak diperbarui.")
+        : "error=" + encodeURIComponent(result.error))
+  );
 }
