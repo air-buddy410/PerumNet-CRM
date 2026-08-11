@@ -587,6 +587,7 @@ model Subscription {
   odpPort         OdpPort?
 
   @@index([status])
+  pppoeSessions PppoeSession[]
 }
 
 // Bukti/lampiran generik (foto survey, nota, dsb.)
@@ -1091,6 +1092,7 @@ model NetworkDevice {
   subscriptions Subscription[]     @relation("SubscriptionRouter")
   accessJobs    NetworkAccessJob[]
   oltDevice     OltDevice?
+  mikrotikRouter MikrotikRouter?
 }
 
 model NetworkLink {
@@ -2636,4 +2638,65 @@ model UserWarehouseScope {
   warehouse Warehouse @relation("WarehouseScope", fields: [warehouseId], references: [id])
 
   @@unique([userId, warehouseId])
+}
+
+/// Fase 24 (PRD-NOC-TOOLS N2) — router MikroTik sebagai spesialisasi
+/// NetworkDevice, mengikuti pola OltDevice. RouterOS v7 → REST API di atas
+/// HTTPS, jadi tidak butuh pustaka klien tambahan.
+model MikrotikRouter {
+  id              String   @id @default(cuid())
+  networkDeviceId String   @unique
+  managementUrl   String // https://host[:port]
+  /// Nama env var berisi "user:password" — BUKAN nilainya (pola Fase 13).
+  credentialRef   String
+  pollIntervalSec Int      @default(60)
+  isPollingEnabled Boolean @default(true)
+  lastPolledAt    DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  networkDevice NetworkDevice  @relation(fields: [networkDeviceId], references: [id])
+  sessions      PppoeSession[]
+  pollRuns      PppoePollRun[]
+}
+
+/// Keadaan sesi PPPoE terakhir yang diketahui per (router × username).
+/// Diisi HANYA oleh poller — halaman monitor tidak pernah menulis ke sini.
+model PppoeSession {
+  id             String   @id @default(cuid())
+  routerId       String
+  subscriptionId String?
+  username       String
+  callerId       String? // MAC
+  address        String? // IP yang diberikan
+  uptimeSeconds  Int?
+  status         String // ONLINE|OFFLINE|DISABLED
+  lastSeenAt     DateTime?
+  updatedAt      DateTime @updatedAt
+
+  router       MikrotikRouter @relation(fields: [routerId], references: [id])
+  subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([routerId, username])
+  @@index([status])
+}
+
+/// Jejak setiap penarikan data. Kegagalan polling adalah STATE yang terlihat,
+/// bukan log yang tenggelam.
+model PppoePollRun {
+  id            String    @id @default(cuid())
+  routerId      String
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  status        String    @default("RUNNING") // RUNNING|SUCCESS|FAILED
+  totalCount    Int       @default(0)
+  onlineCount   Int       @default(0)
+  offlineCount  Int       @default(0)
+  disabledCount Int       @default(0)
+  matchedCount  Int       @default(0) // username yang cocok ke langganan
+  error         String?
+
+  router MikrotikRouter @relation(fields: [routerId], references: [id])
+
+  @@index([routerId, startedAt])
 }

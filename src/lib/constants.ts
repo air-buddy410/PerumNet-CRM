@@ -12,8 +12,7 @@ export const ROLES = {
   OPERATIONAL_COORDINATOR: "operational_coordinator",
   TECHNICIAN: "technician",
   PROJECT_MANAGER: "project_manager",
-  NOC_MANAGER: "noc_manager",
-  NOC_ENGINEER: "noc_engineer",
+  NOC: "noc", // Fase 22: noc_manager + noc_engineer dilebur jadi satu
   IT_MANAGER: "it_manager",
   DEVELOPER: "developer",
   DEVOPS_ENGINEER: "devops_engineer",
@@ -86,6 +85,7 @@ export const PERMISSIONS = {
   PROJECTS_CLOSE: "projects.close",
   // Phase 5 — NOC
   NOC_VIEW: "noc.view",
+  NOC_MAP_VIEW: "noc_map.view", // peta jaringan + titik pelanggan (Fase 23)
   NET_INVENTORY_MANAGE: "net_inventory.manage", // site, device, link
   IPAM_MANAGE: "ipam.manage",
   ALARMS_MANAGE: "alarms.manage",

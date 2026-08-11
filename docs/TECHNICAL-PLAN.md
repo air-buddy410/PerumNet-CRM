@@ -199,6 +199,11 @@ Fase berikutnya menambah folder per modul di `(app)/` (sales, crm, inventory, fi
 
 Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dari riset banding terhadap sistem helpdesk lama — lihat `FEATURE-GAP-ANALYSIS-HELPDESK-V2.md` (gap G1–G23) dan `DESIGN-PHASE-8-BILLING-AND-BEYOND.md`. Keputusan desain §11 yang diambil selama implementasi tercatat di `DECISIONS-PHASE-8.md`, termasuk satu yang masih menunggu pemilik proyek: **retensi data identitas (foto selfie & jejak lokasi absensi)**.
 
+| **22. NOC Satu Kesatuan** | Peleburan noc_manager + noc_engineer → peran tunggal `noc` | ✅ selesai (PRD-NOC-TOOLS §0/N5; migrasi memindahkan penugasan user & langkah approval ke peran baru sebelum peran lama dihapus, jadi database berisi tidak kehilangan akses; **SoD tidak hilang** — post-review change tetap menolak eksekutornya sendiri karena ditegakkan per-record, bukan per-peran) |
+| **23. Peta Jaringan Terpadu** | ODP berwarna okupansi + titik pelanggan + kaskade ODP + denah port | ✅ selesai (PRD-NOC-TOOLS N1; tanpa dependensi baru dan tanpa server ubin eksternal — SVG mandiri, jalan di jaringan tertutup; okupansi dihitung dari OdpPort nyata bukan kolom turunan; pelanggan tanpa koordinat sendiri digambar di titik ODP-nya dan dihitung terbuka) |
+
+| **24. Monitor PPPoE (MikroTik)** | Adapter RouterOS v7 REST read-only, poller, Total/Aktif/Offline/Disable | ✅ selesai (PRD-NOC-TOOLS N2; v7 REST di atas HTTPS jadi **tanpa dependensi baru** — cukup fetch bawaan; adapter READ-ONLY, perintah yang mengubah layanan tetap lewat NetworkAccessJob Fase 10; kredensial lewat nama env var (`credentialRef`) bukan nilai, mengikuti pola Fase 13; username dicocokkan ke `Subscription.pppoeUsername` yang sudah ada; kegagalan polling jadi state terlihat di PppoePollRun, bukan log tenggelam) |
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 ---
