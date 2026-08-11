@@ -2,6 +2,11 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/constants";
 import { parseKml, buildKml, type KmlPlacemark } from "@/lib/kml";
+import {
+  inferPointType,
+  notImportableReason,
+  type ImportPointType,
+} from "@/lib/ftth-point-type";
 import { occupancyOf, OCCUPANCY_LABEL, type OccupancyLevel } from "@/lib/noc-map";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -16,23 +21,30 @@ type Result<T = undefined> =
   | { ok: true; id: string; data?: T }
   | { ok: false; error: string };
 
+/**
+ * Tindakan yang akan diambil untuk sebuah titik.
+ *
+ * Kosakata ini menegakkan keputusan D5 secara langsung: impor hanya MENGISI
+ * yang kosong, tidak pernah menimpa. Titik yang sudah punya koordinat
+ * dilaporkan sebagai KEEP berikut jarak selisihnya — perbedaan tetap terlihat
+ * tanpa ada yang diubah diam-diam.
+ */
+export type KmlImportAction = "NEW" | "FILL" | "KEEP" | "DUPLICATE" | "SKIP";
+
 export interface KmlImportRow {
   name: string;
   latitude: number;
   longitude: number;
-  /**
-   * Folder asal titik ini di dalam KML (Fase 35).
-   *
-   * Ditampilkan karena importer ini masih menyasar ODP SAJA. Berkas survei
-   * lengkap memuat POP dan MS di folder terpisah, dan tanpa keterangan folder
-   * petugas tidak punya cara melihat bahwa "SPOP Abang" akan tersimpan sebagai
-   * ODP. Impor multi-jenis menyusul di Fase 36.
-   */
+  /** Folder asal titik di dalam KML — dasar penebakan jenis (Fase 35). */
   folder: string | null;
-  /** MATCH = kode cocok ODP yang ada · NEW = belum ada · DUPLICATE = ganda di berkas */
-  action: "MATCH" | "NEW" | "DUPLICATE";
-  odpId: string | null;
-  /** Koordinat lama, supaya perubahannya terlihat sebelum disetujui. */
+  /** Jenis titik hasil tebakan folder; UNKNOWN berarti petugas harus memilih. */
+  type: ImportPointType;
+  action: KmlImportAction;
+  /** Alasan bila tindakannya SKIP atau KEEP. */
+  note: string | null;
+  /** Id entitas yang cocok — Odp untuk MS/ODP, NetworkSite untuk POP. */
+  targetId: string | null;
+  /** Koordinat yang sudah tersimpan, supaya selisihnya terlihat. */
   currentLatitude: number | null;
   currentLongitude: number | null;
   moveMeters: number | null;
@@ -41,7 +53,14 @@ export interface KmlImportRow {
 export interface KmlImportPreview {
   rows: KmlImportRow[];
   rejected: { raw: string; reason: string }[];
-  counts: { match: number; new: number; duplicate: number; rejected: number };
+  counts: {
+    new: number;
+    fill: number;
+    keep: number;
+    duplicate: number;
+    skip: number;
+    rejected: number;
+  };
 }
 
 /** Jarak kasar antar dua koordinat (haversine), untuk menunjukkan seberapa jauh titik bergeser. */
@@ -56,69 +75,115 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number):
   return Math.round(2 * R * Math.asin(Math.sqrt(s)));
 }
 
-export async function previewKmlImport(xml: string): Promise<KmlImportPreview> {
+export interface PreviewOptions {
+  /** Jenis yang dipakai untuk titik yang jenisnya tidak tertebak dari folder. */
+  unknownAs?: ImportPointType | null;
+}
+
+export async function previewKmlImport(
+  xml: string,
+  options: PreviewOptions = {}
+): Promise<KmlImportPreview> {
   const { placemarks, rejected } = parseKml(xml);
 
-  const names = placemarks.map((p) => p.name);
-  const existing = names.length
-    ? await db.odp.findMany({
-        where: { code: { in: names } },
-        select: { id: true, code: true, latitude: true, longitude: true },
-      })
-    : [];
-  const byCode = new Map(existing.map((o) => [o.code, o]));
+  // Seluruh calon target diambil sekali, bukan per baris — berkas survei bisa
+  // memuat ratusan titik dan kueri per baris akan menyiksa database.
+  const [odps, sites] = await Promise.all([
+    db.odp.findMany({ select: { id: true, code: true, latitude: true, longitude: true } }),
+    db.networkSite.findMany({
+      select: { id: true, siteCode: true, name: true, latitude: true, longitude: true },
+    }),
+  ]);
+  const odpByCode = new Map(odps.map((o) => [o.code, o]));
+  const siteByKey = new Map<string, (typeof sites)[number]>();
+  for (const st of sites) {
+    siteByKey.set(st.siteCode, st);
+    if (!siteByKey.has(st.name)) siteByKey.set(st.name, st);
+  }
 
-  const seen = new Set<string>();
   const rows: KmlImportRow[] = [];
+  const seen = new Set<string>();
+
   for (const p of placemarks) {
-    if (seen.has(p.name)) {
-      rows.push({
-        name: p.name,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        folder: p.folder,
-        action: "DUPLICATE",
-        odpId: null,
-        currentLatitude: null,
-        currentLongitude: null,
-        moveMeters: null,
-      });
-      continue;
-    }
-    seen.add(p.name);
-    const odp = byCode.get(p.name);
-    rows.push({
+    const inferred = inferPointType(p.folder);
+    const type =
+      inferred === "UNKNOWN" && options.unknownAs ? options.unknownAs : inferred;
+
+    const base = {
       name: p.name,
       latitude: p.latitude,
       longitude: p.longitude,
       folder: p.folder,
-      action: odp ? "MATCH" : "NEW",
-      odpId: odp?.id ?? null,
-      currentLatitude: odp?.latitude ?? null,
-      currentLongitude: odp?.longitude ?? null,
-      moveMeters:
-        odp && odp.latitude !== null && odp.longitude !== null
-          ? distanceMeters(odp.latitude, odp.longitude, p.latitude, p.longitude)
-          : null,
+      type,
+      targetId: null as string | null,
+      currentLatitude: null as number | null,
+      currentLongitude: null as number | null,
+      moveMeters: null as number | null,
+    };
+
+    if (seen.has(p.name)) {
+      rows.push({ ...base, action: "DUPLICATE", note: "Nama ganda di dalam berkas ini." });
+      continue;
+    }
+    seen.add(p.name);
+
+    const blocked = notImportableReason(type);
+    if (blocked) {
+      rows.push({ ...base, action: "SKIP", note: blocked });
+      continue;
+    }
+
+    const existing = type === "POP" ? siteByKey.get(p.name) : odpByCode.get(p.name);
+    if (!existing) {
+      rows.push({ ...base, action: "NEW", note: null });
+      continue;
+    }
+
+    const hasCoords = existing.latitude !== null && existing.longitude !== null;
+    if (!hasCoords) {
+      rows.push({ ...base, action: "FILL", targetId: existing.id, note: null });
+      continue;
+    }
+
+    // D5: sudah berkoordinat → TIDAK disentuh. Selisihnya tetap dilaporkan,
+    // karena perbedaan besar antara berkas dan data tersimpan adalah kabar
+    // penting meskipun tidak ada yang diubah.
+    const moved = distanceMeters(
+      existing.latitude!,
+      existing.longitude!,
+      p.latitude,
+      p.longitude
+    );
+    rows.push({
+      ...base,
+      action: "KEEP",
+      targetId: existing.id,
+      currentLatitude: existing.latitude,
+      currentLongitude: existing.longitude,
+      moveMeters: moved,
+      note: `Sudah berkoordinat — tidak diubah. Titik di berkas berjarak ${moved} m.`,
     });
   }
 
+  const count = (a: KmlImportAction) => rows.filter((r) => r.action === a).length;
   return {
     rows,
     rejected,
     counts: {
-      match: rows.filter((r) => r.action === "MATCH").length,
-      new: rows.filter((r) => r.action === "NEW").length,
-      duplicate: rows.filter((r) => r.action === "DUPLICATE").length,
+      new: count("NEW"),
+      fill: count("FILL"),
+      keep: count("KEEP"),
+      duplicate: count("DUPLICATE"),
+      skip: count("SKIP"),
       rejected: rejected.length,
     },
   };
 }
 
-export interface KmlImportOptions {
-  /** Buat ODP baru untuk titik yang kodenya belum ada. */
+export interface KmlImportOptions extends PreviewOptions {
+  /** Buat entitas baru untuk titik yang belum ada. */
   createMissing: boolean;
-  /** Kapasitas port untuk ODP baru — KML tidak memuat informasi ini. */
+  /** Kapasitas port untuk MS/ODP baru — KML tidak memuat informasi ini. */
   defaultCapacity: number;
   siteId?: string | null;
 }
@@ -127,56 +192,81 @@ export async function applyKmlImport(
   user: CurrentUser,
   xml: string,
   options: KmlImportOptions
-): Promise<Result<{ updated: number; created: number; skipped: number }>> {
+): Promise<Result<{ created: number; filled: number; skipped: number }>> {
   if (!user.permissions.has(PERMISSIONS.FTTH_MANAGE)) {
     return { ok: false, error: "Anda tidak memiliki izin mengubah data FTTH." };
   }
   if (options.createMissing) {
     if (!Number.isInteger(options.defaultCapacity) || options.defaultCapacity <= 0) {
-      return { ok: false, error: "Kapasitas port untuk ODP baru harus lebih dari nol." };
+      return { ok: false, error: "Kapasitas port untuk titik baru harus lebih dari nol." };
     }
   }
 
-  const preview = await previewKmlImport(xml);
+  const preview = await previewKmlImport(xml, { unknownAs: options.unknownAs });
   if (!preview.rows.length) {
     return { ok: false, error: "Tidak ada titik yang bisa diimpor dari berkas ini." };
   }
 
-  let updated = 0;
   let created = 0;
+  let filled = 0;
   let skipped = 0;
 
   try {
     await db.$transaction(async (prisma) => {
       for (const row of preview.rows) {
-        if (row.action === "DUPLICATE") {
+        // KEEP, DUPLICATE, dan SKIP sama-sama tidak menyentuh apa pun.
+        if (row.action !== "NEW" && row.action !== "FILL") {
           skipped++;
           continue;
         }
-        if (row.action === "MATCH" && row.odpId) {
-          // Hanya koordinat yang disentuh. Kapasitas, port, dan relasi ODP
-          // TIDAK pernah diubah oleh impor peta — itu data operasional.
-          await prisma.odp.update({
-            where: { id: row.odpId },
-            data: { latitude: row.latitude, longitude: row.longitude },
-          });
-          updated++;
+
+        if (row.action === "FILL" && row.targetId) {
+          // Hanya koordinat yang diisi. Kapasitas, port, dan relasi TIDAK
+          // pernah disentuh impor peta — itu data operasional.
+          if (row.type === "POP") {
+            await prisma.networkSite.update({
+              where: { id: row.targetId },
+              data: { latitude: row.latitude, longitude: row.longitude },
+            });
+          } else {
+            await prisma.odp.update({
+              where: { id: row.targetId },
+              data: { latitude: row.latitude, longitude: row.longitude },
+            });
+          }
+          filled++;
           continue;
         }
+
         if (!options.createMissing) {
           skipped++;
           continue;
         }
-        await prisma.odp.create({
-          data: {
-            code: row.name,
-            latitude: row.latitude,
-            longitude: row.longitude,
-            portCapacity: options.defaultCapacity,
-            siteId: options.siteId || null,
-            status: "PLANNED", // hasil survei belum tentu terpasang
-          },
-        });
+
+        if (row.type === "POP") {
+          await prisma.networkSite.create({
+            data: {
+              siteCode: row.name,
+              name: row.name,
+              type: "POP",
+              latitude: row.latitude,
+              longitude: row.longitude,
+              status: "PLANNED", // hasil survei belum tentu terpasang
+            },
+          });
+        } else {
+          await prisma.odp.create({
+            data: {
+              code: row.name,
+              role: row.type === "MS" ? "MS" : "ODP",
+              latitude: row.latitude,
+              longitude: row.longitude,
+              portCapacity: options.defaultCapacity,
+              siteId: options.siteId || null,
+              status: "PLANNED",
+            },
+          });
+        }
         created++;
       }
     });
@@ -186,13 +276,16 @@ export async function applyKmlImport(
 
   await logAudit({
     userId: user.id,
-    action: "ODP_KML_IMPORT",
+    action: "FTTH_KML_IMPORT",
     module: "noc",
     entityType: "Odp",
     entityId: "-",
-    description: `Impor KML: ${updated} koordinat diperbarui, ${created} ODP baru (status PLANNED), ${skipped} dilewati, ${preview.rejected.length} ditolak`,
+    description:
+      `Impor KML/KMZ: ${created} titik baru (status PLANNED), ${filled} koordinat diisi, ` +
+      `${skipped} dilewati, ${preview.rejected.length} ditolak. ` +
+      `Koordinat yang sudah terisi tidak ditimpa.`,
   });
-  return { ok: true, id: "-", data: { updated, created, skipped } };
+  return { ok: true, id: "-", data: { created, filled, skipped } };
 }
 
 const OCCUPANCY_STYLE: Record<OccupancyLevel, { id: string; colorAabbggrr: string }> = {

@@ -2134,6 +2134,13 @@ model PonPort {
 model Odp {
   id            String  @id @default(cuid())
   code          String  @unique
+  /// Fase 36 — MS (master switch / rumah kabel / ODC) dan ODP disimpan pada
+  /// tabel yang SAMA, mengikuti bentuk data operasional yang sudah berjalan:
+  /// keduanya sama-sama punya port, optic power, dan induk PON. Yang
+  /// membedakan hanya posisinya di rantai — MS berada di puncak kaskade.
+  /// Peran ini hanya untuk membedakan ikon dan penyaringan; kaskadenya tetap
+  /// ditentukan oleh parentId.
+  role          String  @default("ODP") // MS | ODP
   siteId        String?
   ponPortId     String?
   parentId      String? // ODP kaskade

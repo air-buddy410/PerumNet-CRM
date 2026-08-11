@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { applyKmlImport, previewKmlImport } from "@/lib/ftth-kml";
 import { readKmlSource } from "@/lib/kmz";
+import type { ImportPointType } from "@/lib/ftth-point-type";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -38,10 +39,15 @@ export async function previewKmlAction(formData: FormData): Promise<void> {
     redirect("/noc/ftth/kml?error=" + encodeURIComponent(read.error));
   }
 
-  const preview = await previewKmlImport(read.xml);
+  const unknownAs = (String(formData.get("unknownAs") ?? "") || null) as
+    | ImportPointType
+    | null;
+  const preview = await previewKmlImport(read.xml, { unknownAs });
   const summary = [
-    `${preview.counts.match} cocok`,
     `${preview.counts.new} baru`,
+    `${preview.counts.fill} diisi`,
+    `${preview.counts.keep} dipertahankan`,
+    `${preview.counts.skip} dilewati`,
     `${preview.counts.duplicate} ganda`,
     `${preview.counts.rejected} ditolak`,
   ].join(" · ");
@@ -74,7 +80,7 @@ export async function applyKmlAction(formData: FormData): Promise<void> {
       (result.ok
         ? "ok=" +
           encodeURIComponent(
-            `Impor selesai: ${result.data?.updated} koordinat diperbarui, ${result.data?.created} ODP baru, ${result.data?.skipped} dilewati.`
+            `Impor selesai: ${result.data?.created} titik baru, ${result.data?.filled} koordinat diisi, ${result.data?.skipped} dilewati. Koordinat yang sudah terisi tidak ditimpa.`
           )
         : "error=" + encodeURIComponent(result.error))
   );

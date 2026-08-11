@@ -4,13 +4,16 @@ import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, BackLink, Flash, EmptyState } from "@/components/ui";
 import { previewKmlImport } from "@/lib/ftth-kml";
 import { previewKmlAction, applyKmlAction } from "./actions";
+import { POINT_TYPE_LABEL, IMPORTABLE_TYPES } from "@/lib/ftth-point-type";
 
 export const metadata = { title: "Impor / Ekspor KML" };
 
 const ACTION_LABEL: Record<string, string> = {
-  MATCH: "Perbarui koordinat",
-  NEW: "ODP baru",
+  NEW: "Buat baru",
+  FILL: "Isi koordinat kosong",
+  KEEP: "Dipertahankan",
   DUPLICATE: "Ganda — dilewati",
+  SKIP: "Dilewati",
 };
 
 // Fase 26 (PRD-NOC-TOOLS N4). Impor SELALU dua tahap: pratinjau dulu, baru
@@ -82,6 +85,21 @@ export default async function KmlPage({
             placeholder="…atau tempel isi KML di sini"
             className="input w-full font-mono text-xs"
           />
+          <div>
+            <label className="label" htmlFor="unknownAs">
+              Titik tanpa folder dianggap sebagai
+            </label>
+            <select id="unknownAs" name="unknownAs" className="input w-64" defaultValue="ODP">
+              <option value="">— dilewati —</option>
+              {IMPORTABLE_TYPES.map((t) => (
+                <option key={t} value={t}>{POINT_TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Jenis titik ditebak dari nama folder KML. Berkas lama yang tidak berfolder
+              perlu ditentukan di sini, kalau tidak seluruhnya akan dilewati.
+            </p>
+          </div>
           <button type="submit" className="btn-primary">Lihat Pratinjau</button>
         </form>
       </div>
@@ -90,8 +108,10 @@ export default async function KmlPage({
         <div className="card p-5">
           <h2 className="mb-2 text-sm font-medium">Langkah 2: Tinjau lalu Terapkan</h2>
           <div className="mb-3 flex flex-wrap gap-4 text-xs">
-            <span className="text-emerald-700">{preview.counts.match} cocok</span>
             <span className="text-sky-700">{preview.counts.new} baru</span>
+            <span className="text-emerald-700">{preview.counts.fill} koordinat diisi</span>
+            <span className="text-slate-600">{preview.counts.keep} dipertahankan</span>
+            <span className="text-amber-700">{preview.counts.skip} dilewati</span>
             <span className="text-amber-700">{preview.counts.duplicate} ganda</span>
             <span className="text-red-700">{preview.counts.rejected} ditolak</span>
           </div>
@@ -116,6 +136,7 @@ export default async function KmlPage({
                   <tr>
                     <th className="th">Nama</th>
                     <th className="th">Folder</th>
+                    <th className="th">Jenis</th>
                     <th className="th">Tindakan</th>
                     <th className="th text-right">Lintang</th>
                     <th className="th text-right">Bujur</th>
@@ -127,7 +148,13 @@ export default async function KmlPage({
                     <tr key={`${r.name}-${i}`} className="hover:bg-slate-50">
                       <td className="td font-mono text-xs">{r.name}</td>
                       <td className="td text-xs text-slate-500">{r.folder ?? "—"}</td>
-                      <td className="td text-xs">{ACTION_LABEL[r.action]}</td>
+                      <td className="td text-xs">{POINT_TYPE_LABEL[r.type]}</td>
+                      <td className="td text-xs">
+                        {ACTION_LABEL[r.action]}
+                        {r.note && (
+                          <span className="block text-[11px] text-slate-400">{r.note}</span>
+                        )}
+                      </td>
                       <td className="td text-right font-mono text-xs">{r.latitude.toFixed(6)}</td>
                       <td className="td text-right font-mono text-xs">{r.longitude.toFixed(6)}</td>
                       <td className={`td text-right text-xs ${r.moveMeters && r.moveMeters > 50 ? "text-amber-600 font-medium" : "text-slate-400"}`}>
@@ -175,6 +202,21 @@ export default async function KmlPage({
               Impor hanya menyentuh <strong>koordinat</strong>. Kapasitas, port, dan
               relasi ODP yang sudah ada tidak pernah diubah oleh berkas peta.
             </p>
+            <div>
+            <label className="label" htmlFor="unknownAsApply">
+              Titik tanpa folder dianggap sebagai
+            </label>
+            <select id="unknownAsApply" name="unknownAs" className="input w-64" defaultValue="ODP">
+              <option value="">— dilewati —</option>
+              {IMPORTABLE_TYPES.map((t) => (
+                <option key={t} value={t}>{POINT_TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Jenis titik ditebak dari nama folder KML. Berkas lama yang tidak berfolder
+              perlu ditentukan di sini, kalau tidak seluruhnya akan dilewati.
+            </p>
+          </div>
             <button type="submit" className="btn-primary">Terapkan Impor</button>
           </form>
         </div>
