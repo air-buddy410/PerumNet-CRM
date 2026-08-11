@@ -25,6 +25,9 @@ export interface MapOdp {
   ponLabel: string | null;
   parentId: string | null;
   status: string;
+  /// Fase 38 — MS/ODC dan ODP berbagi tabel; peran inilah yang membedakan
+  /// ikonnya di peta. Kaskadenya tetap ditentukan parentId.
+  role: string; // MS | ODP
 }
 
 /// Status sambungan menurut router, BUKAN menurut status langganan.
@@ -52,6 +55,19 @@ export interface MapCustomer {
   routerName: string | null;
 }
 
+/// Lokasi fisik: POP dan mini-POP (Fase 38). Bukan simpul distribusi — tidak
+/// punya port maupun okupansi — jadi sengaja dipisahkan dari MapOdp alih-alih
+/// dipaksa masuk bentuk yang sama.
+export interface MapSite {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  latitude: number;
+  longitude: number;
+  status: string;
+}
+
 export interface MapBounds {
   minLat: number;
   maxLat: number;
@@ -61,6 +77,7 @@ export interface MapBounds {
 
 export interface NetworkMapData {
   odps: MapOdp[];
+  sites: MapSite[];
   customers: MapCustomer[];
   /** Garis ODP anak → ODP induk (kaskade). */
   cascades: { fromId: string; toId: string }[];
@@ -174,6 +191,24 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
   ]);
   const sessionOf = new Map(sessionRows.map((r) => [r.subscriptionId!, r]));
 
+  const siteRows = await db.networkSite.findMany({
+    where: {
+      latitude: { not: null },
+      longitude: { not: null },
+      type: { in: ["POP", "MINI_POP"] },
+      ...(filter.siteId ? { id: filter.siteId } : {}),
+    },
+    select: {
+      id: true,
+      siteCode: true,
+      name: true,
+      type: true,
+      latitude: true,
+      longitude: true,
+      status: true,
+    },
+  });
+
   const odpRows = await db.odp.findMany({
     where: {
       ...(filter.siteId ? { siteId: filter.siteId } : {}),
@@ -234,6 +269,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
         ponLabel: odp.ponPort?.label ?? null,
         parentId: odp.parentId,
         status: odp.status,
+        role: odp.role,
       });
     }
 
@@ -281,8 +317,28 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     .filter((o) => o.parentId && visible.has(o.parentId))
     .map((o) => ({ fromId: o.id, toId: o.parentId! }));
 
-  const lats = [...odps.map((o) => o.latitude), ...customers.map((c) => c.latitude)];
-  const lngs = [...odps.map((o) => o.longitude), ...customers.map((c) => c.longitude)];
+  const sites: MapSite[] = siteRows.map((st) => ({
+    id: st.id,
+    code: st.siteCode,
+    name: st.name,
+    type: st.type,
+    latitude: st.latitude!,
+    longitude: st.longitude!,
+    status: st.status,
+  }));
+
+  // POP ikut menentukan batas peta; kalau tidak, peta bisa memotong POP yang
+  // berada di pinggir wilayah layanan.
+  const lats = [
+    ...odps.map((o) => o.latitude),
+    ...customers.map((c) => c.latitude),
+    ...sites.map((s) => s.latitude),
+  ];
+  const lngs = [
+    ...odps.map((o) => o.longitude),
+    ...customers.map((c) => c.longitude),
+    ...sites.map((s) => s.longitude),
+  ];
   const bounds: MapBounds | null = lats.length
     ? {
         minLat: Math.min(...lats),
@@ -310,6 +366,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
 
   return {
     odps,
+    sites,
     customers,
     cascades,
     bounds,

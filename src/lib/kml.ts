@@ -180,6 +180,15 @@ export interface KmlExportPoint {
   description?: string | null;
   /** Dipakai untuk memilih gaya penanda (warna okupansi). */
   styleId?: string | null;
+  /**
+   * Folder tempat titik ini ditaruh (Fase 38).
+   *
+   * Penting untuk perjalanan pulang-pergi: importir menebak jenis titik dari
+   * nama folder, jadi berkas yang kita ekspor harus bisa diimpor kembali dan
+   * dikenali sebagai jenis yang sama. Tanpa folder, seluruh hasil ekspor akan
+   * kembali sebagai "belum ditentukan".
+   */
+  folder?: string | null;
 }
 
 /** Menyusun dokumen KML. Gaya warna mengikuti okupansi ODP. */
@@ -196,16 +205,33 @@ export function buildKml(
     )
     .join("\n");
 
-  const placemarks = points
-    .map(
-      (p) => `  <Placemark>
-    <name>${escapeXml(p.name)}</name>${
-      p.description ? `\n    <description>${escapeXml(p.description)}</description>` : ""
-    }${p.styleId ? `\n    <styleUrl>#${escapeXml(p.styleId)}</styleUrl>` : ""}
-    <Point><coordinates>${p.longitude},${p.latitude},0</coordinates></Point>
-  </Placemark>`
-    )
-    .join("\n");
+  const renderPoint = (p: KmlExportPoint, indent: string) =>
+    `${indent}<Placemark>
+${indent}  <name>${escapeXml(p.name)}</name>${
+      p.description ? `\n${indent}  <description>${escapeXml(p.description)}</description>` : ""
+    }${p.styleId ? `\n${indent}  <styleUrl>#${escapeXml(p.styleId)}</styleUrl>` : ""}
+${indent}  <Point><coordinates>${p.longitude},${p.latitude},0</coordinates></Point>
+${indent}</Placemark>`;
+
+  // Titik berfolder dikelompokkan; yang tanpa folder tetap di akar dokumen.
+  const loose = points.filter((p) => !p.folder);
+  const folders = new Map<string, KmlExportPoint[]>();
+  for (const p of points) {
+    if (!p.folder) continue;
+    const list = folders.get(p.folder) ?? [];
+    list.push(p);
+    folders.set(p.folder, list);
+  }
+
+  const placemarks = [
+    ...loose.map((p) => renderPoint(p, "  ")),
+    ...[...folders.entries()].map(
+      ([name, list]) => `  <Folder>
+    <name>${escapeXml(name)}</name>
+${list.map((p) => renderPoint(p, "    ")).join("\n")}
+  </Folder>`
+    ),
+  ].join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">

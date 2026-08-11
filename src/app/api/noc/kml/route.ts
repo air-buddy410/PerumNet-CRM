@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
-import { exportOdpKml } from "@/lib/ftth-kml";
+import { exportFtthKml } from "@/lib/ftth-kml";
 
 // Ekspor KML sebagai unduhan. Route ini berada di balik middleware JWT,
 // dan permission tetap diperiksa di sini — guard sesi bukan pengganti RBAC.
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   const siteId = new URL(request.url).searchParams.get("site");
-  const kml = await exportOdpKml(siteId);
+  const kml = await exportFtthKml(siteId);
   const stamp = new Date().toISOString().slice(0, 10);
 
   return new NextResponse(kml, {
