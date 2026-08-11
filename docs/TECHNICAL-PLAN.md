@@ -206,6 +206,8 @@ Fase 8–15 sudah ter-merge ke `main` lewat PR #2–#9 (2026-08-10). Asalnya dar
 
 | **25. Probe Monitoring Realtime** | ProbeTarget + ProbeResult, alarm berambang, auto-clear saat pulih | ✅ selesai (PRD-NOC-TOOLS N3; metode TCP connect karena ICMP butuh raw socket/root yang tidak tersedia di proses aplikasi — konsekuensinya port per target dapat dikonfigurasi; DOWN tidak langsung membangunkan orang, alarm baru naik setelah gagal beruntun mencapai ambang lalu ditutup sendiri saat pulih, memakai NetworkAlarm + dedupKey yang sudah ada; halaman menandai target yang lama tidak diperiksa agar worker mati tidak lolos perhatian) |
 
+| **26. Impor/Ekspor KML** | Ambil titik ODP dari survei lapangan, keluarkan peta ODP untuk Google Earth | ✅ selesai (PRD-NOC-TOOLS N4; parser ditulis tanpa dependensi XML; impor WAJIB dua tahap — pratinjau menampilkan cocok/baru/ganda/ditolak beserta pergeseran koordinat dalam meter sebelum apa pun disimpan; impor hanya menyentuh koordinat, kapasitas & relasi ODP tidak pernah diubah berkas peta; placemark rusak dilaporkan, tidak dibuang diam-diam; ODP baru dibuat berstatus PLANNED; KMZ sengaja tidak didukung — diminta ekstrak dulu) |
+
 Setiap fase: schema → service (business rules) → UI → seed → verifikasi build & jalan.
 
 ---
