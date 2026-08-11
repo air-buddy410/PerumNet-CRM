@@ -63,13 +63,16 @@ export default async function KmlPage({
         <h2 className="mb-2 text-sm font-medium">Impor — Langkah 1: Pratinjau</h2>
         <p className="mb-3 text-xs text-slate-500">
           Belum ada yang disimpan pada tahap ini. Titik dicocokkan ke ODP lewat
-          <strong> nama placemark = kode ODP</strong>. Berkas KMZ perlu diekstrak dulu.
+          <strong> nama placemark = kode ODP</strong>. Berkas <strong>.kml</strong> maupun
+          <strong> .kmz</strong> sama-sama diterima. Impor ini masih menyasar <strong>ODP saja</strong> —
+          periksa kolom Folder sebelum menerapkan, karena titik POP atau MS pada berkas
+          survei lengkap akan ikut tersimpan sebagai ODP.
         </p>
         <form action={previewKmlAction} className="space-y-3">
           <input
             type="file"
             name="file"
-            accept=".kml,application/vnd.google-earth.kml+xml,text/xml"
+            accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,text/xml"
             className="input w-full"
             aria-label="Berkas KML"
           />
@@ -112,6 +115,7 @@ export default async function KmlPage({
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
                     <th className="th">Nama</th>
+                    <th className="th">Folder</th>
                     <th className="th">Tindakan</th>
                     <th className="th text-right">Lintang</th>
                     <th className="th text-right">Bujur</th>
@@ -122,6 +126,7 @@ export default async function KmlPage({
                   {preview.rows.map((r, i) => (
                     <tr key={`${r.name}-${i}`} className="hover:bg-slate-50">
                       <td className="td font-mono text-xs">{r.name}</td>
+                      <td className="td text-xs text-slate-500">{r.folder ?? "—"}</td>
                       <td className="td text-xs">{ACTION_LABEL[r.action]}</td>
                       <td className="td text-right font-mono text-xs">{r.latitude.toFixed(6)}</td>
                       <td className="td text-right font-mono text-xs">{r.longitude.toFixed(6)}</td>

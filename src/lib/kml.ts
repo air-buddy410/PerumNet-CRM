@@ -17,10 +17,28 @@ export interface KmlPlacemark {
   latitude: number;
   longitude: number;
   description: string | null;
+  /**
+   * Nama folder terdalam yang memuat placemark ini (Fase 35).
+   *
+   * KMZ dari surveyor hampir selalu menata titiknya per folder — POP, ODC,
+   * ODP, HOME PASS — dan folder itulah petunjuk paling andal untuk menebak
+   * jenis sebuah titik. Bernilai null bila berada di luar folder mana pun.
+   */
+  folder: string | null;
+}
+
+/** Rute kabel dari KML (Fase 35). Disimpan sebagai lapisan visual — D1(b). */
+export interface KmlLine {
+  name: string;
+  folder: string | null;
+  /** Urutan titik [bujur, lintang], mengikuti urutan asli KML. */
+  coordinates: [number, number][];
 }
 
 export interface KmlParseResult {
   placemarks: KmlPlacemark[];
+  /** Garis (LineString) — rute kabel feeder/distribusi/drop. */
+  lines: KmlLine[];
   /** Placemark yang ditemukan tapi tidak bisa dipakai, beserta alasannya. */
   rejected: { raw: string; reason: string }[];
 }
@@ -42,12 +60,57 @@ function firstTag(block: string, tag: string): string | null {
   return decodeEntities(inner).trim();
 }
 
+/**
+ * Nama sebuah folder: <name> pertama setelah tag <Folder>, sebelum folder
+ * atau placemark berikutnya. Folder tanpa nama menghasilkan null.
+ */
+function folderNameAfter(xml: string, from: number): string | null {
+  const rest = xml.slice(from, from + 4000);
+  const stop = rest.search(/<Folder\b|<Placemark\b/i);
+  return firstTag(stop === -1 ? rest : rest.slice(0, stop), "name");
+}
+
+/** Menguraikan daftar koordinat KML menjadi pasangan [bujur, lintang]. */
+function parseCoordinateList(raw: string): [number, number][] {
+  const out: [number, number][] = [];
+  for (const token of raw.split(/\s+/)) {
+    if (!token) continue;
+    const parts = token.split(",");
+    const lng = Number(parts[0]);
+    const lat = Number(parts[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+    out.push([lng, lat]);
+  }
+  return out;
+}
+
 export function parseKml(xml: string): KmlParseResult {
   const placemarks: KmlPlacemark[] = [];
+  const lines: KmlLine[] = [];
   const rejected: { raw: string; reason: string }[] = [];
 
-  const blocks = xml.match(/<Placemark[\s\S]*?<\/Placemark>/gi) ?? [];
-  for (const block of blocks) {
+  // Dokumen ditelusuri berurutan sambil menahan tumpukan folder, sehingga
+  // setiap placemark tahu ia berada di dalam folder mana. Pendekatan regex
+  // global yang lama tidak bisa melakukannya karena kehilangan urutan.
+  const walker = /<Folder\b[^>]*>|<\/Folder>|<Placemark\b[\s\S]*?<\/Placemark>/gi;
+  const stack: (string | null)[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = walker.exec(xml)) !== null) {
+    const token = m[0];
+
+    if (/^<Folder/i.test(token)) {
+      stack.push(folderNameAfter(xml, m.index + token.length));
+      continue;
+    }
+    if (/^<\/Folder/i.test(token)) {
+      stack.pop();
+      continue;
+    }
+
+    const block = token;
+    const folder = stack.length ? stack[stack.length - 1] : null;
     const short = block.replace(/\s+/g, " ").slice(0, 120);
     const name = firstTag(block, "name");
     if (!name) {
@@ -59,6 +122,20 @@ export function parseKml(xml: string): KmlParseResult {
       rejected.push({ raw: short, reason: `"${name}" tidak punya <coordinates>.` });
       continue;
     }
+
+    // Garis dan titik dibedakan dari geometrinya, bukan dari jumlah koordinat:
+    // LineString bersimpul satu tetap sebuah garis, dan Point tidak pernah
+    // boleh diam-diam berubah menjadi rute.
+    if (/<LineString\b/i.test(block)) {
+      const coordinates = parseCoordinateList(coords);
+      if (coordinates.length < 2) {
+        rejected.push({ raw: short, reason: `"${name}" garisnya kurang dari dua titik.` });
+        continue;
+      }
+      lines.push({ name, folder, coordinates });
+      continue;
+    }
+
     // KML menulis bujur DULU, baru lintang: "lng,lat[,alt]".
     const first = coords.split(/\s+/).filter(Boolean)[0] ?? "";
     const parts = first.split(",");
@@ -80,10 +157,11 @@ export function parseKml(xml: string): KmlParseResult {
       latitude,
       longitude,
       description: firstTag(block, "description"),
+      folder,
     });
   }
 
-  return { placemarks, rejected };
+  return { placemarks, lines, rejected };
 }
 
 function escapeXml(value: string): string {

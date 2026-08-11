@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { applyKmlImport, previewKmlImport } from "@/lib/ftth-kml";
+import { readKmlSource } from "@/lib/kmz";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -14,13 +15,15 @@ async function readKml(formData: FormData): Promise<{ xml: string } | { error: s
     if (file.size > MAX_BYTES) {
       return { error: `Berkas terlalu besar (${Math.round(file.size / 1024)} KB, batas 4 MB).` };
     }
-    if (/\.kmz$/i.test(file.name)) {
-      return {
-        error:
-          "Berkas KMZ belum didukung — ekstrak dulu menjadi .kml, lalu unggah berkas KML-nya.",
-      };
+    // KMZ maupun KML sama-sama diterima. Jenisnya ditentukan dari ISI berkas,
+    // bukan dari namanya — nama berkas dikendalikan pengunggah dan sering
+    // salah, mis. arsip KMZ yang di-rename menjadi .kml.
+    try {
+      const buf = Buffer.from(await file.arrayBuffer());
+      return { xml: readKmlSource(buf) };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Berkas tidak dapat dibaca." };
     }
-    return { xml: await file.text() };
   }
   const pasted = String(formData.get("kml") ?? "").trim();
   if (!pasted) return { error: "Unggah berkas KML atau tempel isinya." };
