@@ -133,3 +133,61 @@ export function coordinateRejection(c: Partial<Coordinate>): string | null {
   }
   return null;
 }
+
+// ── Siapa boleh melihat sebuah penarikan (Fase 40) ──────────────
+// Modul MURNI.
+//
+// §9.2 FR-PICK-002: teknisi hanya melihat penarikan yang ditugaskan
+// kepadanya. Aturan itu TIDAK boleh hidup di halaman — PRD §12 menyatakannya
+// terang-terangan: "menyembunyikan tombol di UI saja tidak cukup". Menyaring
+// daftar tetapi membiarkan halaman detail terbuka berarti siapa pun yang tahu
+// id-nya bisa membaca nama, alamat, dan nomor telepon pelanggan yang bukan
+// urusannya.
+
+/** Izin yang menandakan peran KOORDINASI — melihat seluruh penarikan. */
+export const RECOVERY_COORDINATION_PERMISSIONS = [
+  "device_recovery.assign",
+  "device_recovery.receive",
+  "device_recovery.inspect",
+  "device_recovery.escalate",
+  "device_recovery.dispose",
+] as const;
+
+export interface RecoveryViewer {
+  id: string;
+  permissions: Set<string>;
+}
+
+export interface RecoveryAssignment {
+  assigneeId: string | null;
+  workOrderTechnicianId: string | null;
+}
+
+/** Apakah pemakai ini berperan koordinasi (gudang, koordinator, management)? */
+export function isRecoveryCoordinator(viewer: RecoveryViewer): boolean {
+  return RECOVERY_COORDINATION_PERMISSIONS.some((p) => viewer.permissions.has(p));
+}
+
+/**
+ * Boleh atau tidak melihat penarikan tertentu.
+ *
+ * Aturannya sengaja sesempit mungkin supaya tidak ada yang kehilangan akses
+ * tanpa alasan: yang berubah HANYA teknisi murni — pemegang izin pickup yang
+ * tidak memegang satu pun izin koordinasi. Dia kini terbatas pada tugasnya
+ * sendiri. Peran lain tetap seperti sebelumnya.
+ */
+export function canViewRecovery(
+  viewer: RecoveryViewer,
+  recovery: RecoveryAssignment
+): boolean {
+  if (isRecoveryCoordinator(viewer)) return true;
+  if (viewer.permissions.has("device_recovery.pickup")) {
+    return (
+      recovery.assigneeId === viewer.id ||
+      recovery.workOrderTechnicianId === viewer.id
+    );
+  }
+  // Bukan teknisi dan bukan koordinator — perlakukan seperti sebelumnya,
+  // yaitu bergantung pada izin melihat inventory di lapisan halaman.
+  return true;
+}
