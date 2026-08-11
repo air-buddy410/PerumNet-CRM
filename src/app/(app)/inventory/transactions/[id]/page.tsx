@@ -14,6 +14,9 @@ import {
   cancelTransactionAction,
   reverseTransactionAction,
   receiveTransferAction,
+  createDeliveryOrderAction,
+  approveDeliveryOrderAction,
+  issueMaterialAction,
 } from "../actions";
 
 export const metadata = { title: "Detail Transaksi" };
@@ -42,6 +45,8 @@ export default async function TransactionDetailPage({
       reversedBy: true,
       lines: { include: { item: true, device: true, receiptLines: true } },
       receipts: { include: { receivedBy: true, lines: true }, orderBy: { receivedAt: "asc" } },
+      deliveryOrders: { include: { createdBy: true, approvedBy: true }, orderBy: { createdAt: "asc" } },
+      irf: true,
     },
   });
   if (!tx) notFound();
@@ -50,6 +55,11 @@ export default async function TransactionDetailPage({
   const canReverse = user.permissions.has(PERMISSIONS.STOCK_REVERSE);
   const canCreate = user.permissions.has(PERMISSIONS.STOCK_CREATE);
   const canReceive = user.permissions.has(PERMISSIONS.STOCK_RECEIVE);
+
+  // Fase 18: surat jalan wajib disetujui sebelum barang boleh diserahkan.
+  const activeDo = tx.deliveryOrders.find((d) => d.status === "DRAFT" || d.status === "APPROVED");
+  const needsDo = (tx.type === "STOCK_ISSUE" || tx.type === "STOCK_TRANSFER") && tx.status === "DRAFT";
+  const readyToIssue = tx.type === "STOCK_ISSUE" && tx.status === "DRAFT" && activeDo?.status === "APPROVED";
 
   // Fase 17: sisa kiriman yang belum diterima gudang tujuan, per baris.
   const remainingOf = (line: (typeof tx.lines)[number]) =>
@@ -182,7 +192,71 @@ export default async function TransactionDetailPage({
         </div>
 
         <div className="space-y-6">
-          {tx.status === "DRAFT" && canPost && (
+          {needsDo && (
+            <div className="card p-5">
+              <h2 className="mb-1 text-sm font-medium">Surat Jalan</h2>
+              {activeDo ? (
+                <>
+                  <p className="mb-3 text-xs text-slate-500">
+                    <span className="font-mono">{activeDo.doNumber}</span> ·{" "}
+                    {activeDo.status === "APPROVED"
+                      ? `disetujui ${activeDo.approvedBy?.name ?? ""}`
+                      : "menunggu persetujuan"}
+                  </p>
+                  {activeDo.status === "DRAFT" && canPost && (
+                    <form action={approveDeliveryOrderAction}>
+                      <input type="hidden" name="txId" value={tx.id} />
+                      <input type="hidden" name="doId" value={activeDo.id} />
+                      <button type="submit" className="btn-primary w-full justify-center">
+                        Setujui Surat Jalan
+                      </button>
+                    </form>
+                  )}
+                </>
+              ) : (
+                canCreate && (
+                  <>
+                    <p className="mb-3 text-xs text-slate-500">
+                      Barang hanya boleh diserahkan lewat surat jalan yang sudah disetujui.
+                    </p>
+                    <form action={createDeliveryOrderAction} className="space-y-2">
+                      <input type="hidden" name="txId" value={tx.id} />
+                      <input type="text" name="notes" placeholder="Catatan (opsional)" className="input w-full" />
+                      <button type="submit" className="btn-secondary w-full justify-center">
+                        Buat Surat Jalan
+                      </button>
+                    </form>
+                  </>
+                )
+              )}
+            </div>
+          )}
+          {readyToIssue && canPost && (
+            <div className="card p-5">
+              <h2 className="mb-1 text-sm font-medium">Serah Terima Barang</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                Kedua nama direkam sebagai tanda tangan dokumen. IRF terbit otomatis dalam
+                transaksi yang sama — kalau posting gagal, dokumennya ikut batal.
+              </p>
+              <form action={issueMaterialAction} className="space-y-2">
+                <input type="hidden" name="txId" value={tx.id} />
+                <input type="text" name="receiverName" placeholder="Nama penerima barang" className="input w-full" required />
+                <input type="text" name="adminName" placeholder="Nama admin gudang" className="input w-full" required />
+                <button type="submit" className="btn-primary w-full justify-center">
+                  Serahkan &amp; Terbitkan IRF
+                </button>
+              </form>
+            </div>
+          )}
+          {tx.irf && (
+            <div className="card p-5">
+              <h2 className="mb-2 text-sm font-medium">IRF</h2>
+              <p className="text-xs text-slate-500">
+                <span className="font-mono">{tx.irf.irfNumber}</span> · {tx.irf.status}
+              </p>
+            </div>
+          )}
+          {tx.status === "DRAFT" && canPost && !readyToIssue && (
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Posting</h2>
               <p className="mb-3 text-xs text-slate-500">

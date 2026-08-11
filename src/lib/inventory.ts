@@ -365,7 +365,10 @@ async function adjustCustody(
 
 export async function postTransaction(
   user: CurrentUser,
-  txId: string
+  txId: string,
+  // Fase 18: dokumen turunan (IRF, tanda tangan) dibuat di dalam transaksi yang
+  // sama dengan perubahan saldo — kalau posting gagal, dokumennya ikut batal.
+  opts?: { afterPost?: (prisma: TxClient, tx: { id: string; txNumber: string }) => Promise<void> }
 ): Promise<Result> {
   if (!user.permissions.has(PERMISSIONS.STOCK_POST)) {
     return { ok: false, error: "Anda tidak memiliki izin posting transaksi stock." };
@@ -458,9 +461,15 @@ export async function postTransaction(
                 `Perangkat ${device?.serialNumber ?? "?"} tidak berada dalam custody teknisi tersebut.`
               );
             }
+            const brokenDevice = line.condition === "DAMAGED" || line.condition === "RMA";
             await prisma.serializedDevice.update({
               where: { id: device.id },
-              data: { status: "AVAILABLE", warehouseId: tx.warehouseToId, custodianId: null },
+              data: {
+                status: brokenDevice ? "DAMAGED" : "AVAILABLE",
+                condition: brokenDevice ? "DAMAGED" : "GOOD",
+                warehouseId: tx.warehouseToId,
+                custodianId: null,
+              },
             });
             await prisma.deviceMovement.create({
               data: {
@@ -477,7 +486,16 @@ export async function postTransaction(
             const errC = await adjustCustody(prisma, tx.custodianId!, line.itemId, -line.qty, line.item.name);
             if (errC) throw new Error(errC);
           }
-          const err = await adjustLevel(prisma, line.itemId, tx.warehouseToId!, line.qty, line.item.name);
+          // Fase 18: GOOD/USED kembali sebagai stock siap pakai; DAMAGED/RMA
+          // masuk dimensi damaged agar tidak pernah ikut terhitung tersedia.
+          const brokenReturn = line.condition === "DAMAGED" || line.condition === "RMA";
+          const err = await adjustBalance(
+            prisma,
+            line.itemId,
+            tx.warehouseToId!,
+            brokenReturn ? { damaged: line.qty } : { onHand: line.qty },
+            line.item.name
+          );
           if (err) throw new Error(err);
         } else if (tx.type === "STOCK_TRANSFER") {
           if (isSerialized) {
@@ -536,6 +554,10 @@ export async function postTransaction(
           ...(tx.type === "STOCK_TRANSFER" ? { receiveStatus: "PENDING" } : {}),
         },
       });
+
+      if (opts?.afterPost) {
+        await opts.afterPost(prisma, { id: tx.id, txNumber: tx.txNumber });
+      }
     });
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Posting gagal." };
@@ -1285,7 +1307,7 @@ export interface BalanceDiscrepancy {
   itemName: string;
   warehouseId: string;
   warehouseCode: string;
-  field: "onHand" | "reserved" | "inTransit";
+  field: "onHand" | "reserved" | "inTransit" | "damaged";
   stored: number;
   expected: number;
 }
@@ -1307,6 +1329,7 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
   const onHand = new Map<string, number>();
   const reserved = new Map<string, number>();
   const inTransit = new Map<string, number>();
+  const damaged = new Map<string, number>();
   const bump = (map: Map<string, number>, itemId: string, warehouseId: string, delta: number) => {
     const key = `${itemId}::${warehouseId}`;
     map.set(key, (map.get(key) ?? 0) + delta);
@@ -1325,9 +1348,14 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
         }
         continue;
       }
+      const broken = line.condition === "DAMAGED" || line.condition === "RMA";
       switch (tx.type) {
-        case "GOODS_RECEIPT":
         case "STOCK_RETURN":
+          if (tx.warehouseToId) {
+            bump(broken ? damaged : onHand, line.itemId, tx.warehouseToId, qty);
+          }
+          break;
+        case "GOODS_RECEIPT":
         case "STOCK_ADJUSTMENT":
           if (tx.warehouseToId) bump(onHand, line.itemId, tx.warehouseToId, qty);
           break;
@@ -1368,6 +1396,7 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
     const expectedOnHand = onHand.get(key) ?? 0;
     const expectedReserved = reserved.get(key) ?? 0;
     const expectedInTransit = inTransit.get(key) ?? 0;
+    const expectedDamaged = damaged.get(key) ?? 0;
     if (level.onHand !== expectedOnHand) {
       out.push({ ...base, field: "onHand", stored: level.onHand, expected: expectedOnHand });
     }
@@ -1377,10 +1406,13 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
     if (level.inTransit !== expectedInTransit) {
       out.push({ ...base, field: "inTransit", stored: level.inTransit, expected: expectedInTransit });
     }
+    if (level.damaged !== expectedDamaged) {
+      out.push({ ...base, field: "damaged", stored: level.damaged, expected: expectedDamaged });
+    }
   }
 
   // Kombinasi yang punya transaksi tapi belum punya baris saldo sama sekali.
-  for (const [key, expected] of [...onHand, ...reserved, ...inTransit]) {
+  for (const [key, expected] of [...onHand, ...reserved, ...inTransit, ...damaged]) {
     if (expected === 0 || seen.has(key)) continue;
     const [itemId, warehouseId] = key.split("::");
     out.push({
@@ -1388,7 +1420,13 @@ export async function reconcileStockLevels(): Promise<BalanceDiscrepancy[]> {
       itemName: itemName.get(itemId) ?? "?",
       warehouseId,
       warehouseCode: warehouseCode.get(warehouseId) ?? "?",
-      field: onHand.has(key) ? "onHand" : inTransit.has(key) ? "inTransit" : "reserved",
+      field: onHand.has(key)
+        ? "onHand"
+        : inTransit.has(key)
+          ? "inTransit"
+          : damaged.has(key)
+            ? "damaged"
+            : "reserved",
       stored: 0,
       expected,
     });
