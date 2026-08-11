@@ -2,7 +2,9 @@
 
 **Tanggal:** 2026-08-11
 **Sumber requirement:** [PRD-terminasi-pelanggan-dan-recovery-perangkat.md](PRD-terminasi-pelanggan-dan-recovery-perangkat.md) v1.0
-**Status:** rencana untuk direview — belum ada kode yang ditulis
+**Status:** Fase 28–32 SELESAI diimplementasikan (2026-08-11). Dokumen ini
+dipertahankan sebagai catatan rancangan; bagian §7 diperbarui dengan keputusan
+yang akhirnya diambil.
 
 ## 0. Koreksi atas §20.1 PRD
 
@@ -205,6 +207,11 @@ model DeviceRecoverySetting {
 
 Fase 28 sengaja dipisah karena menyentuh data yang sudah ada (`ownership` backfill) — perubahan itu harus mendarat dan diperiksa sendiri sebelum alur di atasnya dibangun.
 
+**Status akhir:** kelima fase selesai. Invariant §6 diverifikasi lewat 43 pemeriksaan
+berjalan di dev DB (pengajuan → approval → penarikan → karantina → inspeksi → eskalasi
+→ pemberlakuan → pemutusan fisik), ditambah 20 tes unit untuk aturan murni di
+`lib/recovery.ts`.
+
 ## 6. Invariant yang Ditegakkan di Service Layer
 
 Mengikuti aturan repo ini — ditegakkan di mesin, bukan di UI:
@@ -223,14 +230,30 @@ Mengikuti aturan repo ini — ditegakkan di mesin, bukan di UI:
 
 **Dari PRD (§22), masih terbuka:** Q-001 nilai buku saat eskalasi lost · Q-002 siapa berhak menyetujui scrap · Q-003 SLA per wilayah/jenis · Q-004 salinan berita acara ke pelanggan · Q-005 aksesori sebagai aset serial atau kuantitas.
 
-**Tambahan yang muncul dari pemetaan ini:**
+**Keputusan yang diambil saat implementasi:**
 
-| # | Pertanyaan | Kenapa penting |
+| # | Pertanyaan | Keputusan |
 |---|---|---|
-| P-1 | Backfill `ownership`: semua perangkat lama dianggap COMPANY? | Kalau ada perangkat milik pelanggan yang terlanjur tercatat, ia akan ikut masuk daftar penarikan |
-| P-2 | Pakai `WorkOrder` tipe `DEVICE_RETRIEVAL` yang sudah ada, atau tipe baru `CUSTOMER_DEVICE_RECOVERY` seperti tulisan PRD? | Usulanku: pakai yang sudah ada — menambah tipe kembar untuk hal yang sama menyulitkan laporan |
-| P-3 | Route: `/crm/terminations` + `/inventory/device-recoveries`, atau ikut PRD apa adanya? | Konsistensi dengan 141 halaman yang sudah bermodul |
-| P-4 | Terminasi lewat approval engine yang ada, atau alur persetujuan sendiri? | Usulanku: pakai engine yang ada — SoD dan matrixnya sudah teruji |
+| P-1 | Backfill `ownership` | Ya, semua perangkat lama jadi COMPANY (saran konservatif §20.2), **tetapi** disertai jalur koreksi ber-audit + filter kepemilikan di daftar perangkat sebagai daftar tinjau. Wajib ditinjau sebelum produksi. |
+| P-2 | Tipe work order | Pakai `DEVICE_RETRIEVAL` yang sudah ada. Tidak ada tipe kembar. |
+| P-3 | Route | `/crm/terminations` + `/inventory/device-recoveries`, konsisten dengan struktur bermodul yang sudah berjalan. |
+| P-4 | Alur persetujuan | Pakai approval engine yang ada, satu langkah ke Management. SoD-nya ikut terpakai gratis. |
+
+**Yang masih terbuka (tidak diputuskan sendiri oleh implementasi):**
+
+- **Q-001 nilai buku saat eskalasi lost.** `markNotReturned()` menandai perangkat LOST dan menutup kasusnya, tetapi **tidak** membuat jurnal apa pun. Angka kerugian tidak boleh ditebak sistem.
+- **Q-002 siapa berhak menyetujui scrap** — sementara dipagari izin `device_recovery.dispose` (dipegang Management), bukan approval berjenjang.
+- **Q-003 SLA per wilayah** — `DeviceRecoverySetting` sudah berupa data, jadi perubahannya nanti tidak menuntut migrasi.
+- **Q-004 salinan berita acara ke pelanggan** — halaman cetak tersedia; pengirimannya belum otomatis.
+- **Q-005 aksesori sebagai aset serial atau kuantitas** — saat ini hanya butir checklist, bukan aset tersendiri.
+
+**Catatan lain yang muncul dari pemetaan ini:**
+
+Satu penyesuaian pada mesin yang sudah ada ternyata tidak terhindarkan:
+`STOCK_RETURN` semula hanya menerima perangkat berstatus `IN_CUSTODY`, sehingga
+perangkat hasil penarikan (`RETURN_IN_TRANSIT` / `QUARANTINED`) tertolak.
+Penjaganya diperlebar untuk ketiga status itu — pemeriksaan custodian TIDAK
+dilonggarkan, karena rantai tanggung jawabnya memang sama.
 
 ## 8. Yang Perlu Diketahui Sebelum Mulai
 

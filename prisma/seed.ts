@@ -180,7 +180,7 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   // Fase 22: noc_manager + noc_engineer dilebur. Permission = gabungan keduanya.
@@ -188,13 +188,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // eksekutornya sendiri (ditegakkan per-record di lib/noc.ts, bukan per-peran).
   noc: [...BASE, "approvals.act", ...CRM_VIEW, "noc.view", "net_inventory.manage", "ipam.manage", "alarms.manage", "incidents.create", "incidents.manage", "incidents.close", "maintenance.manage", "changes.create", "changes.implement", "changes.review", "integrations.manage", "billing.view", "dunning.manage", "ftth.manage", "noc_map.view"],
   it_manager: [...BASE, "approvals.act", "it.view", "it_inventory.manage", "it_tickets.manage", "access.manage", "deployments.create", "deployments.execute", "backups.manage", "it_assets.manage", "integrations.manage"],
-  operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage"],
+  operational_coordinator: [...BASE, "approvals.act", ...CRM_VIEW, "surveys.manage", "surveys.execute", "subscriptions.edit", "subscriptions.activate", ...INV_VIEW, "stock.create", "work_orders.create", "work_orders.assign", "work_orders.close", "ctickets.view", "ctickets.create", "ctickets.manage", "termination.view", "device_recovery.assign"],
   project_manager: [...BASE, "approvals.act", ...INV_VIEW, "projects.view", "projects.manage", "projects.close"],
   marketing: [...BASE, "campaigns.view", "campaigns.manage", "leads.view", "leads.create", "leads.assign", "channels.view", "channels.manage"],
   sales: [...BASE, ...SALES_CORE],
-  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage", "channels.view", "channels.manage"],
+  customer_service: [...BASE, "customers.view", "customers.edit", "subscriptions.view", "subscriptions.edit", "leads.view", "leads.create", "work_orders.view", "billing.view", "payments.create", "ctickets.view", "ctickets.create", "ctickets.manage", "channels.view", "channels.manage", "termination.create", "termination.view", "termination.cancel"],
   warehouse: [...BASE, ...INV_VIEW, "items.manage", "stock.create", "stock.post", "stock.reverse", "stock.receive", "slot.approve", "devices.writeoff", "devices.ownership", "opname.manage", "termination.view", "device_recovery.assign", "device_recovery.receive", "device_recovery.inspect"],
-  technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view"],
+  technician: [...BASE, "work_orders.view", "work_orders.execute", "custody.view", "inventory.view", "ctickets.view", "termination.view", "device_recovery.pickup"],
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
   it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],
@@ -299,6 +299,9 @@ const APPROVAL_RULES: {
   // Phase 14: berjenjang — atasan (supervisor divisi pengaju) lalu HRD.
   { module: "leave_request", subtype: null, name: "Izin / Cuti Karyawan", min: 0, max: null, steps: [SUP, R("hrd")] },
   { module: "overtime_request", subtype: null, name: "Lembur Karyawan", min: 0, max: null, steps: [SUP] },
+  // Fase 29: terminasi pelanggan — satu langkah ke Management. Segregation of
+  // duties tetap berlaku: pengaju tidak bisa menyetujui pengajuannya sendiri.
+  { module: "termination", subtype: null, name: "Terminasi Pelanggan", min: 0, max: null, steps: [R("management")] },
 ];
 
 async function main() {

@@ -511,7 +511,18 @@ export async function postTransaction(
             const device = await prisma.serializedDevice.findUnique({
               where: { id: line.deviceId! },
             });
-            if (!device || device.status !== "IN_CUSTODY" || device.custodianId !== tx.custodianId) {
+            // Fase 30–31: perangkat hasil penarikan pelanggan juga pulang lewat
+            // jalur ini, tetapi statusnya sengaja dibedakan supaya asal-usulnya
+            // tetap terbaca (RETURN_IN_TRANSIT = di jalan, QUARANTINED = sudah
+            // sampai meja karantina dan menunggu inspeksi). Rantai custody-nya
+            // sama: barang tetap tanggung jawab teknisi sampai transaksi ini
+            // diposting, jadi pemeriksaan custodian TIDAK dilonggarkan.
+            const RETURNABLE = ["IN_CUSTODY", "RETURN_IN_TRANSIT", "QUARANTINED"];
+            if (
+              !device ||
+              !RETURNABLE.includes(device.status) ||
+              device.custodianId !== tx.custodianId
+            ) {
               throw new Error(
                 `Perangkat ${device?.serialNumber ?? "?"} tidak berada dalam custody teknisi tersebut.`
               );

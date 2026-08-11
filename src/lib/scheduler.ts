@@ -3,6 +3,8 @@ import { runDueProbes, pruneProbeResults } from "@/lib/probe";
 import { pollAllRouters } from "@/lib/pppoe-monitor";
 import { runOutboundQueue } from "@/lib/channels";
 import { runQueuedJobs, evaluateDunning } from "@/lib/dunning";
+import { sweepOverdueRecoveries } from "@/lib/device-recovery";
+import { applyDueTerminations } from "@/lib/termination";
 
 // ── Penjadwal Pekerjaan Berkala (Fase 27) ───────────────────────
 //
@@ -59,6 +61,33 @@ export function assertNotTotalFailure(
 }
 
 export const TASKS: TaskDefinition[] = [
+  {
+    code: "recovery.sla",
+    name: "Pantau SLA penarikan perangkat",
+    description:
+      "Menandai penarikan yang melewati batas SLA dan memberi tahu pemegang izin eskalasi.",
+    defaultIntervalSec: 3600,
+    enabledByDefault: true,
+    run: async () => {
+      // Sengaja hanya memberi tahu. Menyatakan perangkat hilang adalah
+      // keputusan manusia dengan izin eskalasi, bukan efek samping cron.
+      const detail = await sweepOverdueRecoveries();
+      return { detail };
+    },
+  },
+  {
+    code: "termination.effective",
+    name: "Berlakukan terminasi yang jatuh tempo",
+    description:
+      "Menjadikan terminasi yang sudah disetujui berstatus EFFECTIVE saat tanggal berlakunya tiba.",
+    defaultIntervalSec: 3600,
+    enabledByDefault: true,
+    run: async () => {
+      const r = await applyDueTerminations();
+      assertNotTotalFailure(r.applied, r.attempted, r.summary);
+      return { detail: r.summary };
+    },
+  },
   {
     code: "probe.run",
     name: "Jalankan probe jaringan",
