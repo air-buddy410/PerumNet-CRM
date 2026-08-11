@@ -25,39 +25,42 @@ Yang ditutup saat ini:
 | `documents.test.ts` | Kunci periode penomoran dokumen, pengambilan urutan tertinggi |
 | `billing.test.ts` | Pembulatan PPN half-up dan presisi BigInt pada nominal besar |
 
-## Yang BELUM ada, dan alasannya
+## Tes integrasi (`tests/integration/`)
 
-**Tes integrasi berbasis database belum ditulis.** Sebagian besar aturan bisnis
-kita hidup di service layer yang menyentuh database — reservasi stok, transfer
-tiga langkah, IRF, isolir, alokasi slot. Aturan-aturan itu sudah diverifikasi
-lewat skrip sekali-pakai saat tiap fase dibangun, tetapi skrip itu tidak
-disimpan, sehingga **tidak ada yang menjaganya dari regresi sekarang**.
-
-Menjalankannya terhadap database dev akan merusak data dev, jadi tes integrasi
-butuh database sendiri lebih dulu. Resepnya:
+Menyentuh database sungguhan dan menjalankan service layer apa adanya —
+approval engine, mesin stok, penomoran dokumen. Inilah yang menjaga aturan
+bisnis yang tidak bisa diuji tanpa database.
 
 ```bash
-# 1. Buat database tes terpisah
-docker exec perumnet-postgres psql -U perumnet -d postgres \
-  -c "CREATE DATABASE perumnet_test;"
-
-# 2. Siapkan skema + seed di sana
-DATABASE_URL="postgresql://perumnet:perumnet@localhost:5433/perumnet_test" \
-  npx prisma db push && \
-DATABASE_URL="postgresql://perumnet:perumnet@localhost:5433/perumnet_test" \
-  npm run db:seed
+npm run test:integration      # menyiapkan skema lalu menjalankan
+npm run test:all              # unit + integrasi
 ```
 
-Berkas tes integrasi harus menimpa `DATABASE_URL` **sebelum** meng-import modul
-apa pun yang menyentuh Prisma, karena klien dibuat saat modul dimuat:
+**Database terpisah, dan itu ditegakkan bukan disarankan.** URL-nya diturunkan
+dari `DATABASE_URL` yang ada dengan mengganti nama database (`perumnet_dev` →
+`perumnet_test`), sehingga kredensial tidak pernah tersalin ke repo. Sebelum
+modul apa pun yang menyentuh Prisma di-import, `assertTestDatabase()` menolak
+berjalan bila nama database tidak berakhiran `_test`. Tes ini MENGHAPUS data;
+satu salah ketik environment tanpa penjaga itu akan menghabisi database dev.
 
-```ts
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL!;
-const { createDraftTransaction } = await import("@/lib/inventory");
-```
+| Berkas | Yang dijaga |
+| --- | --- |
+| `termination.test.ts` | Perangkat pelanggan tidak pernah ikut ditarik, persetujuan atomik, SoD, terminasi ganda, pembatalan, penguncian setelah berlaku |
+| `recovery.test.ts` | Karantina tidak menambah stok, hanya LAYAK_DIGUNAKAN yang menambah dan selalu SECOND, port ODP menunggu pemutusan fisik, syarat vonis tidak kembali |
+| `concurrency.test.ts` | PRD §19.2 — penarikan & inspeksi bersamaan, draft sampah, penomoran dokumen |
 
-Dan wajib melewati dirinya sendiri bila `TEST_DATABASE_URL` tidak di-set,
-supaya `npm test` tetap aman dijalankan siapa pun tanpa merusak apa pun.
+### Dua hal yang sudah pernah salah di sini
+
+**Berkas tes berjalan paralel, database cuma satu.** Bawaan `node:test`
+menjalankan tiap berkas di proses terpisah secara bersamaan, sehingga
+`resetTransactionalData()` milik satu berkas menghapus data berkas lain di
+tengah jalan. Seluruh suite ambruk begitu berkas ketiga ditambahkan. Karena
+itu penjalannya memaksa `--test-concurrency=1`.
+
+**Fixture yang tidak aman dijalankan berbarengan menutupi yang diuji.** Uji
+penomoran sempat gagal bukan karena penomorannya, melainkan karena persiapan
+master data ikut dijalankan paralel. Dalam uji konkurensi, buat persiapannya
+BERURUTAN dan paralelkan hanya bagian yang benar-benar diuji.
 
 ## Aturan menulis tes di sini
 

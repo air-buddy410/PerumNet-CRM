@@ -10,9 +10,11 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma db push && tsx prisma/seed.ts",
-    "test": "tsx --test \"tests/**/*.test.ts\"",
-    "test:watch": "tsx --test --watch \"tests/**/*.test.ts\"",
-    "worker": "tsx scripts/worker.ts"
+    "test": "tsx --test \"tests/unit/**/*.test.ts\"",
+    "test:watch": "tsx --test --watch \"tests/unit/**/*.test.ts\"",
+    "worker": "tsx scripts/worker.ts",
+    "test:integration": "tsx scripts/test-integration.ts",
+    "test:all": "npm test && npm run test:integration"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
