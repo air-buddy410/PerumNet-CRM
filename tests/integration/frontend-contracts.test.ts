@@ -196,7 +196,17 @@ describe("kontrak frontend", () => {
       assert.deepEqual(view!.user.roles, ["Management"]);
       assert.equal(view!.employee?.jobTitle, "Teknisi");
       assert.equal(view!.employee?.supervisorName, "Atasan");
-      assert.ok(["LOCAL", "MAILSERVER"].includes(view!.auth.provider));
+      // Fase 45 — nilai OIDC menyusul. Yang diuji bukan sekadar "salah satu
+      // dari daftar", melainkan invarian yang benar-benar berarti: ganti
+      // password hanya tersedia bila CRM memang pemilik kredensialnya.
+      // Kalau invarian ini pernah bocor, orang bisa mengubah hash lokal lalu
+      // merasa aman padahal kredensial yang dipakai tidak berubah.
+      assert.ok(["LOCAL", "MAILSERVER", "OIDC"].includes(view!.auth.provider));
+      assert.equal(
+        view!.auth.passwordChangeAvailable,
+        view!.auth.provider === "LOCAL",
+        "ganti password harus tersedia HANYA saat provider LOCAL"
+      );
     });
 
     test("tanpa data pegawai, employee bernilai null — bukan gagal", async () => {

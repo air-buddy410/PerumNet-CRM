@@ -1,6 +1,7 @@
 import { Logo } from "@/components/logo";
 import { LogIn } from "lucide-react";
 import { loginAction } from "./actions";
+import { oidcBlocker } from "@/lib/oidc";
 
 export const metadata = { title: "Login" };
 
@@ -10,6 +11,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; next?: string }>;
 }) {
   const sp = await searchParams;
+  const oidcAvailable = oidcBlocker() === null;
 
   return (
     <main className="crm-login-page">
@@ -29,6 +31,21 @@ export default async function LoginPage({
             <div className="crm-flash is-error">
               {sp.error}
             </div>
+          )}
+
+          {/* Fase 45 — jalur utama saat identitas terpusat aktif.
+              Form password TETAP ditampilkan di bawahnya, bukan disembunyikan:
+              itulah jalur akun darurat, dan menyembunyikannya berarti tidak ada
+              yang bisa masuk saat penyedia identitas mati. */}
+          {oidcAvailable && (
+            <>
+              <a href="/api/auth/oidc/start" className="btn-primary w-full justify-center">
+                Masuk dengan Akun PerumNet
+              </a>
+              <p className="mt-3 text-center text-xs text-slate-500">
+                Password di bawah hanya untuk akun darurat.
+              </p>
+            </>
           )}
 
           <form action={loginAction} className="crm-login-form">

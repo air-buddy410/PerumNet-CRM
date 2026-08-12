@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { authProviderMode } from "@/lib/oidc";
 import { logAudit } from "@/lib/audit";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -6,18 +7,20 @@ import type { CurrentUser } from "@/lib/rbac";
 //
 // Bentuk `ProfileView` mengikuti kontrak frontend apa adanya.
 //
-// Soal identitas: hari ini autentikasi CRM bersifat LOKAL — password ada di
-// tabel User sebagai hash bcrypt, dan `changePasswordAction` benar-benar
-// bekerja. PRD frontend §11 menyebut rencana identitas terpusat lewat
-// mailserver/LDAP, tetapi antarmuka resminya BELUM ADA. Yang dilaporkan di
-// sini karena itu adalah keadaan sebenarnya, bukan keadaan yang dicita-citakan
-// — melaporkan MAILSERVER sekarang berarti berbohong kepada UI.
+// Soal identitas (diperbarui Fase 45): nilai yang dilaporkan mengikuti
+// AUTH_PROVIDER yang benar-benar aktif, bukan yang dicita-citakan.
 //
-// Ketika penyedia identitas resmi dipasang, cukup set AUTH_PROVIDER=MAILSERVER:
-// tombol ganti password otomatis menjadi nonaktif sampai adapter-nya ditulis,
-// dan CRM tidak akan pernah menerima password mailserver sebagai nilai biasa.
+//   LOCAL      — password ada di tabel User sebagai hash bcrypt; ganti
+//                password bekerja sungguhan.
+//   OIDC       — kredensial milik penyedia identitas (Authentik). CRM tidak
+//                pernah memegangnya, jadi ganti password ditutup.
+//   MAILSERVER — sama seperti OIDC dari sudut pandang UI: bukan milik CRM.
+//
+// Menutup ganti password bukan sekadar menyembunyikan tombol: server pun
+// menolaknya. Tanpa itu, orang bisa mengubah hash lokal lalu merasa aman
+// padahal kredensial yang sebenarnya dipakai tidak berubah sama sekali.
 
-export type AuthProvider = "MAILSERVER" | "LOCAL";
+export type AuthProvider = "MAILSERVER" | "LOCAL" | "OIDC";
 
 export interface ProfileView {
   user: {
@@ -46,7 +49,9 @@ export interface ProfileView {
 }
 
 export function authProvider(): AuthProvider {
-  return process.env.AUTH_PROVIDER === "MAILSERVER" ? "MAILSERVER" : "LOCAL";
+  // Fase 45 — nilai OIDC menyusul MAILSERVER: keduanya sama-sama berarti
+  // kredensialnya BUKAN milik CRM, jadi keduanya menutup ganti password.
+  return authProviderMode();
 }
 
 /**

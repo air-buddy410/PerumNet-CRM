@@ -320,7 +320,7 @@ dikerjakan **setelah** 41–42 supaya pembekuan akun bisa langsung memakainya.
 | **42** | **Kontrak berakhir → pembekuan akun** — worker Fase 27 memberi tahu H-30 & H-7, lalu membekukan akun saat jatuh tempo (§4b.1). Data pegawai tetap utuh. | ✅ **SELESAI** |
 | **43** | **Setting mailserver** — `Integration` provider `MAILCOW`, halaman `/it/mailserver`, uji koneksi. Belum menyentuh mailbox. | ✅ **SELESAI** |
 | **44** | **Pengelolaan mailbox & label divisi** — bandingkan CRM ↔ mailcow, dorong divisi CRM jadi tag, laporkan selisih. | ✅ **SELESAI** |
-| **45** | **Adapter identitas (OIDC/Authentik)** — login lewat IdP, akun dicocokkan lewat email, jalur lokal tetap ada sebagai cadangan darurat. | ⏸ menunggu Authentik berdiri — lihat §8b |
+| **45** | **Adapter identitas (OIDC/Authentik)** — login lewat IdP, akun terikat `oidcSubject`, jalur darurat lokal dengan audit tersendiri. | ✅ **SELESAI** — diuji sungguhan terhadap Authentik di `auth.perumnet.id` |
 | **46** | **Katalog & akses aplikasi lain** — captive portal dkk. terdaftar di `Application`, dengan daftar divisi yang boleh masuk; IdP menerbitkan grupnya. | 45 |
 | **47** | **Arsip & pemulihan terpadu** — `ArchivedRecord` + halaman `/settings/trash`, alasan wajib (§4b.3). Pengarsipan akun beku 3 bulan memakainya. | ✅ **SELESAI** |
 

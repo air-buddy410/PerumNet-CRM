@@ -309,3 +309,46 @@ export async function unfreezeUserAction(formData: FormData): Promise<void> {
         : "error=" + encodeURIComponent(result.error))
   );
 }
+
+// ── Akun darurat / break-glass (Fase 45) ────────────────────────
+// Menandai akun yang tetap boleh masuk memakai password lokal walaupun
+// identitas terpusat aktif. Tanpa minimal satu akun bertanda ini, penyedia
+// identitas yang mati mengunci seluruh perusahaan dari CRM — termasuk dari
+// memperbaiki penyedianya.
+//
+// Karena itu izinnya sengaja PALING TINGGI (users.create, bukan users.edit):
+// menandai akun darurat berarti memberi jalan pintas permanen ke sistem.
+
+export async function toggleBreakGlassAction(formData: FormData): Promise<void> {
+  const actor = await requirePermission(PERMISSIONS.USERS_CREATE);
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (reason.length < 3) {
+    redirect(
+      `/settings/users/${userId}?error=` +
+        encodeURIComponent("Alasan wajib diisi — penandaan akun darurat harus bisa ditelusuri.")
+    );
+  }
+  const target = await db.user.findUnique({ where: { id: userId } });
+  if (!target) {
+    redirect("/settings/users?error=" + encodeURIComponent("User tidak ditemukan."));
+  }
+  const next = !target.allowLocalLogin;
+
+  await db.user.update({ where: { id: userId }, data: { allowLocalLogin: next } });
+  await logAudit({
+    userId: actor.id,
+    action: next ? "USER_BREAK_GLASS_GRANT" : "USER_BREAK_GLASS_REVOKE",
+    module: "users",
+    entityType: "User",
+    entityId: userId,
+    description: `${next ? "Menandai" : "Mencabut tanda"} akun darurat pada "${target.username}" — ${reason}`,
+  });
+  revalidatePath("/settings/users");
+  revalidatePath(`/settings/users/${userId}`);
+  redirect(
+    `/settings/users/${userId}?ok=` +
+      encodeURIComponent(next ? "Akun ditandai sebagai akun darurat." : "Tanda akun darurat dicabut.")
+  );
+}

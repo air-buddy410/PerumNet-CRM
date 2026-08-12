@@ -40,6 +40,19 @@ model User {
   /// berjalan di perangkat lain ikut tertutup saat itu juga.
   frozenAt           DateTime?
   freezeReason       String?
+  /// Fase 45 — penaut ke identitas di penyedia identitas (klaim `sub`).
+  /// Disimpan alih-alih hanya mengandalkan email karena alamat email BISA
+  /// BERUBAH: setelah tertaut, ganti alamat tidak memutus akun dan tidak
+  /// menghapus riwayatnya. Sekaligus penjaga: token dengan `sub` berbeda
+  /// ditolak meski emailnya sama, sehingga menghapus lalu membuat ulang
+  /// pengguna di IdP dengan alamat yang sama tidak mengambil alih akun ini.
+  oidcSubject        String?  @unique
+  /// Fase 45 — jalur darurat. Saat AUTH_PROVIDER bukan LOCAL, password lokal
+  /// ditutup untuk SEMUA orang kecuali akun bertanda ini. Tanpa satu pun akun
+  /// darurat, penyedia identitas yang mati mengunci seluruh perusahaan dari
+  /// CRM — termasuk dari memperbaiki penyedianya. Setiap pemakaiannya dicatat
+  /// dengan aksi audit tersendiri.
+  allowLocalLogin    Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

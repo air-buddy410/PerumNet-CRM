@@ -1,6 +1,6 @@
 # Handoff Backend → Frontend (Luna)
 
-**Tanggal:** 2026-08-12 (diperbarui setelah Fase 48)
+**Tanggal:** 2026-08-12 (diperbarui setelah Fase 45 — identitas terpusat aktif)
 **Untuk:** pengerjaan frontend PerumNet CRM
 **Dari:** sisi backend (Opus)
 **Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
@@ -35,6 +35,7 @@ ingatan.
 | 13 | **Halaman arsip `/settings/trash`** | mekanisme belum ada | ✅ siap — lihat §11 |
 | 14 | **Setting mailserver + label divisi mailbox** | integrasi belum ada | ✅ siap — lihat §13 |
 | 15 | **Unggah gambar tanda tangan + redirect kembali ke portal** (§20 PRD-mu) | action belum ada | ✅ siap — lihat §14 |
+| 16 | **Identitas terpusat aktif** — `provider` bisa bernilai `OIDC` | menunggu IdP | ✅ **sudah jalan** — lihat §15 |
 
 ---
 
@@ -117,10 +118,16 @@ memberi umpan balik lebih awal):
 nama wajib & maksimal 100 karakter · telepon `^[0-9+()\s-]{6,25}$` ·
 menyimpan tanpa perubahan ditolak.
 
-## 4. Ganti password & identitas — SIAP, TAPI PERLU DISEPAKATI
+## 4. Ganti password & identitas — SUDAH DIPUTUSKAN, lihat juga §15
+
+> **Diperbarui Fase 45.** Pertanyaan terbuka di bawah **sudah terjawab**:
+> `AUTH_PROVIDER` kini bernilai `OIDC` dan login lewat Authentik sudah berjalan.
+> `provider` melaporkan `"OIDC"`, `passwordChangeAvailable` bernilai `false`,
+> dan teks "identitas terpusat" di halaman profil kini benar apa adanya.
+> Catatan asli dibiarkan di bawah sebagai rekaman alasannya.
 
 ```ts
-view.auth.provider                 // "LOCAL" | "MAILSERVER"
+view.auth.provider                 // "LOCAL" | "MAILSERVER" | "OIDC"
 view.auth.passwordChangeAvailable  // boolean
 ```
 
@@ -547,6 +554,40 @@ ditemukan", supaya penebak id tidak bisa memastikan penarikan itu ada.
 portal dengan akun teknisi yang bukan pemilik tugasnya, aksinya kini akan
 gagal — itu perilaku yang benar, bukan bug. Koordinator, gudang, dan
 management tidak terpengaruh sama sekali.
+
+---
+
+## 15. Identitas terpusat aktif (Fase 45) — SIAP & SUDAH JALAN
+
+Login lewat Authentik sudah bekerja sungguhan di `auth.perumnet.id`. Yang
+berubah untukmu **hanya satu nilai**, dan kontraknya tidak bergeser sama sekali.
+
+`view.auth.provider` sekarang bisa bernilai **`"OIDC"`**, selain `LOCAL` dan
+`MAILSERVER` yang sudah ada. Perlakukan `OIDC` **sama persis seperti
+`MAILSERVER`**: kredensialnya bukan milik CRM, jadi `passwordChangeAvailable`
+bernilai `false` dan form ganti password disembunyikan.
+
+Ini sekaligus menutup pertanyaan terbuka di §4 — sekarang nilainya benar-benar
+mencerminkan keadaan, bukan lagi `LOCAL` yang bertentangan dengan teks
+"identitas terpusat" di halaman profil.
+
+**Halaman masuk** (`/login`) sudah saya sesuaikan:
+
+- Tombol **"Masuk dengan Akun PerumNet"** muncul bila konfigurasi OIDC lengkap
+- **Form password TETAP ditampilkan di bawahnya**, dengan keterangan
+  "Password di bawah hanya untuk akun darurat"
+
+Tolong **jangan sembunyikan form password itu** saat OIDC aktif. Itu bukan sisa
+yang terlupakan — itulah satu-satunya jalan masuk saat Authentik mati, dan
+menyembunyikannya berarti tidak ada seorang pun bisa masuk untuk memperbaiki
+keadaan.
+
+**Akun darurat** dikelola di `/settings/users/[id]`, kartu "Akun Darurat",
+izin `users.create`. Kartunya sudah ada dan berfungsi; kalau mau kamu rapikan
+tampilannya, dua hal yang tolong dipertahankan: lencana **AKTIF** saat menyala,
+dan kolom **Alasan** tetap wajib.
+
+Tidak ada DTO, action, atau endpoint lain yang berubah.
 
 ---
 
