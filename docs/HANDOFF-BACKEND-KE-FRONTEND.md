@@ -1,6 +1,6 @@
 # Handoff Backend → Frontend (Luna)
 
-**Tanggal:** 2026-08-12 (diperbarui setelah Fase 41–42 & 47)
+**Tanggal:** 2026-08-12 (diperbarui setelah Fase 48)
 **Untuk:** pengerjaan frontend PerumNet CRM
 **Dari:** sisi backend (Opus)
 **Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
@@ -34,6 +34,7 @@ ingatan.
 | 12 | **Akun beku & pencairan** | konsep belum ada | ✅ siap — lihat §10 |
 | 13 | **Halaman arsip `/settings/trash`** | mekanisme belum ada | ✅ siap — lihat §11 |
 | 14 | **Setting mailserver + label divisi mailbox** | integrasi belum ada | ✅ siap — lihat §13 |
+| 15 | **Unggah gambar tanda tangan + redirect kembali ke portal** (§20 PRD-mu) | action belum ada | ✅ siap — lihat §14 |
 
 ---
 
@@ -468,6 +469,84 @@ Keadaan yang mungkin muncul ada di `SYNC_STATE_LABELS` (`@/lib/mailbox-tag`):
 
 **Belum ada di navigasi.** Sama seperti `/settings/trash` — `nav.tsx` kamu yang
 pegang. Tolong tambahkan `/it/mailserver` dan `/it/mailboxes` di grup IT.
+
+---
+
+## 14. Jawaban atas §20 PRD-mu (Fase 48) — SIAP
+
+Dua permintaanmu yang tersisa sudah selesai, plus satu lubang yang ketahuan
+sambil mengerjakannya.
+
+### 14.1 Unggah gambar tanda tangan → `attachmentId`
+
+Dua jalur, pilih yang cocok dengan bentuk UI-mu:
+
+**Jalur satu-submit** (form biasa, paling sederhana) — `signPickupAction`
+sekarang menerima field `signatureFile` langsung:
+
+```
+<form action={signPickupAction} encType="multipart/form-data">
+  recoveryId · role (CUSTOMER|TECHNICIAN) · signerName · signatureFile? · origin?
+```
+
+**Jalur dua-langkah** (kanvas tanda tangan) — `uploadSignatureAction`, dipakai
+dengan `useActionState` karena ia MENGEMBALIKAN nilai alih-alih mengalihkan
+halaman; redirect akan membuang kanvas yang baru digambar:
+
+```ts
+const [state, action] = useActionState(uploadSignatureAction, null);
+// state: { ok: true, attachmentId } | { ok: false, error } | null
+// field: recoveryId, signatureFile
+```
+Lalu kirim `attachmentId` itu ke `signPickupAction`.
+
+**Gambar tetap OPSIONAL — jangan dijadikan wajib di UI.** Nama penanda tangan
+satu-satunya yang wajib, karena itulah yang masih terbaca bertahun-tahun
+kemudian saat berkas gambarnya sudah tidak bisa dibuka. Kalau nanti diputuskan
+gambar wajib secara hukum, itu keputusan PO — bukan default.
+
+Berkasnya disajikan lewat `/api/files/<attachmentId>` seperti bukti foto, dan
+sudah didaftarkan di daftar-putih izin (entityType `DeviceRecoverySignature`).
+PNG/JPG, maksimal 5MB — batas mesin lampiran yang lama.
+
+### 14.2 Redirect kembali ke portal teknisi
+
+Setiap aksi penarikan sekarang menerima field opsional **`origin`**:
+
+| Nilai | Kembali ke |
+|---|---|
+| `portal` | `/portal/recoveries/<id>` |
+| `backoffice` atau kosong | `/inventory/device-recoveries/<id>` (perilaku lama) |
+
+```html
+<input type="hidden" name="origin" value="portal" />
+```
+
+**Yang dikirim adalah TOKEN, bukan URL — tolong jangan diubah jadi URL.**
+Alamatnya disusun di server dari daftar tertutup di `src/lib/recovery-origin.ts`.
+Menerima URL dari form akan membuka celah open redirect: satu tautan
+bertuliskan `?origin=https://situs-palsu` sudah cukup untuk melempar teknisi ke
+halaman login tiruan sambil terlihat berasal dari CRM.
+
+Berlaku untuk semua aksi: assign, recordAttempt, pickup, confirmDisconnect,
+receive, inspect, markNotReturned, attachEvidence, signPickup.
+
+### 14.3 Cakupan teknisi kini juga tegak di jalur TULIS
+
+Ini bukan permintaanmu, tapi kamu perlu tahu karena mengubah perilaku.
+
+Fase 40 menutup jalur baca. Jalur tulis ternyata masih terbuka: memegang
+`device_recovery.pickup` sudah cukup untuk mencatat kunjungan, menarik
+perangkat, **memutus port ODP**, membubuhkan tanda tangan, dan melampirkan
+bukti pada penarikan milik teknisi lain — hanya dengan tahu id-nya.
+
+Sekarang semuanya ditolak dengan pesan yang sama persis dengan "tidak
+ditemukan", supaya penebak id tidak bisa memastikan penarikan itu ada.
+
+**Untuk UI-mu:** tidak ada perubahan kontrak. Tapi kalau kamu sedang menguji
+portal dengan akun teknisi yang bukan pemilik tugasnya, aksinya kini akan
+gagal — itu perilaku yang benar, bukan bug. Koordinator, gudang, dan
+management tidak terpengaruh sama sekali.
 
 ---
 
