@@ -33,6 +33,13 @@ model User {
   /// Tanpa ini, ganti password TIDAK mengusir sesi di perangkat lain — dan
   /// justru itu alasan orang mengganti password saat akunnya disusupi.
   sessionEpoch       Int      @default(0)
+  /// Fase 42 — pembekuan akun. Beku BUKAN nonaktif: orangnya tidak bisa masuk,
+  /// tetapi datanya tetap utuh dan tetap terlihat di daftar. Diisi otomatis
+  /// saat kontrak berakhir, dan bisa dibatalkan manusia (tanggal kontrak bisa
+  /// salah ketik). Membekukan menaikkan sessionEpoch agar sesi yang sedang
+  /// berjalan di perangkat lain ikut tertutup saat itu juga.
+  frozenAt           DateTime?
+  freezeReason       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -141,6 +148,8 @@ model User {
   recoveryItemsReceived DeviceRecoveryItem[] @relation("RecoveryReceiver")
   recoveryAttempts    DeviceRecoveryAttempt[] @relation("RecoveryAttemptUser")
   deviceInspections   DeviceInspection[] @relation("DeviceInspector")
+  recordsArchived     ArchivedRecord[]   @relation("ArchiveArchiver")
+  recordsRestored     ArchivedRecord[]   @relation("ArchiveRestorer")
 }
 
 model Division {
@@ -215,6 +224,44 @@ model AuditLog {
   @@index([module, createdAt])
   @@index([userId, createdAt])
   @@index([action])
+}
+
+// ── Arsip terpadu (Fase 47) ─────────────────────────────────────
+// Append-only, seperti AuditLog: tidak ada jalur update/delete di aplikasi
+// selain menandai pemulihan.
+//
+// SENGAJA satu tabel, bukan kolom `deletedAt` di setiap model. Tiga alasan
+// yang sudah terbukti mahal di sistem lain:
+//   1. `deletedAt` menuntut SETIAP query mengingat menyaringnya; satu yang
+//      lupa membuat data "terhapus" muncul kembali di laporan.
+//   2. Batasan unik jadi rusak — employeeNo yang sudah dihapus tetap
+//      menempati indeks uniknya, sehingga nomornya hangus selamanya.
+//   3. Menduplikasi apa yang sudah dikerjakan status lifecycle dengan lebih
+//      baik. `Invoice.VOID` menyimpan MAKNA; `deletedAt` hanya "hilang".
+//
+// `reason` sengaja WAJIB (bukan String?). Itulah satu-satunya cara menjamin
+// aturan "tidak ada yang dibuang tanpa alasan" — dijaga oleh basis data,
+// bukan oleh ingatan penulis modul berikutnya.
+model ArchivedRecord {
+  id           String    @id @default(cuid())
+  entityType   String // "Employee", "User", "Customer", ...
+  entityId     String
+  label        String // teks yang dikenali manusia, mis. "Teguh — EMP-0012"
+  snapshot     String // JSON isi lengkap saat diarsipkan
+  reason       String // WAJIB
+  /// null = diarsipkan oleh penyapu terjadwal, bukan oleh orang. Sengaja
+  /// dibiarkan kosong alih-alih diatasnamakan admin mana pun: mencatat
+  /// tindakan sistem sebagai tindakan manusia merusak nilai jejak auditnya.
+  archivedById String?
+  archivedAt   DateTime  @default(now())
+  restoredById String?
+  restoredAt   DateTime?
+
+  archivedBy User? @relation("ArchiveArchiver", fields: [archivedById], references: [id])
+  restoredBy User? @relation("ArchiveRestorer", fields: [restoredById], references: [id])
+
+  @@index([entityType, archivedAt])
+  @@index([entityId])
 }
 
 // ── Approval Engine ─────────────────────────────────────────────
@@ -2191,6 +2238,20 @@ model Employee {
   supervisorId String?
   joinedAt     DateTime
   isActive     Boolean  @default(true)
+  /// Fase 41 — alamat domisili.
+  address      String?
+  /// Fase 41 — pola kerja: SHIFT mengikuti jadwal bergilir, NON_SHIFT jam
+  /// kantor tetap. Dibedakan dari keberadaan ShiftSchedule karena seorang
+  /// pekerja non-shift pun bisa sesekali dijadwalkan.
+  workPattern  String   @default("NON_SHIFT") // SHIFT | NON_SHIFT
+  /// Fase 41 — jenjang jabatan. SENGAJA terpisah dari User.level: yang ini
+  /// fakta kepegawaian, User.level adalah hierarki persetujuan. Menyatukannya
+  /// membuat promosi jabatan diam-diam mengubah kewenangan approval.
+  jobLevel     String   @default("STAFF") // STAFF | LEADER
+  /// Fase 41 — masa kontrak. Hanya terisi bila employeeType = CONTRACT;
+  /// ditegakkan di contractRejection(), bukan di form.
+  contractStartAt DateTime?
+  contractEndAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -7,7 +7,10 @@ import {
   updateUserAction,
   toggleUserActiveAction,
   resetPasswordAction,
+  freezeUserAction,
+  unfreezeUserAction,
 } from "../actions";
+import { archiveDueAt, FREEZE_GRACE_MONTHS } from "@/lib/employment";
 
 export const metadata = { title: "Detail User" };
 
@@ -161,6 +164,51 @@ export default async function UserDetailPage({
                 />
               </div>
               <button type="submit" className="btn-secondary">Reset</button>
+            </form>
+          </div>
+
+          <div className="card mt-6 space-y-3 p-6">
+            <div>
+              <h2 className="font-medium">
+                {user.frozenAt ? "Cairkan Akun" : "Bekukan Akun"}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {user.frozenAt ? (
+                  <>
+                    Beku sejak {formatDateTime(user.frozenAt)}
+                    {user.freezeReason ? ` — ${user.freezeReason}` : ""}. Akan
+                    diarsipkan otomatis {archiveDueAt(user.frozenAt).toLocaleDateString("id-ID")}{" "}
+                    bila tidak dicairkan.
+                  </>
+                ) : (
+                  <>
+                    Akun beku tidak bisa login dan sesinya yang sedang berjalan
+                    ikut tertutup, tetapi seluruh datanya tetap utuh. Setelah{" "}
+                    {FREEZE_GRACE_MONTHS} bulan beku, akun diarsipkan otomatis —
+                    dan arsip pun masih bisa dipulihkan.
+                  </>
+                )}
+              </p>
+            </div>
+            <form
+              action={user.frozenAt ? unfreezeUserAction : freezeUserAction}
+              className="flex flex-wrap items-end gap-3"
+            >
+              <input type="hidden" name="userId" value={user.id} />
+              <div className="min-w-56 flex-1">
+                <label className="label" htmlFor="freezeReason">Alasan</label>
+                <input
+                  id="freezeReason"
+                  name="reason"
+                  className="input"
+                  required
+                  minLength={3}
+                  placeholder={user.frozenAt ? "mis. kontrak diperpanjang" : "mis. kontrak berakhir"}
+                />
+              </div>
+              <button type="submit" className={user.frozenAt ? "btn-primary" : "btn-secondary"}>
+                {user.frozenAt ? "Cairkan" : "Bekukan"}
+              </button>
             </form>
           </div>
 

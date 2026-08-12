@@ -5,6 +5,7 @@ import { runOutboundQueue } from "@/lib/channels";
 import { runQueuedJobs, evaluateDunning } from "@/lib/dunning";
 import { sweepOverdueRecoveries } from "@/lib/device-recovery";
 import { applyDueTerminations } from "@/lib/termination";
+import { sweepEmploymentLifecycle } from "@/lib/employment-lifecycle";
 
 // ── Penjadwal Pekerjaan Berkala (Fase 27) ───────────────────────
 //
@@ -168,6 +169,25 @@ export const TASKS: TaskDefinition[] = [
       return {
         detail: `${result.data?.checked ?? 0} langganan diperiksa · ${result.data?.suspended ?? 0} diisolir`,
       };
+    },
+  },
+  {
+    code: "hrd.contract-lifecycle",
+    name: "Kontrak berakhir: peringatan, pembekuan, arsip",
+    description:
+      "Memperingatkan H-30 & H-7, membekukan akun yang kontraknya berakhir, lalu mengarsipkan akun yang sudah beku melewati masa tenggang.",
+    // Ambangnya berbasis hari — sekali sehari sudah cukup, dan menjaga
+    // peringatan tidak berulang dalam satu hari yang sama.
+    defaultIntervalSec: 24 * 3600,
+    // Aktif secara default, TIDAK seperti dunning. Bedanya: yang ini menutup
+    // akses orang yang kontraknya memang sudah habis dan bisa dibatalkan
+    // dengan satu tombol, sedangkan dunning memutus layanan pelanggan.
+    enabledByDefault: true,
+    run: async () => {
+      const r = await sweepEmploymentLifecycle();
+      // Sengaja TIDAK memakai assertNotTotalFailure: nol pembekuan adalah
+      // keadaan normal dan sehat, bukan kegagalan.
+      return { detail: r.summary };
     },
   },
   {

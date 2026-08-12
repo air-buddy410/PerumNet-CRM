@@ -154,6 +154,9 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   // Phase 15 — Kanal Pelanggan
   { code: "channels.view", module: "channels", action: "view", description: "Melihat template pesan, antrian kirim, dan pengumuman" },
   { code: "channels.manage", module: "channels", action: "manage", description: "Mengelola template, blast pesan, pengumuman, dan antrian" },
+  // Phase 47 — Arsip terpadu
+  { code: "archive.view", module: "archive", action: "view", description: "Melihat arsip lintas modul beserta alasan pengarsipannya" },
+  { code: "archive.restore", module: "archive", action: "restore", description: "Memulihkan baris yang sudah diarsipkan" },
 ];
 
 // Pemetaan permission per role.
@@ -180,7 +183,7 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate"],
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate", "archive.view", "archive.restore"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   // Fase 22: noc_manager + noc_engineer dilebur. Permission = gabungan keduanya.
@@ -198,7 +201,11 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   developer: [...BASE, "it.view", "deployments.create"],
   devops_engineer: [...BASE, "it.view", "it_inventory.manage", "deployments.create", "deployments.execute", "backups.manage"],
   it_support: [...BASE, "it.view", "it_tickets.manage", "access.manage", "it_assets.manage"],
-  hrd: [...BASE, "approvals.act", "hrd.view", "hrd.manage", "users.view"],
+  // Arsip sengaja TIDAK dibagikan luas: memulihkan baris yang sudah
+  // dikeluarkan dari peredaran adalah kewenangan yang harus sedikit
+  // pemegangnya. HRD boleh melihat karena akun karyawan yang dibekukan
+  // berakhir di sana, tetapi memulihkannya tetap keputusan management.
+  hrd: [...BASE, "approvals.act", "hrd.view", "hrd.manage", "users.view", "archive.view"],
 };
 
 // Struktur organisasi: staff -> supervisor -> owner; staff & supervisor per divisi.

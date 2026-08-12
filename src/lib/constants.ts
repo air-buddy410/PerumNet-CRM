@@ -151,6 +151,9 @@ export const PERMISSIONS = {
   // Phase 15 — Kanal Pelanggan
   CHANNELS_VIEW: "channels.view",
   CHANNELS_MANAGE: "channels.manage", // template, blast, pengumuman, antrian
+  // Phase 47 — Arsip terpadu
+  ARCHIVE_VIEW: "archive.view", // melihat isi arsip lintas modul
+  ARCHIVE_RESTORE: "archive.restore", // memulihkan baris yang diarsipkan
 } as const;
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -884,10 +887,30 @@ export const OUTBOUND_STATUSES = ["QUEUED", "SENDING", "SENT", "FAILED", "SKIPPE
 // ── Phase 14: HRD & Absensi ─────────────────────────────────────
 
 export const EMPLOYEE_TYPES = [
-  ["FULL_TIME", "Full Time"],
-  ["PART_TIME", "Part Time"],
+  ["FULL_TIME", "Karyawan Tetap"],
+  ["PART_TIME", "Paruh Waktu"],
   ["CONTRACT", "Kontrak"],
-  ["PROBATION", "Probation"],
+  ["PROBATION", "Masa Percobaan"],
+] as const;
+
+/// Jenis kepegawaian yang mensyaratkan masa kontrak. Dipakai bersama oleh
+/// validasi (contractRejection) dan UI (kapan blok tanggal ditampilkan),
+/// supaya keduanya tidak bisa berbeda pendapat.
+export const CONTRACTED_EMPLOYEE_TYPES = ["CONTRACT"] as const;
+
+// Fase 41 — pola kerja. Dibedakan dari ada/tidaknya ShiftSchedule: pekerja
+// non-shift pun sesekali bisa dijadwalkan, jadi jadwal bukan penanda yang sah.
+export const WORK_PATTERNS = [
+  ["NON_SHIFT", "Non-Shift"],
+  ["SHIFT", "Shift"],
+] as const;
+
+// Fase 41 — jenjang jabatan. BUKAN User.level: yang itu hierarki persetujuan.
+// Nilai lain (SUPERVISOR, MANAGER) sengaja belum ada — ditambah saat memang
+// dibutuhkan, karena menambah nilai baru mudah tetapi mengubah artinya sulit.
+export const JOB_LEVELS = [
+  ["STAFF", "Staff"],
+  ["LEADER", "Leader"],
 ] as const;
 
 export const DAY_TYPES = [

@@ -32,6 +32,27 @@ export async function login(
     return { ok: false, error: "Username atau password salah." };
   }
 
+  // Fase 42 — akun beku. Diperiksa SETELAH password terbukti benar, dan itu
+  // disengaja: memberi tahu "akun ini beku" sebelum password diverifikasi
+  // membocorkan keadaan akun kepada siapa pun yang menebak nama pengguna.
+  // Setelah passwordnya benar, orang itu memang pemilik akunnya — dan ia
+  // berhak tahu kenapa tidak bisa masuk, bukan disesatkan pesan "password
+  // salah" yang membuatnya mencoba mereset password berulang kali.
+  if (user.frozenAt) {
+    await logAudit({
+      userId: user.id,
+      action: AUDIT_ACTIONS.LOGIN_FAILED,
+      module: "auth",
+      description: `Login ditolak untuk "${user.username}" (akun beku)`,
+    });
+    return {
+      ok: false,
+      error: `Akun Anda dibekukan sejak ${user.frozenAt.toLocaleDateString("id-ID")}${
+        user.freezeReason ? ` — ${user.freezeReason}` : ""
+      }. Hubungi HRD atau IT.`,
+    };
+  }
+
   await createSession({
     userId: user.id,
     username: user.username,

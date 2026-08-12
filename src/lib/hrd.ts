@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
-import { EMPLOYEE_TYPES, LEAVE_TYPES, DAY_TYPES } from "@/lib/constants";
+import { EMPLOYEE_TYPES, LEAVE_TYPES, DAY_TYPES, WORK_PATTERNS, JOB_LEVELS } from "@/lib/constants";
+import { contractRejection } from "@/lib/employment";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── HRD & Absensi Engine (DESIGN-PHASE-8 §8, gap G7) ────────────
@@ -71,6 +72,11 @@ export async function saveEmployee(
     supervisorId?: string | null;
     joinedAt: Date;
     isActive?: boolean;
+    address?: string | null;
+    workPattern?: string;
+    jobLevel?: string;
+    contractStartAt?: Date | null;
+    contractEndAt?: Date | null;
   }
 ): Promise<Result> {
   const employeeNo = data.employeeNo.trim().toUpperCase();
@@ -82,6 +88,19 @@ export async function saveEmployee(
     return { ok: false, error: "Jenis karyawan tidak dikenal." };
   }
   if (Number.isNaN(data.joinedAt.getTime())) return { ok: false, error: "Tanggal bergabung tidak valid." };
+  const workPattern = data.workPattern ?? "NON_SHIFT";
+  const jobLevel = data.jobLevel ?? "STAFF";
+  if (!isValidCode(WORK_PATTERNS, workPattern)) return { ok: false, error: "Pola kerja tidak dikenal." };
+  if (!isValidCode(JOB_LEVELS, jobLevel)) return { ok: false, error: "Jenjang jabatan tidak dikenal." };
+  // Fase 41 — masa kontrak. Ditolak di sini, bukan di form: penyapu Fase 42
+  // membekukan akun berdasarkan contractEndAt, jadi tanggal yang tertinggal
+  // pada karyawan tetap akan membekukan orang yang masih bekerja.
+  const contractError = contractRejection({
+    employeeType: data.employeeType,
+    contractStartAt: data.contractStartAt ?? null,
+    contractEndAt: data.contractEndAt ?? null,
+  });
+  if (contractError) return { ok: false, error: contractError };
   const dup = await db.employee.findFirst({
     where: { employeeNo, ...(data.id ? { id: { not: data.id } } : {}) },
   });
@@ -121,6 +140,11 @@ export async function saveEmployee(
     supervisorId: data.supervisorId || null,
     joinedAt: data.joinedAt,
     isActive: data.isActive ?? true,
+    address: data.address?.trim() || null,
+    workPattern,
+    jobLevel,
+    contractStartAt: data.contractStartAt ?? null,
+    contractEndAt: data.contractEndAt ?? null,
   };
   const emp = data.id
     ? await db.employee.update({ where: { id: data.id }, data: payload })

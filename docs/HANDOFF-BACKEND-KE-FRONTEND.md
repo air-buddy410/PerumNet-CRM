@@ -1,6 +1,6 @@
 # Handoff Backend → Frontend (Luna)
 
-**Tanggal:** 2026-08-12 (diperbarui setelah Fase 35–39)
+**Tanggal:** 2026-08-12 (diperbarui setelah Fase 41–42 & 47)
 **Untuk:** pengerjaan frontend PerumNet CRM
 **Dari:** sisi backend (Opus)
 **Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
@@ -30,6 +30,9 @@ ingatan.
 | 8 | Penyaringan teknisi & pencarian serial di daftar penarikan | — | ⚠️ perlu dibuat |
 | 9 | Tombol "Ajukan Terminasi" di Customer 360 | — | ⚠️ perlu dibuat |
 | 10 | Portal teknisi `/portal/recoveries` | — | ⚠️ perlu dibuat |
+| 11 | **Data pegawai lengkap** (alamat, shift, jenjang, masa kontrak) | field belum ada | ✅ siap — lihat §9 |
+| 12 | **Akun beku & pencairan** | konsep belum ada | ✅ siap — lihat §10 |
+| 13 | **Halaman arsip `/settings/trash`** | mekanisme belum ada | ✅ siap — lihat §11 |
 
 ---
 
@@ -325,7 +328,106 @@ pola yang bisa diikuti.
 
 ---
 
-## 8. Catatan kerja bersama
+## 9. Data pegawai lengkap (Fase 41) — SIAP
+
+Field baru di `Employee`, semuanya sudah tersimpan lewat `saveEmployeeAction`
+yang lama (nama form-nya di bawah). Halaman `/hrd/employees` sudah berfungsi;
+yang tersisa untukmu murni tampilan.
+
+| Field | Nama di form | Nilai |
+|---|---|---|
+| Alamat | `address` | teks bebas, opsional |
+| Pola kerja | `workPattern` | `NON_SHIFT` \| `SHIFT` — konstanta `WORK_PATTERNS` |
+| Jenjang jabatan | `jobLevel` | `STAFF` \| `LEADER` — konstanta `JOB_LEVELS` |
+| Mulai kontrak | `contractStartAt` | `yyyy-mm-dd`, opsional |
+| Berakhir kontrak | `contractEndAt` | `yyyy-mm-dd`, **wajib bila `employeeType = CONTRACT`** |
+
+`EMPLOYEE_TYPES` **tidak berubah kodenya**, hanya labelnya kini Indonesia:
+`FULL_TIME` → "Karyawan Tetap", `CONTRACT` → "Kontrak",
+`PART_TIME` → "Paruh Waktu", `PROBATION` → "Masa Percobaan".
+
+**Empat aturan tampilan yang tolong dipertahankan:**
+
+1. **Blok kontrak muncul dan menghilang** mengikuti `employeeType`, bukan
+   sekadar dinonaktifkan. Sudah diterapkan di `employee-form.tsx` (client
+   component). Field mati yang tetap terlihat mengundang orang mengisi tanggal
+   pada karyawan tetap — dan tanggal itulah yang dipakai penyapu untuk
+   membekukan akun.
+2. **`jobLevel` ≠ `User.level`.** Jangan pernah memberi keduanya label yang
+   sama. Yang kedua sebut "Level Approval".
+3. Kontrak yang tinggal < 30 hari diberi penanda peringatan, **bukan** error —
+   orangnya masih bekerja normal.
+4. Karyawan tetap menampilkan `—` pada kolom kontrak, bukan "aman".
+
+Pembantu siap pakai di `@/lib/employment` (modul murni, aman di client):
+`contractPhase()` → `NONE|OK|DUE_SOON|ENDED`, `contractRemainingDays()`,
+`accountState()`, `ACCOUNT_STATE_LABELS`, `archiveDueAt()`.
+
+---
+
+## 10. Akun beku (Fase 42) — SIAP
+
+**Beku bukan nonaktif.** Nonaktif untuk akun yang riwayatnya sudah selesai;
+beku untuk orang yang berhenti berhak masuk tetapi mungkin kembali. Beku punya
+masa tenggang 3 bulan lalu berujung arsip; nonaktif tidak.
+
+| Hal | Kontrak |
+|---|---|
+| Field | `User.frozenAt`, `User.freezeReason` |
+| Action | `freezeUserAction`, `unfreezeUserAction` di `settings/users/actions.ts` — keduanya menuntut field `reason` (min. 3 karakter) |
+| Izin | `users.edit` |
+| Otomatis | Tugas penjadwal `hrd.contract-lifecycle`, sehari sekali |
+
+Alurnya: peringatan H-30 & H-7 ke pemegang `hrd.manage` **dan atasan
+langsungnya** → kontrak lewat → akun beku → 3 bulan → diarsipkan.
+
+**Kosakata yang tolong dipakai konsisten:** label **"Beku"**, jangan
+"Nonaktif" — beku itu sementara dan dibalik satu tombol.
+
+- Baris beku **tetap terlihat** di daftar, diberi penanda. Menyembunyikannya
+  membuat HRD mengira orangnya sudah hilang.
+- Banner detail menyebut **sejak kapan** dan **kapan akan diarsipkan**.
+- Yang beku **tidak bisa login sama sekali**, jadi tidak ada tampilan
+  "profil beku" yang perlu dibuat.
+
+Pesan login untuk akun beku sudah berbunyi jelas ("Akun Anda dibekukan sejak
+… — hubungi HRD atau IT"), dan sengaja hanya muncul **setelah passwordnya
+benar**, supaya keadaan akun tidak bocor ke penebak nama pengguna.
+
+---
+
+## 11. Arsip terpadu `/settings/trash` (Fase 47) — SIAP
+
+Halamannya sudah jadi dan berfungsi. Yang mungkin ingin kamu perbaiki hanya
+tampilannya.
+
+| Hal | Kontrak |
+|---|---|
+| Loader | `listArchive({ entityType?, onlyPending? })`, `archivedEntityTypes()` |
+| Action | `restoreArchivedAction` |
+| Izin | `archive.view` untuk melihat, `archive.restore` untuk memulihkan |
+| Pemegang | `super_admin`, `management` (keduanya), `hrd` (hanya lihat) |
+
+**Empat hal yang tolong tidak diubah:**
+
+1. **Alasan tidak pernah kosong.** Kolomnya wajib di basis data, jadi tidak ada
+   keadaan "tanpa alasan" yang perlu ditangani UI.
+2. **Baris yang sudah dipulihkan TETAP tampil** dengan penanda. Tabelnya
+   append-only dan pemulihan itu sendiri bagian dari jejaknya.
+3. **Tidak ada tombol "Hapus Permanen"**, dan tidak ada action-nya di backend.
+   Kalau ada permintaan menambahkannya, alasannya ada di komentar model
+   `ArchivedRecord`.
+4. Jenis yang belum punya jalur pemulihan otomatis menampilkan "via modulnya",
+   bukan tombol yang menandai pulih tanpa memulihkan apa pun. Cek dengan
+   `isRestorable(entityType)`.
+
+**Belum ada di navigasi.** `src/components/nav.tsx` sedang kamu pegang, jadi
+saya tidak menyentuhnya — tolong tambahkan sendiri entri `/settings/trash`
+(izin `archive.view`) di grup Pengaturan.
+
+---
+
+## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
 `NEXT_DIST_DIR=.next-luna` supaya `.next` tidak lagi diperebutkan dua proses.

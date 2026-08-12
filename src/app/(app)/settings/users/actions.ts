@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/rbac";
 import { hashPassword } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS, AUDIT_ACTIONS, USER_LEVELS } from "@/lib/constants";
+import { freezeAccount, unfreezeAccount } from "@/lib/employment-lifecycle";
 
 const orgSchema = z.object({
   level: z.enum([USER_LEVELS.STAFF, USER_LEVELS.SUPERVISOR, USER_LEVELS.OWNER]),
@@ -260,5 +261,51 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
   redirect(
     `/settings/users/${userId}?ok=` +
       encodeURIComponent("Password direset. User wajib menggantinya saat login.")
+  );
+}
+
+// ── Pembekuan akun (Fase 42) ────────────────────────────────────
+// Beku BUKAN nonaktif. Nonaktif dipakai untuk akun yang memang sudah selesai
+// riwayatnya; beku dipakai saat orangnya berhenti berhak masuk tetapi masih
+// mungkin kembali — kontrak habis, cuti panjang, penyelidikan internal.
+// Perbedaannya penting karena beku punya masa tenggang dan berujung arsip.
+
+export async function freezeUserAction(formData: FormData): Promise<void> {
+  const actor = await requirePermission(PERMISSIONS.USERS_EDIT);
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+
+  // Membekukan diri sendiri berarti mengunci diri di luar tanpa jalan kembali:
+  // pencairan pun butuh akun yang bisa masuk.
+  if (userId === actor.id) {
+    redirect(
+      `/settings/users/${userId}?error=` +
+        encodeURIComponent("Anda tidak dapat membekukan akun sendiri.")
+    );
+  }
+  const result = await freezeAccount(actor.id, userId, reason);
+  revalidatePath("/settings/users");
+  revalidatePath(`/settings/users/${userId}`);
+  redirect(
+    `/settings/users/${userId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Akun dibekukan.")
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+export async function unfreezeUserAction(formData: FormData): Promise<void> {
+  const actor = await requirePermission(PERMISSIONS.USERS_EDIT);
+  const userId = String(formData.get("userId") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+
+  const result = await unfreezeAccount(actor, userId, reason);
+  revalidatePath("/settings/users");
+  revalidatePath(`/settings/users/${userId}`);
+  redirect(
+    `/settings/users/${userId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Akun dicairkan — pemiliknya bisa masuk kembali.")
+        : "error=" + encodeURIComponent(result.error))
   );
 }

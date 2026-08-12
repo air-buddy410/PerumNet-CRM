@@ -238,6 +238,9 @@ export async function resetTransactionalData() {
   await db.approvalStep.deleteMany({});
   await db.approvalRequest.deleteMany({});
   await db.auditLog.deleteMany({});
+  // Arsip menunjuk User lewat archivedById/restoredById — harus dibersihkan
+  // sebelum user, atau penghapusan user ditolak foreign key.
+  await db.archivedRecord.deleteMany({});
   await db.documentSequence.deleteMany({});
   await db.subscription.deleteMany({});
   await db.customer.deleteMany({});
