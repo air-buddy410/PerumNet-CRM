@@ -186,6 +186,30 @@ export function isBreakGlassLogin(
   return provider !== "LOCAL" && account.allowLocalLogin;
 }
 
+// ── Jalur yang harus lolos middleware ───────────────────────────
+//
+// Ditaruh di modul murni supaya bisa diuji. Aturan "path mana yang boleh
+// tanpa sesi" adalah jenis aturan yang rusak diam-diam: salah sedikit dan
+// jalur login ikut tertutup — persis yang terjadi saat Fase 45 pertama kali
+// dicoba, dan baru ketahuan karena dijalankan sungguhan, bukan dari tes.
+
+export const OIDC_BYPASS_PREFIXES = [
+  "/api/auth/oidc/",
+  "/api/auth/callback/oidc",
+] as const;
+
+/**
+ * Apakah path ini jalur masuk OIDC yang harus dilewatkan sepenuhnya?
+ *
+ * "Sepenuhnya" — bukan sekadar publik. Kalau sesi lama masih ada dan orangnya
+ * masuk ulang lewat penyedia identitas, memperlakukan callback sebagai publik
+ * akan memantulkannya ke dashboard SEBELUM sesi barunya terbentuk: ia tetap
+ * masuk sebagai pemilik sesi lama.
+ */
+export function isOidcBypassPath(pathname: string): boolean {
+  return OIDC_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 // ── PKCE & parameter permintaan ─────────────────────────────────
 
 export interface AuthRequestParams {

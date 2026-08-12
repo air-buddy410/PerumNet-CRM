@@ -6,6 +6,8 @@ import {
   newStartParams,
   authorizationUrl,
   OidcError,
+  OIDC_FLOW_COOKIE,
+  OIDC_FLOW_TTL_SEC,
 } from "@/lib/oidc";
 
 // Memulai alur masuk lewat penyedia identitas.
@@ -16,8 +18,6 @@ import {
 // membuat tabel yang harus dibersihkan dan bisa dibaca proses lain, tanpa
 // menambah keamanan apa pun.
 
-export const OIDC_FLOW_COOKIE = "perumnet_oidc_flow";
-const FLOW_TTL_SEC = 10 * 60;
 
 export async function GET() {
   const blocker = oidcBlocker();
@@ -45,7 +45,7 @@ export async function GET() {
     // penyedia identitas, dan "strict" akan menahan cookienya sehingga
     // state tidak pernah cocok.
     sameSite: "lax",
-    maxAge: FLOW_TTL_SEC,
+    maxAge: OIDC_FLOW_TTL_SEC,
     path: "/",
   });
 

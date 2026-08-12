@@ -42,6 +42,12 @@ export interface OidcConfig {
 
 export const OIDC_CALLBACK_PATH = "/api/auth/callback/oidc";
 
+/// Cookie berumur pendek berisi state, nonce, dan PKCE verifier untuk SATU
+/// permintaan login. Ditaruh di sini, bukan di berkas route: Next.js hanya
+/// mengizinkan route mengekspor handler-nya sendiri.
+export const OIDC_FLOW_COOKIE = "perumnet_oidc_flow";
+export const OIDC_FLOW_TTL_SEC = 10 * 60;
+
 /** Mode autentikasi yang sedang berlaku. */
 export function authProviderMode(): AuthProviderMode {
   const raw = (process.env.AUTH_PROVIDER ?? "LOCAL").trim().toUpperCase();

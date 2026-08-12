@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { isOidcBypassPath } from "@/lib/oidc-rules";
 
 const SESSION_COOKIE = "perumnet_session";
+// Fase 45 — jalur masuk lewat penyedia identitas harus terbuka tanpa sesi,
+// karena justru DI SITULAH sesi dibuat. Keduanya punya penjaganya sendiri:
+// `/start` hanya mengalihkan ke IdP, dan `/callback` menolak apa pun yang
+// state-nya tidak cocok dengan cookie yang kita terbitkan sendiri.
 const PUBLIC_PATHS = ["/login"];
 
 // Next.js middleware membangun URL dari hostname/port server (bukan Host header),
@@ -19,6 +24,17 @@ export async function middleware(request: NextRequest) {
   // Webhook integrasi (§56): dipanggil sistem eksternal tanpa sesi —
   // autentikasi memakai token per-integrasi di route handler.
   if (pathname.startsWith("/api/integrations/")) {
+    return NextResponse.next();
+  }
+
+  // Jalur OIDC dilewatkan SEPENUHNYA — bukan sekadar "publik".
+  //
+  // Bedanya penting pada satu kasus: kalau sesi lama masih ada dan orangnya
+  // masuk ulang lewat penyedia identitas, memperlakukan callback sebagai
+  // "publik" akan memantulkannya ke /dashboard SEBELUM sesi barunya terbentuk
+  // — ia tetap masuk sebagai pemilik sesi lama, bukan sebagai dirinya yang
+  // baru saja login.
+  if (isOidcBypassPath(pathname)) {
     return NextResponse.next();
   }
 

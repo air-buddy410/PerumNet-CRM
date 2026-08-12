@@ -4,9 +4,8 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { createSession } from "@/lib/session";
 import { AUDIT_ACTIONS } from "@/lib/constants";
-import { oidcConfig, oidcBlocker, exchangeCode, verifyIdToken, OidcError } from "@/lib/oidc";
+import { oidcConfig, oidcBlocker, exchangeCode, verifyIdToken, OidcError, OIDC_FLOW_COOKIE } from "@/lib/oidc";
 import { callbackRejection, resolveAccount } from "@/lib/oidc-rules";
-import { OIDC_FLOW_COOKIE } from "../../oidc/start/route";
 
 // Titik balik dari penyedia identitas.
 //

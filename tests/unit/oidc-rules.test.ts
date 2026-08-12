@@ -8,6 +8,7 @@ import {
   callbackRejection,
   timingSafeEqual,
   displayNameFrom,
+  isOidcBypassPath,
 } from "@/lib/oidc-rules";
 
 const ISSUER = "https://auth.perumnet.id/application/o/perumnet-crm/";
@@ -234,5 +235,24 @@ describe("displayNameFrom", () => {
   });
   test("jatuh ke nilai cadangan bila keduanya kosong", () => {
     assert.equal(displayNameFrom({}, "cadangan"), "cadangan");
+  });
+});
+
+describe("isOidcBypassPath — jalur yang lolos middleware", () => {
+  test("jalur mulai dan callback dilewatkan", () => {
+    assert.equal(isOidcBypassPath("/api/auth/oidc/start"), true);
+    assert.equal(isOidcBypassPath("/api/auth/callback/oidc"), true);
+  });
+
+  test("halaman biasa TIDAK dilewatkan", () => {
+    // Kalau ini pernah jadi true, seluruh aplikasi terbuka tanpa sesi.
+    for (const p of ["/dashboard", "/settings/users", "/api/search", "/"]) {
+      assert.equal(isOidcBypassPath(p), false, `${p} tidak boleh lolos`);
+    }
+  });
+
+  test("path yang hanya MENGANDUNG jalur oidc tidak lolos", () => {
+    // startsWith, bukan includes — "/x/api/auth/oidc/" tidak boleh lolos.
+    assert.equal(isOidcBypassPath("/x/api/auth/oidc/start"), false);
   });
 });
