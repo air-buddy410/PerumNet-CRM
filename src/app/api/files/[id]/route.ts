@@ -29,6 +29,10 @@ const ENTITY_PERMISSION: Record<string, string> = {
   // pelanggan), sehingga izinnya bisa diperketat kelak tanpa menyentuh
   // lampiran lama.
   DeviceRecoverySignature: PERMISSIONS.INVENTORY_VIEW,
+  // Fase 49a — gambar tanda tangan dokumen gudang (IRF, DO, bukti terima).
+  // Izin melihatnya sama dengan izin melihat dokumennya: siapa pun yang boleh
+  // membuka IRF-nya boleh melihat tanda tangan di atasnya.
+  DocumentSignatureImage: PERMISSIONS.INVENTORY_VIEW,
 };
 
 export async function GET(
