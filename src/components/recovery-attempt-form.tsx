@@ -8,10 +8,12 @@ export function RecoveryAttemptForm({
   action,
   recoveryId,
   results,
+  origin,
 }: {
   action: FormAction;
   recoveryId: string;
   results: readonly (readonly [string, string])[];
+  origin?: "portal" | "backoffice";
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const submittingRef = useRef(false);
@@ -56,6 +58,7 @@ export function RecoveryAttemptForm({
   return (
     <form ref={formRef} action={action} onSubmit={handleSubmit} className="space-y-3">
       <input type="hidden" name="recoveryId" value={recoveryId} />
+      {origin && <input type="hidden" name="origin" value={origin} />}
       <input type="hidden" name="latitude" />
       <input type="hidden" name="longitude" />
       <select name="result" className="input" defaultValue="TIDAK_DI_TEMPAT">

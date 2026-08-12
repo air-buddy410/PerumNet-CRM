@@ -47,6 +47,18 @@ const LINK_STATUS_COLOR: Record<LinkStatus, string> = {
   DISABLED: "#64748b",
   UNKNOWN: "#d39a3a",
 };
+const SITE_COLOR: Record<string, string> = {
+  POP: "#0e7490",
+  MINI_POP: "#38bdf8",
+  DEFAULT: "#0f766e",
+};
+const ROUTE_COLOR: Record<string, string> = {
+  FEEDER: "#7c3aed",
+  DISTRIBUTION: "#2563eb",
+  DROP: "#0f9f91",
+  OTHER: "#64748b",
+  DEFAULT: "#64748b",
+};
 
 // Fase 23 (PRD-NOC-TOOLS N1) — peta ODP + pelanggan dalam satu tampilan.
 // Data dan permission tetap server-side. Renderer MapLibre berjalan di client
@@ -123,7 +135,7 @@ export default async function NetworkMapPage({
     <div>
       <PageHeader
         title="Peta Jaringan"
-        subtitle={`${data.odps.length} ODP · ${data.customers.length} pelanggan terpetakan · ${usedPorts}/${totalPorts} port terpakai${
+        subtitle={`${data.sites.length} site · ${data.routes.length} jalur · ${data.odps.length} ODP/MS · ${data.customers.length} pelanggan terpetakan · ${usedPorts}/${totalPorts} port terpakai${
           data.missingCoordinates.odps > 0
             ? ` · ${data.missingCoordinates.odps} ODP tanpa koordinat`
             : ""
@@ -191,7 +203,7 @@ export default async function NetworkMapPage({
           <NetworkMap
             data={data}
             selectedOdpId={selected?.id ?? null}
-            palette={{ occupancy: OCCUPANCY_COLOR, subscription: SUBSCRIPTION_COLOR, linkStatus: LINK_STATUS_COLOR }}
+            palette={{ occupancy: OCCUPANCY_COLOR, subscription: SUBSCRIPTION_COLOR, linkStatus: LINK_STATUS_COLOR, site: SITE_COLOR, route: ROUTE_COLOR }}
             occupancyLabels={OCCUPANCY_LABEL}
             fallback={
               <NetworkMapSvg
@@ -199,6 +211,8 @@ export default async function NetworkMapPage({
                 selectedOdpId={selected?.id ?? null}
                 odpHrefs={odpHrefs}
                 linkPalette={LINK_STATUS_COLOR}
+                sitePalette={SITE_COLOR}
+                routePalette={ROUTE_COLOR}
               />
             }
           />
@@ -228,6 +242,24 @@ export default async function NetworkMapPage({
                 Link {LINK_STATUS_LABEL[status].toLowerCase()}
               </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: SITE_COLOR.POP }} />
+              POP
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: SITE_COLOR.MINI_POP }} />
+              Mini-POP
+            </span>
+            {(Object.keys(ROUTE_COLOR).filter((key) => key !== "DEFAULT") as string[]).map((routeType) => (
+              <span key={routeType} className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-5 rounded-full" style={{ backgroundColor: ROUTE_COLOR[routeType] }} />
+                Jalur {routeType.toLowerCase()}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rotate-45 rounded-sm bg-amber-500" />
+              MS
+            </span>
           </div>
         </div>
 
@@ -284,6 +316,9 @@ export default async function NetworkMapPage({
               sendiri dan digambar di titik ODP-nya.
             </p>
           )}
+          {data.routes.length > 0 && (
+            <p className="mt-4 text-[11px] text-slate-400">Panjang jalur hanya perkiraan dari geometri survey, bukan panjang kabel aktual.</p>
+          )}
         </div>
       </div>
     </div>
@@ -295,15 +330,21 @@ function NetworkMapSvg({
   selectedOdpId,
   odpHrefs,
   linkPalette,
+  sitePalette,
+  routePalette,
 }: {
   data: NetworkMapData;
   selectedOdpId: string | null;
   odpHrefs: Record<string, string>;
   linkPalette: Record<LinkStatus, string>;
+  sitePalette: Record<string, string>;
+  routePalette: Record<string, string>;
 }) {
   const project = data.bounds ? projector(data.bounds, WIDTH, HEIGHT) : null;
-  if (!project || data.odps.length === 0) {
-    return <EmptyState message="Belum ada ODP berkoordinat untuk digambar. Isi koordinat ODP di modul FTTH." />;
+  const hasRoutes = data.routes.some((route) => route.coordinates.length >= 2);
+  const hasDrawableData = data.odps.length > 0 || data.customers.length > 0 || data.sites.length > 0 || hasRoutes;
+  if (!project || !hasDrawableData) {
+    return <EmptyState message="Belum ada titik atau jalur berkoordinat untuk digambar. Isi koordinat jaringan di modul FTTH." />;
   }
 
   const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
@@ -315,6 +356,40 @@ function NetworkMapSvg({
       role="img"
       aria-label="Peta sebaran ODP dan pelanggan"
     >
+      {/* Jalur kabel — warna dan ketebalan mengikuti routeType. */}
+      {data.routes.map((route) => {
+        const points = route.coordinates.map(([longitude, latitude]) => {
+          const point = project(latitude, longitude);
+          return `${point.x},${point.y}`;
+        });
+        if (points.length < 2) return null;
+        const strokeWidth = route.routeType === "FEEDER" ? 3.4 : route.routeType === "DISTRIBUTION" ? 2.5 : route.routeType === "DROP" ? 1.4 : 1.8;
+        return (
+          <polyline
+            key={route.id}
+            points={points.join(" ")}
+            fill="none"
+            stroke={routePalette[route.routeType] ?? routePalette.DEFAULT}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <title>{`${route.name} · ${route.routeType} · ${Math.round(route.lengthMeters)} m (perkiraan)`}</title>
+          </polyline>
+        );
+      })}
+
+      {/* POP dan Mini-POP tidak memiliki port/okupansi. */}
+      {data.sites.map((site) => {
+        const point = project(site.latitude, site.longitude);
+        const radius = site.type === "POP" ? 8 : 6;
+        return (
+          <circle key={site.id} cx={point.x} cy={point.y} r={radius} fill={sitePalette[site.type] ?? sitePalette.DEFAULT} stroke="#ffffff" strokeWidth={2}>
+            <title>{`${site.name} · ${site.type} · ${site.status}`}</title>
+          </circle>
+        );
+      })}
+
       {/* Kaskade ODP → ODP induk */}
       {data.cascades.map((cascade) => {
         const from = odpById.get(cascade.fromId);
@@ -378,20 +453,30 @@ function NetworkMapSvg({
       {data.odps.map((odp) => {
         const point = project(odp.latitude, odp.longitude);
         const isSelected = selectedOdpId === odp.id;
+        const isMs = odp.role === "MS";
         return (
           <Link key={odp.id} href={odpHrefs[odp.id] ?? `/noc/map?odp=${encodeURIComponent(odp.id)}`}>
             <g>
-              <rect
-                x={point.x - 7}
-                y={point.y - 7}
-                width={14}
-                height={14}
-                rx={3}
-                fill={OCCUPANCY_COLOR[odp.occupancy]}
-                stroke={isSelected ? "#0f172a" : "#ffffff"}
-                strokeWidth={isSelected ? 3 : 1.5}
-              />
-              <title>{`${odp.code} · ${odp.used}/${odp.capacity} port · ${OCCUPANCY_LABEL[odp.occupancy]}`}</title>
+              {isMs ? (
+                <polygon
+                  points={`${point.x},${point.y - 10} ${point.x + 10},${point.y} ${point.x},${point.y + 10} ${point.x - 10},${point.y}`}
+                  fill="#f59e0b"
+                  stroke={isSelected ? "#0f172a" : "#ffffff"}
+                  strokeWidth={isSelected ? 3 : 1.5}
+                />
+              ) : (
+                <rect
+                  x={point.x - 7}
+                  y={point.y - 7}
+                  width={14}
+                  height={14}
+                  rx={3}
+                  fill={OCCUPANCY_COLOR[odp.occupancy]}
+                  stroke={isSelected ? "#0f172a" : "#ffffff"}
+                  strokeWidth={isSelected ? 3 : 1.5}
+                />
+              )}
+              <title>{`${odp.code} · ${isMs ? "MS" : "ODP"} · ${odp.used}/${odp.capacity} port · ${OCCUPANCY_LABEL[odp.occupancy]}`}</title>
             </g>
           </Link>
         );

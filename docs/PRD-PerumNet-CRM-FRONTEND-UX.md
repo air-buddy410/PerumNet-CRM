@@ -484,34 +484,48 @@ Bagian ini mencatat pekerjaan frontend yang mengikuti `docs/HANDOFF-BACKEND-KE-F
 - Summary memakai `linkCounts` untuk titik yang sedang terlihat dan menampilkan `lastSyncedAt`; nilai kosong disebut `belum tersedia`.
 - Marker, garis koneksi, popup, legenda, MapLibre, dan SVG fallback memakai status link yang sama. `UNKNOWN` tidak boleh disamakan dengan offline.
 - Popup pelanggan menampilkan nomor layanan, status subscription, status link, router, dan waktu terakhir terlihat.
+- Lapisan site POP/Mini-POP, simpul MS/ODP, dan jalur feeder/distribution/drop/other ikut ditampilkan. Jalur dibedakan melalui warna dan ketebalan; panjang jalur selalu diberi label sebagai perkiraan geometri survey.
+- `/noc/ftth` menggunakan pemilih koordinat MapLibre internal saat style tersedia. Input latitude/longitude manual tetap menjadi fallback ketika style atau tile internal belum tersedia.
 
 ### Recovery backoffice
 
 - Daftar recovery menyediakan filter teknisi, pencarian nomor recovery/pelanggan/serial/MAC, ringkasan selesai/SLA/mismatch, dan penyaringan tugas teknisi.
 - Checklist inspeksi memakai jawaban eksplisit `Ya`/`Tidak`; simpan baru aktif setelah seluruh butir dari `INSPECTION_CHECKLIST` terjawab. Nilai dikirim kompatibel sebagai `on`/`off`.
 - Evidence menggunakan `ATTEMPT`, `PICKUP`, dan `INSPECTION`, multipart dengan JPG/PNG/WebP/PDF maksimal sesuai kontrak. Preview yang gagal menampilkan pesan jujur; file privat dibuka melalui `/api/files/<id>`.
-- Tanda tangan memakai `signPickupAction` dan nama penanda tangan. UI tidak membuat signature canvas karena kontrak upload signature khusus belum tersedia.
+- Tanda tangan memakai `signPickupAction`, nama penanda tangan, dan gambar PNG/JPG opsional melalui `signatureFile`; attachment yang tersedia dapat dibuka melalui `/api/files/<id>`.
 - Form kunjungan mencoba geolocation browser secara opsional. Penolakan atau ketiadaan geolocation tidak memblokir penyimpanan kunjungan.
 - Customer 360 menampilkan `Ajukan Terminasi` hanya jika user memiliki `termination.create`, subscription belum terminated, dan belum memiliki proses terminasi aktif.
 
 ### Portal teknisi
 
 - `/portal/recoveries` dan `/portal/recoveries/[id]` memakai permission existing `device_recovery.pickup` dan menyaring recovery berdasarkan teknisi aktif yang ditugaskan.
-- Kartu mobile menampilkan pelanggan, alamat, jadwal, SLA, status, dan progress perangkat. Detail menyediakan kunjungan, geolocation opsional, serial/MAC aktual, catatan mismatch, evidence, tanda tangan, dan konfirmasi pemutusan fisik.
+- Kartu mobile menampilkan pelanggan, alamat, jadwal, SLA, status, dan progress perangkat. Detail menyediakan kunjungan, geolocation opsional, serial/MAC aktual, catatan mismatch, evidence, tanda tangan, upload gambar tanda tangan opsional, dan konfirmasi pemutusan fisik.
+- Semua form aksi portal mengirim token `origin=portal`, bukan URL, agar redirect server kembali ke detail portal tanpa membuka open redirect.
 - Portal material `/portal` tetap dipertahankan. Tidak ada status GPS, start/stop kerja, durasi perjalanan, atau tracking realtime yang dipalsukan; data tersebut menunggu fase WFM.
 
 ### Dependency dan handoff ke Opus
 
 - Action recovery tetap harus menegakkan scope teknisi di server, bukan hanya melalui filter UI.
-- Jika tanda tangan gambar wajib secara hukum/operasional, backend perlu menyediakan action upload signature yang mengembalikan `attachmentId`.
-- Redirect action recovery yang masih menuju halaman backoffice perlu dievaluasi bila portal teknisi membutuhkan kembali ke detail portal setelah submit.
+- Gambar tanda tangan tetap opsional sesuai kontrak Fase 48. Jika nanti diwajibkan secara hukum/operasional, validasi kewajiban perlu disepakati dan ditegakkan backend.
+- Token redirect `origin` harus tetap dibatasi pada daftar server-side (`portal` atau `backoffice`); frontend tidak boleh mengirim URL tujuan.
 - Kontrak notification, profile, identity, search, dan maps tidak berubah karena pekerjaan frontend ini.
 
 ### Acceptance QA handoff
 
 - Search: menu/entity, permission scope, debounce, cancellation, loading, empty, error, Enter, Escape, dan Ctrl/Cmd+K.
 - Notification: loader resmi, unread state, maksimal lima item, link null aman, mark read/mark all, dan navigation close.
-- Map: filter router/status, empat hitungan link, timestamp, popup, legenda, fallback, dan tidak ada request provider publik.
-- Recovery: tri-state checklist, bukti valid/invalid, placeholder file gagal, geolocation non-blocking, filter serial/MAC/teknisi, dan terminasi permission-aware.
-- Portal: hanya tugas teknisi aktif yang terlihat dan seluruh tombol/form tetap terbaca pada desktop, tablet, dan mobile.
+- Map: filter router/status, empat hitungan link, timestamp, popup, legenda, POP/MS/ODP, routeType, coordinate picker, fallback, dan tidak ada request provider publik.
+- Recovery: tri-state checklist, bukti valid/invalid, placeholder file gagal, geolocation non-blocking, filter serial/MAC/teknisi, upload tanda tangan opsional, origin portal, dan terminasi permission-aware.
+- Portal: hanya tugas teknisi aktif yang terlihat, semua aksi kembali ke detail portal, dan seluruh tombol/form tetap terbaca pada desktop, tablet, dan mobile.
 - Viewport wajib: 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800. Bukti mencakup bounding-box, `document.scrollWidth`, console, screenshot, typecheck, test, build terisolasi, dan `git diff --check`.
+
+## 21. Audit Ulang Handoff Opus — 12 Agustus 2026
+
+Pemeriksaan ulang terhadap `docs/HANDOFF-BACKEND-KE-FRONTEND.md` menemukan bahwa checklist Ya/Tidak, filter recovery teknisi dan serial/MAC, tombol terminasi Customer 360, portal recovery, data pegawai, akun beku, arsip, mailserver, dan mailbox sudah tersedia di checkout. Gap yang ditutup pada audit ulang ini adalah:
+
+- seluruh form portal recovery mengirim token `origin=portal` agar redirect tetap berada di portal;
+- upload gambar tanda tangan PNG/JPG opsional dipasang pada portal dan backoffice, beserta tautan attachment privat;
+- visual peta memakai data `sites`, `routes`, dan `odps[].role` yang sudah tersedia, termasuk perbedaan POP/Mini-POP, MS/ODP, routeType, dan panjang jalur sebagai perkiraan;
+- pemilih koordinat internal dipasang pada form ODP FTTH dengan input manual sebagai fallback.
+
+Tidak ada perubahan pada API, DTO, action, `src/lib/**`, database, auth, RBAC, atau business rule. Keputusan provider identity (`LOCAL` versus `MAILSERVER`) tetap menjadi keputusan PO/infrastruktur; frontend mengikuti nilai `profileView().auth` yang aktual.

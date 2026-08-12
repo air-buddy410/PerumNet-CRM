@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, EmptyState } from "@/components/ui";
+import { ArchiveRestoreButton } from "@/components/archive-restore-button";
 import { listArchive, archivedEntityTypes, isRestorable } from "@/lib/archive";
 import { restoreArchivedAction } from "./actions";
 
@@ -120,12 +121,12 @@ export default async function TrashPage({
                   {canRestore && (
                     <td className="td text-right text-xs">
                       {!r.restoredAt && isRestorable(r.entityType) && (
-                        <form action={restoreArchivedAction}>
-                          <input type="hidden" name="id" value={r.id} />
-                          <button type="submit" className="text-brand-600 hover:underline">
-                            Pulihkan
-                          </button>
-                        </form>
+                        <ArchiveRestoreButton
+                          action={restoreArchivedAction}
+                          id={r.id}
+                          label={r.label}
+                          reason={r.reason}
+                        />
                       )}
                       {!r.restoredAt && !isRestorable(r.entityType) && (
                         <span className="text-slate-400" title="Belum ada jalur pemulihan otomatis untuk jenis ini">
