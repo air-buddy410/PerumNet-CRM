@@ -211,3 +211,44 @@ describe("PAGAR: grup bernama sama dengan kode divisi TAPI tanpa awalan", () => 
     assert.equal(plan.totalRemove, 0, "anggota grup IT tidak boleh disentuh");
   });
 });
+
+describe("peringatan 'belum berdivisi' tidak berlaku untuk OWNER", () => {
+  test("STAFF tanpa divisi tetap diperingatkan", () => {
+    const plan = planGroupSync(
+      ["MKT"],
+      [{ email: "staff@p.id", divisionCode: null, level: "STAFF" }],
+      [u(1, "staff@p.id")],
+      []
+    );
+    assert.equal(plan.warnings.some((w) => w.kind === "NO_DIVISION"), true);
+  });
+
+  test("OWNER tanpa divisi TIDAK diperingatkan — itu memang sengaja", () => {
+    // Pemilik memang tidak berdivisi. Memperingatkannya tiap sinkronisasi
+    // melatih orang mengabaikan seluruh daftar peringatan, dan peringatan
+    // yang diabaikan sama saja dengan tidak ada.
+    const plan = planGroupSync(
+      ["MKT"],
+      [{ email: "owner@p.id", divisionCode: null, level: "OWNER" }],
+      [u(1, "owner@p.id")],
+      []
+    );
+    assert.equal(plan.warnings.some((w) => w.kind === "NO_DIVISION"), false);
+  });
+
+  test("OWNER tetap tidak dimasukkan ke grup mana pun", () => {
+    // Menahan peringatannya tidak boleh berubah menjadi memasukkannya diam-diam.
+    const plan = planGroupSync(
+      ["MKT"],
+      [{ email: "owner@p.id", divisionCode: null, level: "OWNER" }],
+      [u(1, "owner@p.id")],
+      []
+    );
+    assert.equal(plan.totalAdd, 0);
+  });
+
+  test("tanpa level, perilaku lama dipertahankan", () => {
+    const plan = planGroupSync(["MKT"], [{ email: "x@p.id", divisionCode: null }], [], []);
+    assert.equal(plan.warnings.some((w) => w.kind === "NO_DIVISION"), true);
+  });
+});

@@ -55,6 +55,16 @@ export interface CrmAccount {
   email: string;
   /** null berarti belum berdivisi — bukan berarti harus dikeluarkan. */
   divisionCode: string | null;
+  /**
+   * Level organisasi (STAFF | SUPERVISOR | OWNER).
+   *
+   * Dipakai untuk SATU hal: menahan peringatan "belum berdivisi" pada OWNER.
+   * Pemilik memang sengaja tidak berdivisi — seed sendiri menuliskannya
+   * "Tanpa divisi (khusus Owner)". Memperingatkannya setiap kali sinkronisasi
+   * dijalankan melatih orang mengabaikan seluruh daftar peringatan, dan
+   * peringatan yang diabaikan sama saja dengan tidak ada.
+   */
+  level?: string;
 }
 
 export interface AkUser {
@@ -132,7 +142,11 @@ export function planGroupSync(
   for (const acc of crmAccounts) {
     const email = norm(acc.email);
     if (!acc.divisionCode) {
-      warnings.push({ kind: "NO_DIVISION", email });
+      // OWNER memang sengaja tanpa divisi — bukan keadaan yang perlu
+      // diperingatkan setiap kali. Ia tetap tidak dimasukkan ke grup mana pun.
+      if (acc.level?.toUpperCase() !== "OWNER") {
+        warnings.push({ kind: "NO_DIVISION", email });
+      }
       continue;
     }
     const code = acc.divisionCode.toUpperCase();

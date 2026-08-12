@@ -140,7 +140,9 @@ export async function previewGroupSync(fetcher?: Fetcher): Promise<GroupSyncPrev
     // Akun beku dan yang diarsipkan sengaja IKUT: selama akunnya masih ada di
     // Authentik, keanggotaan grupnya tetap menentukan akses ke aplikasi lain,
     // dan justru itu yang perlu terlihat.
-    db.user.findMany({ select: { email: true, division: { select: { code: true } } } }),
+    db.user.findMany({
+      select: { email: true, level: true, division: { select: { code: true } } },
+    }),
   ]);
 
   try {
@@ -148,7 +150,11 @@ export async function previewGroupSync(fetcher?: Fetcher): Promise<GroupSyncPrev
     const [akUsers, akGroups] = await Promise.all([listUsers(opts), listGroups(opts)]);
     const plan = planGroupSync(
       divisions.map((d) => d.code),
-      accounts.map((a) => ({ email: a.email, divisionCode: a.division?.code ?? null })),
+      accounts.map((a) => ({
+        email: a.email,
+        divisionCode: a.division?.code ?? null,
+        level: a.level,
+      })),
       akUsers,
       akGroups
     );
