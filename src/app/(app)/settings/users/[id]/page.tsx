@@ -9,6 +9,7 @@ import {
   resetPasswordAction,
   freezeUserAction,
   unfreezeUserAction,
+  toggleBreakGlassAction,
 } from "../actions";
 import { archiveDueAt, FREEZE_GRACE_MONTHS } from "@/lib/employment";
 
@@ -211,6 +212,51 @@ export default async function UserDetailPage({
               </button>
             </form>
           </div>
+
+          {/* Fase 45 — akun darurat. Sengaja diberi izin paling tinggi
+              (users.create), karena menandainya berarti memberi jalan pintas
+              permanen ke sistem meski identitas terpusat aktif. */}
+          {actor.permissions.has(PERMISSIONS.USERS_CREATE) && (
+            <div className="card mt-6 space-y-3 border-amber-200 p-6">
+              <div>
+                <h2 className="font-medium">
+                  Akun Darurat {user.allowLocalLogin && <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-900">AKTIF</span>}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {user.allowLocalLogin ? (
+                    <>
+                      Akun ini <strong>tetap bisa masuk memakai password lokal</strong> walaupun
+                      identitas terpusat aktif, dan setiap pemakaiannya dicatat serta diberitakan
+                      ke pemegang akses audit log.
+                    </>
+                  ) : (
+                    <>
+                      Tandai bila akun ini harus tetap bisa masuk saat penyedia identitas mati.
+                      Tanpa satu pun akun bertanda ini, Authentik yang tumbang mengunci semua
+                      orang dari CRM — termasuk dari memperbaiki Authentik-nya.
+                    </>
+                  )}
+                </p>
+              </div>
+              <form action={toggleBreakGlassAction} className="flex flex-wrap items-end gap-3">
+                <input type="hidden" name="userId" value={user.id} />
+                <div className="min-w-56 flex-1">
+                  <label className="label" htmlFor="bgReason">Alasan</label>
+                  <input
+                    id="bgReason"
+                    name="reason"
+                    className="input"
+                    required
+                    minLength={3}
+                    placeholder={user.allowLocalLogin ? "mis. sudah tidak diperlukan" : "mis. akun pemulihan IT"}
+                  />
+                </div>
+                <button type="submit" className="btn-secondary">
+                  {user.allowLocalLogin ? "Cabut tanda" : "Tandai darurat"}
+                </button>
+              </form>
+            </div>
+          )}
 
           <div className="card mt-6 flex items-center justify-between p-6">
             <div>
