@@ -153,14 +153,50 @@ export interface ArchiveFilter {
   entityType?: string;
   /** Baris yang sudah dipulihkan tetap ditampilkan secara default — itu bagian dari jejaknya. */
   onlyPending?: boolean;
+  /** Batas bawah tanggal diarsipkan, inklusif. */
+  from?: Date | null;
+  /**
+   * Batas atas tanggal diarsipkan, INKLUSIF sampai akhir hari.
+   *
+   * Frontend mengirim tanggal polos dari `<input type="date">`, yang menjadi
+   * tengah malam. Memakainya apa adanya sebagai batas atas akan membuang
+   * seluruh baris pada hari itu sendiri — orang memilih "sampai 12 Agustus"
+   * lalu tidak melihat apa pun dari tanggal 12. Karena itu batasnya digeser
+   * ke akhir hari di sini, bukan diserahkan ke pemanggil untuk diingat.
+   */
+  to?: Date | null;
   take?: number;
 }
 
+/** Akhir hari dari sebuah tanggal — 23:59:59.999 waktu lokal. */
+export function endOfDay(d: Date): Date {
+  const x = new Date(d.getTime());
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+/** Menyusun rentang tanggal untuk query, atau undefined bila tak ada batas. */
+export function archivedAtRange(
+  from?: Date | null,
+  to?: Date | null
+): { gte?: Date; lte?: Date } | undefined {
+  const valid = (d?: Date | null) => (d && !Number.isNaN(d.getTime()) ? d : null);
+  const lo = valid(from);
+  const hi = valid(to);
+  if (!lo && !hi) return undefined;
+  return {
+    ...(lo ? { gte: lo } : {}),
+    ...(hi ? { lte: endOfDay(hi) } : {}),
+  };
+}
+
 export async function listArchive(filter: ArchiveFilter = {}) {
+  const range = archivedAtRange(filter.from, filter.to);
   return db.archivedRecord.findMany({
     where: {
       ...(filter.entityType ? { entityType: filter.entityType } : {}),
       ...(filter.onlyPending ? { restoredAt: null } : {}),
+      ...(range ? { archivedAt: range } : {}),
     },
     include: {
       archivedBy: { select: { name: true, username: true } },

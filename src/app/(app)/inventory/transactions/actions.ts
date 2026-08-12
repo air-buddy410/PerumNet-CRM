@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, TX_TYPES } from "@/lib/constants";
+import { attachSignatureImage } from "@/lib/document-signature";
 import {
   createDraftTransaction,
   postTransaction,
@@ -206,6 +207,43 @@ export async function issueMaterialAction(formData: FormData): Promise<void> {
     `/inventory/transactions/${txId}?` +
       (result.ok
         ? "ok=" + encodeURIComponent("Barang diserahkan — IRF terbit dengan dua tanda tangan.")
+        : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+// ── Gambar tanda tangan dokumen gudang (Fase 49a) ───────────────
+// Diminta frontend untuk halaman cetak IRF. Barisnya sudah harus ada — ini
+// melampirkan gambar pada tanda tangan yang memang sudah dibubuhkan, bukan
+// membuat tanda tangan dari sebuah berkas.
+//
+// field: txId (untuk kembali ke halaman), docType, docId, role, file
+
+export async function attachSignatureImageAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.INVENTORY_VIEW);
+  const txId = String(formData.get("txId") ?? "");
+  const file = formData.get("file");
+
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(
+      `/inventory/transactions/${txId}?error=` +
+        encodeURIComponent("Pilih berkas gambar tanda tangan terlebih dahulu.")
+    );
+  }
+  const result = await attachSignatureImage(
+    user,
+    {
+      docType: String(formData.get("docType") ?? ""),
+      docId: String(formData.get("docId") ?? ""),
+      role: String(formData.get("role") ?? ""),
+    },
+    file as File
+  );
+  revalidatePath(`/inventory/transactions/${txId}`);
+  revalidatePath(`/inventory/transactions/${txId}/print`);
+  redirect(
+    `/inventory/transactions/${txId}?` +
+      (result.ok
+        ? "ok=" + encodeURIComponent("Gambar tanda tangan tersimpan.")
         : "error=" + encodeURIComponent(result.error))
   );
 }

@@ -41,6 +41,18 @@ export interface ProfileView {
     employeeType: string;
     joinedAt: string;
     supervisorName: string | null;
+    // Fase 41, ditambahkan ke DTO pada Fase 49a atas permintaan frontend.
+    // Semuanya HANYA BACA di sini: halaman profil tidak boleh mengubah data
+    // kepegawaian — itu urusan HRD lewat modulnya sendiri, dengan izinnya
+    // sendiri. Lihat updateOwnContact() di bawah: hanya nama dan telepon.
+    address: string | null;
+    workPattern: string;
+    jobLevel: string;
+    /// Keduanya null untuk yang bukan karyawan kontrak — dibedakan dari
+    /// "kontrak tanpa tanggal", yang tidak mungkin ada karena ditolak
+    /// contractRejection() saat penyimpanan.
+    contractStartAt: string | null;
+    contractEndAt: string | null;
   } | null;
   auth: {
     provider: AuthProvider;
@@ -95,6 +107,11 @@ export async function profileView(userId: string): Promise<ProfileView | null> {
           employeeType: user.employee.employeeType,
           joinedAt: user.employee.joinedAt.toISOString(),
           supervisorName: user.employee.supervisor?.fullName ?? null,
+          address: user.employee.address,
+          workPattern: user.employee.workPattern,
+          jobLevel: user.employee.jobLevel,
+          contractStartAt: user.employee.contractStartAt?.toISOString() ?? null,
+          contractEndAt: user.employee.contractEndAt?.toISOString() ?? null,
         }
       : null,
     auth: {

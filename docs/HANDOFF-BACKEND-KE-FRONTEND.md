@@ -36,6 +36,7 @@ ingatan.
 | 14 | **Setting mailserver + label divisi mailbox** | integrasi belum ada | ✅ siap — lihat §13 |
 | 15 | **Unggah gambar tanda tangan + redirect kembali ke portal** (§20 PRD-mu) | action belum ada | ✅ siap — lihat §14 |
 | 16 | **Identitas terpusat aktif** — `provider` bisa bernilai `OIDC` | menunggu IdP | ✅ **sudah jalan** — lihat §15 |
+| 17 | **Tiga dependency dari PRD §24–25** — field HR di `profileView`, filter tanggal arsip, gambar tanda tangan IRF | kontrak belum ada | ✅ siap — lihat §16 |
 
 ---
 
@@ -588,6 +589,70 @@ tampilannya, dua hal yang tolong dipertahankan: lencana **AKTIF** saat menyala,
 dan kolom **Alasan** tetap wajib.
 
 Tidak ada DTO, action, atau endpoint lain yang berubah.
+
+---
+
+## 16. Tiga dependency dari PRD §24–25 — SIAP
+
+Ketiganya kamu catat sebagai menunggu backend. Sudah ada sekarang.
+
+### 16.1 `profileView` membawa field kepegawaian Fase 41
+
+`view.employee` bertambah lima field. Kamu **tidak perlu** query langsung —
+memang itu yang benar, dan terima kasih sudah menahan diri.
+
+```ts
+address         : string | null
+workPattern     : string        // "SHIFT" | "NON_SHIFT"
+jobLevel        : string        // "STAFF" | "LEADER"
+contractStartAt : string | null // ISO
+contractEndAt   : string | null // ISO
+```
+
+- `workPattern` dan `jobLevel` **selalu terisi** (bawaannya `NON_SHIFT` /
+  `STAFF`), jadi tidak perlu menangani `undefined`.
+- Tanggal kontrak `null` untuk yang bukan karyawan kontrak. Tidak ada keadaan
+  "kontrak tanpa tanggal" — itu ditolak saat penyimpanan.
+- Semuanya **hanya baca** di halaman profil. Mengubah data kepegawaian tetap
+  lewat modul HRD dengan izinnya sendiri; `updateContactAction` tetap hanya
+  menerima nama dan telepon.
+
+### 16.2 `listArchive` menerima rentang tanggal
+
+```ts
+listArchive({ entityType?, onlyPending?, from?: Date, to?: Date, take? })
+```
+
+**Batas atas sudah inklusif sampai akhir hari** — kamu cukup mengoper tanggal
+polos dari `<input type="date">`. Baris yang diarsipkan pukul 17.45 pada
+tanggal batas tetap ikut terjaring. Penggeseran itu dilakukan di loader, bukan
+diserahkan ke UI untuk diingat.
+
+Tanggal tidak valid (input kosong → `new Date("")`) diabaikan, bukan membuat
+query rusak.
+
+### 16.3 Gambar tanda tangan dokumen gudang
+
+```
+action: attachSignatureImageAction   (inventory/transactions/actions.ts)
+field : txId, docType, docId, role, file
+form  : encType="multipart/form-data"
+```
+
+`docType` yang diterima: `IRF`, `DO`, `RECEIPT`. Jenis lain ditolak.
+
+**Baris tanda tangannya harus sudah ada.** Action ini melampirkan gambar pada
+tanda tangan yang memang sudah dibubuhkan seseorang — ia tidak menciptakan
+tanda tangan dari sebuah berkas. Kalau `role` itu belum ditandatangani,
+jawabannya "Tanda tangan belum dibubuhkan — isi nama penanda tangannya lebih
+dulu". Nama tetap yang wajib; gambar pelengkap.
+
+`attachmentId` **ditautkan otomatis** ke barisnya, jadi tidak ada langkah kedua
+yang bisa terlupakan. Untuk halaman cetak, `documentSignatures(docType, docId)`
+mengembalikan role, nama, waktu, dan `attachmentId` sekaligus.
+
+Gambarnya disajikan lewat `/api/files/<attachmentId>` seperti lampiran lain,
+sudah terdaftar di daftar-putih izin.
 
 ---
 
