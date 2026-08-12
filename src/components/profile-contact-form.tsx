@@ -20,7 +20,7 @@ function validateName(value: string) {
 function validatePhone(value: string) {
   const phone = value.trim();
   if (!phone) return "";
-  if (!/^[+0-9()\-\s.]{7,30}$/.test(phone)) {
+  if (!/^[0-9+()\s-]{6,25}$/.test(phone)) {
     return "Nomor telepon hanya boleh berisi angka dan simbol telepon yang umum.";
   }
   return "";
@@ -80,7 +80,7 @@ export function ProfileContactForm({
             onChange={(event) => setPhone(event.target.value)}
             onBlur={() => setPhoneError(validatePhone(phone))}
             readOnly={!enabled}
-            maxLength={30}
+            maxLength={25}
             aria-invalid={Boolean(phoneError)}
             aria-describedby={phoneError ? "profilePhoneError" : undefined}
           />

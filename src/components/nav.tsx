@@ -106,6 +106,7 @@ const iconByRoute: Record<string, LucideIcon> = {
   "/inventory/returns": Undo2,
   "/inventory/devices": Router,
   "/inventory/device-recoveries": Truck,
+  "/portal": HandCoins,
   "/portal/recoveries": ClipboardCheck,
   "/inventory/items": PackagePlus,
   "/inventory/warehouses": Warehouse,
@@ -217,14 +218,14 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
       groups
-        .filter((group) => group.items.length > 1 && groupHasActiveRoute(group))
+        .filter((group) => group.items.length > 0 && groupHasActiveRoute(group))
         .map((group) => [group.title, true])
     )
   );
 
   useEffect(() => {
     const activeGroup = groups.find(
-      (group) => group.items.length > 1 && groupHasActiveRoute(group)
+      (group) => group.items.length > 0 && groupHasActiveRoute(group)
     );
     if (!activeGroup) return;
 
@@ -238,7 +239,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   return (
     <nav className="crm-navigation" aria-label="Navigasi utama">
       {groups.map((group) => {
-        const collapsible = group.items.length > 1;
+        const collapsible = group.items.length > 0;
         const expanded = Boolean(openGroups[group.title]);
         const activeGroup = groupHasActiveRoute(group);
         const groupId = `crm-nav-group-${group.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -275,33 +276,33 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
                 <span className="crm-nav-group-label">{group.title}</span>
               </div>
             )}
-            {(!collapsible || expanded) && (
-              <ul
-                id={collapsible ? groupId : undefined}
-                className={`crm-nav-list ${collapsible ? "is-collapsible" : ""}`}
-              >
-                {group.items.map((item) => {
-                  const active =
-                    pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  const Icon = routeIcon(item, group);
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        className={`crm-nav-link ${active ? "is-active" : ""}`}
-                        onClick={closeMenu}
-                        aria-label={item.label}
-                        title={item.label}
-                        aria-current={active ? "page" : undefined}
-                      >
-                        <Icon aria-hidden="true" />
-                        <span className="crm-nav-link-label">{item.label}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <ul
+              id={collapsible ? groupId : undefined}
+              className={`crm-nav-list ${collapsible ? "is-collapsible" : ""}`}
+              hidden={collapsible && !expanded}
+              aria-hidden={collapsible && !expanded ? true : undefined}
+            >
+              {group.items.map((item) => {
+                const active =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const Icon = routeIcon(item, group);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={`crm-nav-link ${active ? "is-active" : ""}`}
+                      onClick={closeMenu}
+                      aria-label={item.label}
+                      title={item.label}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon aria-hidden="true" />
+                      <span className="crm-nav-link-label">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         );
       })}

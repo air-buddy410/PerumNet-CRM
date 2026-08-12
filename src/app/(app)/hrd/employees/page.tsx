@@ -151,7 +151,9 @@ export default async function EmployeesPage({
                     <tr key={e.id} className="hover:bg-slate-50">
                       <td className="td whitespace-nowrap font-mono text-xs">{e.employeeNo}</td>
                       <td className="td whitespace-nowrap text-xs font-medium">
-                        {e.fullName}
+                        <Link href={`/hrd/employees/${e.id}`} className="text-brand-700 hover:underline">
+                          {e.fullName}
+                        </Link>
                         {e._count.subordinates > 0 && (
                           <span className="ml-1 text-[10px] text-slate-400">
                             {e._count.subordinates} anggota tim

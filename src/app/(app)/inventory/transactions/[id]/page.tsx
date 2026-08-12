@@ -256,6 +256,9 @@ export default async function TransactionDetailPage({
               <p className="text-xs text-slate-500">
                 <span className="font-mono">{tx.irf.irfNumber}</span> · {tx.irf.status}
               </p>
+              <Link href={`/inventory/transactions/${tx.id}/print`} className="btn-secondary mt-3 w-full justify-center">
+                Cetak IRF
+              </Link>
             </div>
           )}
           {tx.status === "DRAFT" && canPost && !readyToIssue && (

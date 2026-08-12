@@ -78,6 +78,7 @@
 .crm-nav-group-chevron { width: 15px; height: 15px; margin-left: auto; transition: transform .2s ease; }
 .crm-nav-group-toggle[aria-expanded="true"] .crm-nav-group-chevron { transform: rotate(180deg); }
 .crm-nav-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.crm-nav-list.is-collapsible { margin-left: 13px; padding: 3px 0 3px 10px; border-left: 1px solid #50cfc74d; }
 .crm-nav-list.is-collapsible { transform-origin: top; animation: crm-nav-expand .21s cubic-bezier(.2, .7, .2, 1) both; }
 @keyframes crm-nav-expand {
   from { opacity: 0; transform: translateY(-5px) scaleY(.96); }
@@ -569,12 +570,21 @@
   .crm-sidebar.is-collapsed .crm-brand > span { flex: 0 0 auto; }
   .crm-sidebar.is-collapsed .crm-brand .perumnet-wordmark, .crm-sidebar.is-collapsed .crm-brand strong { display: none; }
   .crm-sidebar.is-collapsed .crm-sidebar-rule { margin-right: 0; margin-left: 0; }
-  .crm-sidebar.is-collapsed .crm-nav-group-title, .crm-sidebar.is-collapsed .crm-nav-group-toggle { justify-content: center; width: 100%; margin-right: 0; margin-left: 0; padding: 0; }
-  .crm-sidebar.is-collapsed .crm-nav-group-label, .crm-sidebar.is-collapsed .crm-nav-group-chevron, .crm-sidebar.is-collapsed .crm-nav-link-label { display: none; }
+  .crm-sidebar.is-collapsed .crm-nav-group { display: grid; gap: 4px; }
+  .crm-sidebar.is-collapsed .crm-nav-group-title, .crm-sidebar.is-collapsed .crm-nav-group-toggle { justify-content: center; width: 100%; min-height: 35px; margin: 0; padding: 0; border: 1px solid #ffffff1e; border-radius: 9px; background: #ffffff08; }
+  .crm-sidebar.is-collapsed .crm-nav-group-toggle { position: relative; }
+  .crm-sidebar.is-collapsed .crm-nav-group-toggle:hover, .crm-sidebar.is-collapsed .crm-nav-group.is-active-group .crm-nav-group-toggle { background: #ffffff14; border-color: #50cfc755; }
+  .crm-sidebar.is-collapsed .crm-nav-group-label, .crm-sidebar.is-collapsed .crm-nav-link-label { display: none; }
+  .crm-sidebar.is-collapsed .crm-nav-group-chevron { position: absolute; right: 4px; display: block; width: 10px; height: 10px; color: #83b5b0; }
   .crm-sidebar.is-collapsed .crm-nav-group-icon { width: 24px; height: 24px; }
-  .crm-sidebar.is-collapsed .crm-nav-group-icon svg { width: 18px; height: 18px; }
-  .crm-sidebar.is-collapsed .crm-nav-link { justify-content: center; gap: 0; padding: 0; }
-  .crm-sidebar.is-collapsed .crm-nav-link svg { width: 19px; height: 19px; }
+  .crm-sidebar.is-collapsed .crm-nav-group-icon svg { width: 17px; height: 17px; }
+  .crm-sidebar.is-collapsed .crm-nav-list.is-collapsible { margin: 0 0 0 8px; padding: 3px 0 3px 6px; border-left-color: #50cfc766; }
+  .crm-sidebar.is-collapsed .crm-nav-list.is-collapsible li { position: relative; }
+  .crm-sidebar.is-collapsed .crm-nav-list.is-collapsible li::before { position: absolute; top: 50%; left: -6px; width: 5px; height: 1px; background: #50cfc766; content: ""; }
+  .crm-sidebar.is-collapsed .crm-nav-link { justify-content: center; gap: 0; min-height: 34px; padding: 0; border: 1px solid transparent; border-radius: 8px; }
+  .crm-sidebar.is-collapsed .crm-nav-link:hover { background: #ffffff0d; border-color: #ffffff1c; transform: none; }
+  .crm-sidebar.is-collapsed .crm-nav-link.is-active { background: linear-gradient(135deg, #06b1a7, #008d85); border-color: #50cfc799; box-shadow: 0 7px 15px #003f3a38; }
+  .crm-sidebar.is-collapsed .crm-nav-link svg { width: 16px; height: 16px; }
   .crm-sidebar.is-collapsed .crm-sidebar-footer { justify-content: center; gap: 0; padding-right: 0; padding-left: 0; }
   .crm-sidebar.is-collapsed .crm-sidebar-user-copy, .crm-sidebar.is-collapsed .crm-profile-link { display: none; }
   .crm-sidebar.is-collapsed .crm-avatar { width: 36px; height: 36px; }

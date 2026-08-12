@@ -89,12 +89,11 @@ export default async function AppLayout({
   if (inventoryItems.length)
     groups.push({ title: "Inventory", items: inventoryItems });
 
+  const portalItems = [{ href: "/portal", label: "Portal Material" }];
   if (can(PERMISSIONS.RECOVERY_PICKUP)) {
-    groups.push({
-      title: "Portal Lapangan",
-      items: [{ href: "/portal/recoveries", label: "Penarikan Saya" }],
-    });
+    portalItems.push({ href: "/portal/recoveries", label: "Penarikan Saya" });
   }
+  groups.push({ title: "Portal Lapangan", items: portalItems });
 
   if (can(PERMISSIONS.WORK_ORDERS_VIEW)) {
     groups.push({
