@@ -804,6 +804,7 @@ export const INTEGRATION_PROVIDERS = [
   ["WHATSAPP", "WhatsApp Gateway"],
   ["EMAIL", "Email/SMTP"],
   ["MAILCOW", "mailcow (mailserver)"],
+  ["AUTHENTIK", "Authentik (penyedia identitas)"],
   ["GITHUB", "GitHub"],
   ["GITLAB", "GitLab"],
   ["SENTRY", "Sentry"],
