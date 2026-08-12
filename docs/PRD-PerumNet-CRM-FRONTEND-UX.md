@@ -60,7 +60,7 @@ Semua mode wajib memiliki `min-width: 0` pada container yang dapat menyusut, wra
 
 ## 5. Dynamic navigation dan icon registry
 
-`SidebarNav` menerima `NavGroup[]` hasil permission filtering dari layout. Group multi-item tetap dapat dibuka/tutup dan otomatis terbuka ketika route aktif berada di dalamnya.
+`SidebarNav` menerima `NavGroup[]` hasil permission filtering dari layout. Semua group yang memiliki item, termasuk group dengan satu item, tetap dapat dibuka/tutup dan otomatis terbuka ketika route aktif berada di dalamnya.
 
 Icon dipilih berdasarkan `href`, bukan satu icon berulang untuk seluruh group. Contoh mapping:
 
@@ -72,7 +72,7 @@ Icon dipilih berdasarkan `href`, bukan satu icon berulang untuk seluruh group. C
 - Helpdesk/Billing/Finance → ticket, dispatch, invoice, payment, cashbook, closing;
 - NOC/IT/HRD/Approval/Settings → siren, server, calendar, approval, settings sesuai makna modul.
 
-Mode collapsed tetap menyediakan `aria-label`, `title`, active state, dan icon group. Tablet/mobile tidak memakai mode collapsed agar keterbacaan dan target sentuh tetap terjaga.
+Mode collapsed tetap menyediakan `aria-label`, `title`, active state, icon group, chevron parent, serta rail/indentasi submenu agar parent dan submenu tidak terlihat sebagai satu level. Tablet/mobile tidak memakai mode collapsed agar keterbacaan dan target sentuh tetap terjaga.
 
 ## 6. Sidebar, drawer, dan motion
 
@@ -529,3 +529,63 @@ Pemeriksaan ulang terhadap `docs/HANDOFF-BACKEND-KE-FRONTEND.md` menemukan bahwa
 - pemilih koordinat internal dipasang pada form ODP FTTH dengan input manual sebagai fallback.
 
 Tidak ada perubahan pada API, DTO, action, `src/lib/**`, database, auth, RBAC, atau business rule. Keputusan provider identity (`LOCAL` versus `MAILSERVER`) tetap menjadi keputusan PO/infrastruktur; frontend mengikuti nilai `profileView().auth` yang aktual.
+
+## 22. Audit Ulang Seluruh PRD Opus — Implementasi Frontend Tambahan
+
+Audit lanjutan terhadap seluruh PRD/handoff Opus menutup empat kebutuhan frontend yang belum tersedia:
+
+- `/hrd/employees/[id]` menampilkan identitas, data pekerjaan, kontrak, struktur atasan, status akun, frozen account, dan form perubahan dengan permission HRD yang sudah ada.
+- `/noc/probe` memiliki refresh manual, refresh browser otomatis setiap 30 detik saat tab aktif, status waktu pembaruan, serta alarm suara opsional yang default-nya nonaktif. Alarm suara hanya berjalan setelah pengguna mengaktifkannya dan hanya memberi sinyal bila jumlah target DOWN bertambah.
+- Grup `Portal Lapangan` selalu menyediakan `Portal Material`; `Penarikan Saya` tetap muncul hanya untuk user dengan permission `device_recovery.pickup`.
+- `/inventory/transactions/[id]/print` menyediakan layout IRF A4 dengan rincian item/serial, gudang, custodian, tujuan, dan tanda tangan yang sudah tercatat. Link cetak muncul pada detail transaksi setelah IRF terbit.
+
+### Batas kontrak dan pekerjaan tertunda
+
+- Profile tetap menggunakan DTO `profileView` resmi; field HR tambahan tidak diambil langsung dari database pada halaman profile.
+- UI OIDC/Authentik menunggu provider `OIDC`, URL IdP, dan kontrak redirect resmi dari Opus/infrastruktur.
+- Upload gambar tanda tangan IRF dan lampiran vendor warehouse belum ditambahkan karena action/endpoint backend yang dibutuhkan belum tersedia. Tanda tangan IRF yang sudah memiliki nama tetap dicetak dengan aman.
+- Tidak ada perubahan API, DTO, Server Action, `src/lib/**`, Prisma, database, auth/session, middleware, RBAC, atau business rule.
+
+### Acceptance scope dan responsive QA
+
+Route tambahan untuk sweep adalah `/hrd/employees`, `/hrd/employees/[id]`, `/noc/probe`, `/portal`, `/portal/recoveries`, `/inventory/transactions/[id]`, dan `/inventory/transactions/[id]/print`. Semua harus diperiksa pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+
+Browser QA memeriksa overflow horizontal, bounding-box heading/card/button/form, status refresh saat tab tersembunyi, toggle alarm default off, active navigation, permission filtering, dan print mode yang menyembunyikan app shell. Verifikasi kode meliputi typecheck, test suite, build production terisolasi, dan `git diff --check`.
+
+## 23. Rencana Kartu Pegawai — Menunggu Keputusan Produk
+
+`docs/PLAN-KARTU-PEGAWAI.md` berstatus rencana untuk direview, bukan kontrak implementasi. Audit frontend mencatat kebutuhan foto pegawai, kartu identitas, token QR buram, verifikasi publik, NFC, dan integrasi pengendali pintu sebagai backlog terpisah.
+
+Belum ada UI yang dibuat untuk fitur tersebut karena keputusan berikut masih diperlukan:
+
+- kebijakan foto dan siapa yang boleh melihatnya;
+- izin menambah dependency encoder QR;
+- jenis chip NFC dan model pengendali pintu;
+- apakah NFC menambah atau menggantikan geofence;
+- keputusan penggunaan verifikasi publik teknisi.
+
+Frontend tidak boleh membuat QR berbasis NIK/nama, halaman publik, NFC, atau akses pintu sebelum DTO, permission, attachment contract, token lifecycle, dan keputusan keamanan dari Opus/PO tersedia. Data sensitif pegawai tetap mengikuti batas akses HRD dan RBAC yang sudah ada.
+
+## 24. Audit Ulang PRD Opus — Perbaikan Frontend Kecil
+
+Audit berikutnya terhadap handoff dan rencana Opus menemukan dua isu frontend yang dapat diperbaiki tanpa kontrak backend baru:
+
+- seluruh group navigasi yang memiliki item, termasuk group dengan satu item, tetap memakai dropdown agar hirarki parent/submenu konsisten pada desktop collapsed, desktop expanded, tablet drawer, dan mobile;
+- validasi nomor telepon di form profil mengikuti kontrak server: karakter telepon yang sah dan panjang 6–25 karakter.
+
+`ProfileView` saat ini belum membawa alamat, pola kerja, jenjang jabatan, dan tanggal kontrak pegawai; frontend tidak melakukan direct query untuk melewati DTO resmi. Filter rentang tanggal arsip juga menunggu parameter loader backend. Kedua hal ini tetap menjadi dependency handoff ke Opus.
+
+Fase kartu pegawai tetap ditunda sesuai keputusan produk. Tidak dibuat UI QR, foto publik, NFC, atau akses pintu sebelum K5/K6, permission, attachment contract, token lifecycle, dan kontrak keamanan tersedia.
+
+## 25. Audit Seluruh Dokumen Opus — 12 Agustus 2026
+
+Audit silang terhadap `HANDOFF-BACKEND-KE-FRONTEND.md`, `PLAN-IDENTITAS-DAN-DATA-PEGAWAI.md`, `PLAN-KARTU-PEGAWAI.md`, dan `SETUP-AUTHENTIK.md` menghasilkan status berikut:
+
+- Portal teknisi `/portal/recoveries` dan `/portal/recoveries/[id]` sudah tersedia di checkout, termasuk permission existing, scope tugas teknisi, catatan kunjungan, bukti, tanda tangan, dan redirect `origin=portal`. Item lama pada handoff yang masih menulis “perlu dibuat” sudah tertutup oleh implementasi yang ada; tidak dibuat duplikasi.
+- Arsip terpadu `/settings/trash` beserta entry navigasi permission-scoped sudah tersedia. Tidak ditambahkan filter rentang tanggal karena loader resmi belum menerima parameter tersebut.
+- Detail data pegawai, akun beku, mailbox/mailserver, upload tanda tangan, redirect portal, serta lapisan FTTH pada peta sudah tersedia sesuai kontrak yang ada.
+- Authentik/OIDC masih menunggu infrastruktur dan kontrak provider resmi. Frontend tidak menambah login flow, endpoint, atau redirect buatan.
+- Alamat, pola kerja, jenjang jabatan, dan tanggal kontrak belum menjadi bagian dari DTO `profileView`; frontend tidak melakukan query langsung untuk melewati kontrak tersebut. Implementasi tetap berada pada halaman HRD yang memiliki data/action resmi.
+- Kartu pegawai, QR publik, NFC, absensi kartu, dan akses pintu tetap backlog tertunda sesuai K5/K6. Tidak ada UI atau dependency baru sebelum keputusan keamanan, permission, attachment, dan token lifecycle tersedia.
+
+Perbaikan frontend pada audit ini terbatas pada hirarki sidebar/accessibility dan validasi telepon yang sudah dicatat pada bagian 24. Tidak ada perubahan backend, API, DTO, auth/session, RBAC, database, Prisma, Server Action, middleware, atau business rule.

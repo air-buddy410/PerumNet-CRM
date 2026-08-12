@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, EmptyState, Flash } from "@/components/ui";
+import { NetworkMonitorControls } from "@/components/network-monitor-controls";
 
 export const metadata = { title: "Network Monitor" };
 
@@ -49,6 +50,7 @@ export default async function ProbePage({
   const down = countOf("DOWN");
   const up = countOf("UP");
   const unknown = countOf(null);
+  const refreshedAt = new Date().toISOString();
 
   const stale = targets.filter(
     (t) =>
@@ -64,6 +66,10 @@ export default async function ProbePage({
       />
 
       <Flash ok={sp.ok} error={sp.error} />
+
+      <div className="mb-4 flex min-w-0 justify-end">
+        <NetworkMonitorControls downCount={down} updatedAt={refreshedAt} />
+      </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         {[
