@@ -18,7 +18,7 @@ export default async function RolesPage() {
     <div>
       <PageHeader
         title="Roles & Permissions"
-        subtitle="17 role standar PerumNet (PRD §6). Klik role untuk mengatur permission."
+        subtitle="Kelola role dan permission pengguna. Pilih role untuk melihat atau mengatur aksesnya."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {roles.map((r) => (

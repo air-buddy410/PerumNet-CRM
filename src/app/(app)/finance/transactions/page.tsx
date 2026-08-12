@@ -47,7 +47,7 @@ export default async function CashTransactionsPage({
     <div>
       <PageHeader
         title="Transaksi Kas"
-        subtitle="Saldo hanya berubah saat posting. Expense/reimbursement/advance wajib approval + bukti (PRD §22–25)."
+        subtitle="Saldo berubah saat posting. Expense, reimbursement, dan advance memerlukan persetujuan serta bukti."
       />
       {/* Toolbar berdiri sendiri: slot `action` PageHeader dirancang untuk satu
           tombol ringkas (flex: 0 0 auto), sehingga deretan tombol di sana

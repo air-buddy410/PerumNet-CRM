@@ -66,7 +66,7 @@ export default async function NewTransactionPage({
       <BackLink href="/inventory/transactions" label="Kembali ke daftar transaksi" />
       <PageHeader
         title={`${TX_TYPE_LABELS[type]} Baru`}
-        subtitle="Draft belum mengubah saldo — saldo berubah saat posting (PRD §7.1)."
+        subtitle="Draft belum mengubah saldo; saldo berubah saat transaksi diposting."
       />
       <Flash error={sp.error} />
 

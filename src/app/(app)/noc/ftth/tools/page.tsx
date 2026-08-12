@@ -25,7 +25,7 @@ export default async function FtthToolsPage({
       <BackLink href="/noc/ftth" label="Kembali ke FTTH" />
       <PageHeader
         title="Tools Teknis"
-        subtitle="IP calculator & MikroTik burst calculator (gap G21). Untuk pengelolaan alokasi IP sesungguhnya, gunakan IPAM."
+        subtitle="Kalkulator IP dan burst MikroTik. Gunakan IPAM untuk mengelola alokasi IP."
       />
 
       <div className="grid gap-6 sm:grid-cols-2">

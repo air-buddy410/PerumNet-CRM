@@ -25,7 +25,7 @@ export default async function ChangesPage({
     <div>
       <PageHeader
         title="Network Change Management"
-        subtitle="Change wajib rollback plan & approval; emergency wajib post-review (PRD §35, rule 21–23)."
+        subtitle="Setiap perubahan memerlukan rencana rollback dan persetujuan; perubahan darurat wajib ditinjau setelah pelaksanaan."
         action={
           user.permissions.has(PERMISSIONS.CHANGES_CREATE) ? (
             <Link href="/noc/changes/new" className="btn-primary">+ Change Request</Link>

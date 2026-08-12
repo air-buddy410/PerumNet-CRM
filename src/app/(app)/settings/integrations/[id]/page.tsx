@@ -30,7 +30,7 @@ export default async function IntegrationDetailPage({
   if (!integration) notFound();
 
   const h = await headers();
-  const host = h.get("host") ?? "localhost:3000";
+  const host = h.get("host") ?? "localhost:3300";
   const proto = h.get("x-forwarded-proto") ?? "http";
   const webhookUrl = `${proto}://${host}/api/integrations/${integration.code}/webhook`;
   const provLabel =

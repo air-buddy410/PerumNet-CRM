@@ -30,7 +30,7 @@ export default async function AccessJobsPage({
     <div>
       <PageHeader
         title="Antrian Router (Access Jobs)"
-        subtitle={`Perintah isolir/aktivasi ke MikroTik — auditable & retryable (§4). ${queued} antri · ${failed} gagal (sync failures dilacak sebagai state, bukan log).`}
+        subtitle={`Perintah isolir/aktivasi ke MikroTik dicatat untuk audit dan dapat dicoba ulang. ${queued} antre · ${failed} gagal (kegagalan sinkronisasi dilacak sebagai status).`}
         action={
           canRun ? (
             <form action={runJobsAction}>

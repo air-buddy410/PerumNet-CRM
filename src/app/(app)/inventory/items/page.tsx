@@ -38,7 +38,7 @@ export default async function ItemsPage({
     <div>
       <PageHeader
         title="Item Master"
-        subtitle="Stock hanya berubah lewat transaksi resmi — tidak ada edit qty langsung (PRD §7.1)."
+        subtitle="Stok hanya berubah melalui transaksi resmi; jumlah tidak dapat diedit langsung."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

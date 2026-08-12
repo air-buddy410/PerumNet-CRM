@@ -29,7 +29,7 @@ export default async function IncomePage({
     <div className="max-w-3xl">
       <PageHeader
         title="Laba Rugi"
-        subtitle={`Periode ${from} s.d. ${to} — diturunkan dari jurnal (§5).`}
+        subtitle={`Periode ${from} s.d. ${to} — laporan diturunkan dari jurnal.`}
       />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">

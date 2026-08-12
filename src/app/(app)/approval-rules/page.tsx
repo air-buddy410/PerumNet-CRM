@@ -35,7 +35,7 @@ export default async function ApprovalRulesPage({
     <div>
       <PageHeader
         title="Approval Matrix"
-        subtitle="Konfigurasi jalur approval per modul, subtipe, dan rentang nilai (PRD §48). Perubahan struktur rule dilakukan melalui seed/migrasi terkontrol."
+        subtitle="Atur jalur persetujuan berdasarkan modul, subtipe, dan rentang nilai. Struktur aturan dikelola melalui konfigurasi terkontrol."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

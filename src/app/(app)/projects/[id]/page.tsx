@@ -152,7 +152,8 @@ export default async function ProjectDetailPage({
             {project.bomLines.length === 0 && recon.materials.length === 0 ? (
               <EmptyState message="Belum ada BoM / pemakaian material." />
             ) : (
-              <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
                     <th className="th">Item</th>
@@ -192,7 +193,8 @@ export default async function ProjectDetailPage({
                       </tr>
                     ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
             {isOpen && canManage && (
               <form

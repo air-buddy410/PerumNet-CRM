@@ -22,9 +22,18 @@ function num(v: FormDataEntryValue | null): number {
 
 // ── Master (HRD) ────────────────────────────────────────────────
 
+/** Tanggal opsional: string kosong berarti "tidak diisi", bukan tanggal invalid. */
+function optionalDate(v: FormDataEntryValue | null): Date | null {
+  const s = String(v ?? "").trim();
+  return s ? new Date(s) : null;
+}
+
 export async function saveEmployeeAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
   const joined = String(formData.get("joinedAt") ?? "");
+  // Jenis bukan-kontrak mengirimkan blok tanggal yang tidak dirender sama
+  // sekali, jadi nilainya memang absen — bukan dikosongkan di sini. Yang
+  // menolak tanggal nyasar tetap contractRejection() di service layer.
   const result = await saveEmployee(user, {
     id: String(formData.get("id") ?? "") || undefined,
     userId: String(formData.get("userId") ?? "") || null,
@@ -35,6 +44,11 @@ export async function saveEmployeeAction(formData: FormData): Promise<void> {
     supervisorId: String(formData.get("supervisorId") ?? "") || null,
     joinedAt: joined ? new Date(joined) : new Date(NaN),
     isActive: formData.get("isActive") === "on",
+    address: String(formData.get("address") ?? "") || null,
+    workPattern: String(formData.get("workPattern") ?? "NON_SHIFT"),
+    jobLevel: String(formData.get("jobLevel") ?? "STAFF"),
+    contractStartAt: optionalDate(formData.get("contractStartAt")),
+    contractEndAt: optionalDate(formData.get("contractEndAt")),
   });
   revalidatePath("/hrd/employees");
   redirect(

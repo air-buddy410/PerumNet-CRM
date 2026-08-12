@@ -41,7 +41,7 @@ export default async function FtthPage({
     <div>
       <PageHeader
         title="FTTH — OLT, PON & ODP"
-        subtitle={`Rantai OLT → PON → ODP (kaskade) → port → pelanggan. Kapasitas terpakai ${totalUsed}/${totalCapacity} port; portUsed adalah turunan yang direkap engine (§7).`}
+        subtitle={`Rantai OLT → PON → ODP (kaskade) → port → pelanggan. Kapasitas terpakai ${totalUsed}/${totalCapacity} port; penggunaan port direkap otomatis.`}
       />
       <Flash ok={sp.ok} error={sp.error} />
 

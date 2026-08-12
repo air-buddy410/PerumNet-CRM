@@ -39,7 +39,7 @@ export default async function BillingProfilesPage({
     <div>
       <PageHeader
         title="Billing Profiles"
-        subtitle="Kapan langganan mulai ditagih, tanggal terbit, jatuh tempo, PPN, dan addon (DESIGN-PHASE-8 §2)."
+        subtitle="Atur awal penagihan, tanggal terbit, jatuh tempo, PPN, dan layanan tambahan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

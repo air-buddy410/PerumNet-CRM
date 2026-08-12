@@ -30,7 +30,7 @@ export default async function PreferencesPage({
     <div>
       <PageHeader
         title="Preferensi Notifikasi Pelanggan"
-        subtitle={`Kanal pilihan pelanggan (§9). ${counts.map((c) => `${c.label}: ${c.count}`).join(" · ")}. Pelanggan "Tidak menerima" tidak akan dikirimi pesan.`}
+        subtitle={`Preferensi kanal pelanggan. ${counts.map((c) => `${c.label}: ${c.count}`).join(" · ")}. Pelanggan yang memilih tidak menerima tidak akan dikirimi pesan.`}
       />
       <Flash ok={sp.ok} error={sp.error} />
 

@@ -57,7 +57,7 @@ export default async function LeadsPage({
     <div>
       <PageHeader
         title="Leads"
-        subtitle="Setiap lead wajib memiliki Sales owner (business rule 14). Follow-up lewat tenggat ditandai merah."
+        subtitle="Setiap lead harus memiliki Sales owner. Follow-up yang melewati tenggat ditandai merah."
         action={
           user.permissions.has(PERMISSIONS.LEADS_CREATE) ? (
             <Link href="/sales/leads/new" className="btn-primary">

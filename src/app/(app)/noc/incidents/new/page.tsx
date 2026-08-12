@@ -31,7 +31,7 @@ export default async function NewIncidentPage({
       <BackLink href="/noc/incidents" label="Kembali ke daftar incident" />
       <PageHeader
         title="Incident Baru"
-        subtitle="Severity wajib (business rule 19). PIC ditetapkan saat acknowledge."
+        subtitle="Severity wajib diisi. PIC ditetapkan saat incident diakui."
       />
       <Flash error={sp.error} />
 

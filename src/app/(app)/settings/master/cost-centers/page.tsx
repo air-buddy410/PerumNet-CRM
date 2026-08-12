@@ -20,7 +20,7 @@ export default async function CostCentersPage({
     <MasterCrud
       entity="cost-centers"
       title="Cost Centers"
-      subtitle="Setiap pengeluaran wajib memiliki cost center (PRD §26). Data tidak dihapus, hanya dinonaktifkan."
+      subtitle="Setiap pengeluaran harus memiliki cost center. Data tidak dihapus, hanya dinonaktifkan."
       rows={rows}
       editRow={editRow}
       canManage={user.permissions.has(PERMISSIONS.MASTER_DATA_MANAGE)}

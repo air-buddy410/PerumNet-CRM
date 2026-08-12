@@ -15,7 +15,7 @@ export default async function ReceivablesPage() {
     <div>
       <PageHeader
         title="Aging Piutang"
-        subtitle={`Daftar penunggak — basis penentuan isolir Fase 10 (gap G5). ${overdueCustomers} pelanggan menunggak · total piutang ${formatRupiah(totalOutstanding)}.`}
+        subtitle={`Daftar pelanggan menunggak untuk pemantauan piutang dan tindak lanjut isolir. ${overdueCustomers} pelanggan menunggak · total piutang ${formatRupiah(totalOutstanding)}.`}
       />
 
       <div className="card overflow-x-auto">

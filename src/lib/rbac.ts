@@ -37,6 +37,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     },
   });
   if (!user || !user.isActive) return null;
+  // Fase 42 — akun beku tidak boleh memakai sesi apa pun. Membekukan memang
+  // sudah menaikkan sessionEpoch sehingga token lama gugur di baris bawah;
+  // pemeriksaan ini tetap ada karena aturannya milik lapisan ini, bukan efek
+  // samping dari mekanisme lain yang suatu saat bisa berubah.
+  if (user.frozenAt) return null;
   // Token yang diterbitkan sebelum password terakhir diganti tidak berlaku.
   // Token lama memakai payload tanpa epoch; diperlakukan sebagai generasi 0
   // supaya sesi yang sedang berjalan tidak putus saat fitur ini dipasang.

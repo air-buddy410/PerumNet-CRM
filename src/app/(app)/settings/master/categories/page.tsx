@@ -20,7 +20,7 @@ export default async function CategoriesPage({
     <MasterCrud
       entity="categories"
       title="Kategori Pengeluaran"
-      subtitle="Kategori wajib pada setiap expense (PRD §23). Tipe: EXPENSE."
+      subtitle="Kelola kategori yang digunakan untuk mencatat expense."
       rows={rows}
       editRow={editRow}
       canManage={user.permissions.has(PERMISSIONS.MASTER_DATA_MANAGE)}

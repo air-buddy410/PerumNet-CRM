@@ -35,7 +35,7 @@ export default async function CustomerDetailPage({
         subscriptions: { include: { package: true }, orderBy: { createdAt: "desc" } },
         terminations: {
           include: {
-            subscription: { select: { serviceNumber: true } },
+            subscription: { select: { id: true, serviceNumber: true } },
             recovery: { select: { id: true, recoveryNumber: true, status: true } },
           },
           orderBy: { createdAt: "desc" },
@@ -49,6 +49,12 @@ export default async function CustomerDetailPage({
 
   const canEdit = user.permissions.has(PERMISSIONS.CUSTOMERS_EDIT);
   const canCreateSub = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_CREATE);
+  const canCreateTermination = user.permissions.has(PERMISSIONS.TERMINATION_CREATE);
+  const terminationSubscriptionIds = new Set(
+    customer.terminations
+      .filter((termination) => ["DRAFT", "SUBMITTED", "APPROVED", "EFFECTIVE"].includes(termination.status))
+      .map((termination) => termination.subscription.id),
+  );
 
   return (
     <div className="max-w-4xl">
@@ -143,7 +149,8 @@ export default async function CustomerDetailPage({
         {customer.subscriptions.length === 0 ? (
           <EmptyState message="Belum ada subscription." />
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
                 <th className="th">Service ID</th>
@@ -151,6 +158,7 @@ export default async function CustomerDetailPage({
                 <th className="th">Harga/bln</th>
                 <th className="th">Aktivasi</th>
                 <th className="th">Status</th>
+                <th className="th">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -174,10 +182,18 @@ export default async function CustomerDetailPage({
                   <td className="td">
                     <Badge value={s.status} label={statusLabel(s.status)} />
                   </td>
+                  <td className="td">
+                    {canCreateTermination && !["TERMINATED", "CANCELLED"].includes(s.status) && !terminationSubscriptionIds.has(s.id) ? (
+                      <Link href={`/crm/terminations/new?subscriptionId=${encodeURIComponent(s.id)}`} className="btn-secondary whitespace-nowrap px-3 py-1.5 text-xs">
+                        Ajukan Terminasi
+                      </Link>
+                    ) : <span className="text-xs text-slate-400">—</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </div>
 
@@ -186,7 +202,8 @@ export default async function CustomerDetailPage({
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-medium">Riwayat Terminasi ({customer.terminations.length})</h2>
           </div>
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
                 <th className="th">Nomor</th>
@@ -227,7 +244,8 @@ export default async function CustomerDetailPage({
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
     </div>

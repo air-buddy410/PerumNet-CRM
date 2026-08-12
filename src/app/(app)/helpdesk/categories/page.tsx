@@ -36,7 +36,7 @@ export default async function TicketCategoriesPage({
     <div>
       <PageHeader
         title="Kategori & Workflow Tiket"
-        subtitle="Tiap kategori bisa punya SLA & workflow — step wajib menggerbang solve (DESIGN-PHASE-8 §6, gap G17)."
+        subtitle="Atur SLA dan workflow per kategori; seluruh langkah wajib selesai sebelum tiket diselesaikan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

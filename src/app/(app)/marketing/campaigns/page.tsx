@@ -23,7 +23,7 @@ export default async function CampaignsPage({
     <div>
       <PageHeader
         title="Marketing Campaigns"
-        subtitle="Campaign → Lead → Sales Assignment → Opportunity → Customer (PRD §8)"
+        subtitle="Pantau perjalanan campaign dari lead hingga menjadi pelanggan."
         action={
           user.permissions.has(PERMISSIONS.CAMPAIGNS_MANAGE) ? (
             <Link href="/marketing/campaigns/new" className="btn-primary">+ Campaign</Link>

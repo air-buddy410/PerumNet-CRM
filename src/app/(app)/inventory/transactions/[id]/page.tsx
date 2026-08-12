@@ -156,7 +156,8 @@ export default async function TransactionDetailPage({
             {tx.lines.length === 0 ? (
               <EmptyState message="Tidak ada baris." />
             ) : (
-              <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
                     <th className="th">Item</th>
@@ -186,7 +187,8 @@ export default async function TransactionDetailPage({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
           </div>
         </div>

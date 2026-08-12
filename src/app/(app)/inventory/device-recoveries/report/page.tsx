@@ -74,7 +74,7 @@ export default async function RecoveryReportPage() {
       <BackLink href="/inventory/device-recoveries" label="Kembali ke daftar penarikan" />
       <PageHeader
         title="Laporan Penarikan Perangkat"
-        subtitle="KPI recovery sesuai PRD §17."
+        subtitle="Ringkasan kinerja proses penarikan perangkat."
         action={
           <Link href="/api/export/device-recoveries" className="btn-secondary">
             Export CSV
@@ -116,7 +116,8 @@ export default async function RecoveryReportPage() {
             {byDecision.length === 0 ? (
               <EmptyState message="Belum ada perangkat yang diputuskan." />
             ) : (
-              <table className="w-full">
+              <div className="overflow-x-auto">
+                <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
                     <th className="th">Keputusan</th>
@@ -135,7 +136,8 @@ export default async function RecoveryReportPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             )}
           </div>
 
@@ -143,7 +145,8 @@ export default async function RecoveryReportPage() {
             <div className="border-b border-slate-100 px-5 py-4 font-medium">
               Perangkat Menurut Tahap
             </div>
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
                   <th className="th">Tahap</th>
@@ -162,7 +165,8 @@ export default async function RecoveryReportPage() {
                   )
                 )}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         </>
       )}

@@ -29,7 +29,7 @@ export default async function LinksPage({
     <div>
       <PageHeader
         title="Links & Circuits"
-        subtitle="Jalur antar site: backbone fiber, wireless, leased line (PRD §28.3)."
+        subtitle="Kelola jalur antar-site seperti backbone fiber, wireless, dan leased line."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

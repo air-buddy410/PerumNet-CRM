@@ -35,7 +35,7 @@ export default async function PaymentsPage({
     <div>
       <PageHeader
         title="Payments"
-        subtitle="Pembayaran pelanggan dengan alokasi eksplisit ke invoice (gap G2). Koreksi via reversal, bukan edit."
+        subtitle="Catat pembayaran pelanggan dan alokasikan ke invoice terkait. Koreksi dilakukan melalui reversal."
         action={
           canCreate ? (
             <Link href="/billing/payments/new" className="btn-primary">

@@ -23,7 +23,7 @@ export default async function SurveysPage({
     <div>
       <PageHeader
         title="Survey Management"
-        subtitle="Alur: Diajukan → Terjadwal → Selesai dengan hasil feasibility + foto bukti (PRD §10)."
+        subtitle="Ikuti proses survey dari pengajuan hingga selesai dengan hasil kelayakan dan foto bukti."
         action={
           user.permissions.has(PERMISSIONS.SURVEYS_CREATE) ? (
             <Link href="/sales/surveys/new" className="btn-primary">+ Ajukan Survey</Link>

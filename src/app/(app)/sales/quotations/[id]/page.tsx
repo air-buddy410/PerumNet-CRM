@@ -100,7 +100,8 @@ export default async function QuotationDetailPage({
           ) : (
             <div className="card p-6">
               <h2 className="mb-4 font-medium">Rincian Penawaran</h2>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
                 <tbody className="divide-y divide-slate-100">
                   <tr>
                     <td className="py-2 text-slate-500">Paket</td>
@@ -161,7 +162,8 @@ export default async function QuotationDetailPage({
                     </td>
                   </tr>
                 </tbody>
-              </table>
+                </table>
+              </div>
               {q.notes && (
                 <p className="mt-4 whitespace-pre-wrap border-t border-slate-100 pt-4 text-sm text-slate-600">
                   {q.notes}

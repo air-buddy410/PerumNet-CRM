@@ -24,7 +24,7 @@ export default async function OutagesPage() {
     <div className="max-w-3xl">
       <PageHeader
         title="Status Gangguan"
-        subtitle="Informasi outage yang telah disetujui NOC untuk komunikasi (PRD §33). Gunakan info ini saat menjawab pelanggan."
+        subtitle="Informasi gangguan yang telah disetujui NOC untuk komunikasi kepada pelanggan."
       />
 
       <h2 className="mb-2 text-sm font-semibold text-slate-600">Sedang Berlangsung</h2>

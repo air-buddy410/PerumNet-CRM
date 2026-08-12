@@ -33,7 +33,7 @@ export default async function IpamPage({
     <div>
       <PageHeader
         title="IP Address Management"
-        subtitle="IP tidak boleh duplikat dan wajib tertaut perangkat/layanan (PRD §29, rule 18)."
+        subtitle="Setiap IP harus unik dan tertaut ke perangkat atau layanan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

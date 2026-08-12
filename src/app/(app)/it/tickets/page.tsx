@@ -29,7 +29,7 @@ export default async function TicketsPage({
     <div>
       <PageHeader
         title="IT Service Desk"
-        subtitle={seesAll ? "Seluruh tiket IT (PRD §39)." : "Tiket yang Anda buat/laporkan."}
+        subtitle={seesAll ? "Seluruh tiket IT yang dapat Anda pantau." : "Tiket yang Anda buat atau laporkan."}
         action={
           <Link href="/it/tickets/new" className="btn-primary">
             Buat Tiket

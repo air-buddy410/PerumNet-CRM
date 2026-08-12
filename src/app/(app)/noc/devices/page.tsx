@@ -31,7 +31,7 @@ export default async function NetDevicesPage({
     <div>
       <PageHeader
         title="Perangkat Jaringan"
-        subtitle="Router, switch, OLT, backhaul, dan perangkat aktif lain (PRD §28.2)."
+        subtitle="Kelola perangkat jaringan aktif seperti router, switch, OLT, dan backhaul."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

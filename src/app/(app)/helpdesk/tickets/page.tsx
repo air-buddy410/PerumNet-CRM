@@ -39,7 +39,7 @@ export default async function CustomerTicketsPage({
     <div>
       <PageHeader
         title="Tiket Pelanggan"
-        subtitle={`Helpdesk pelanggan dengan workflow per kategori & MTTR bersih dari pause (DESIGN-PHASE-8 §6).${seesAll ? "" : " Menampilkan tiket yang ditugaskan kepada Anda."}`}
+        subtitle={`Helpdesk pelanggan dengan workflow per kategori dan waktu pengerjaan yang dihitung tanpa waktu jeda.${seesAll ? "" : " Menampilkan tiket yang ditugaskan kepada Anda."}`}
         action={
           canCreate ? (
             <Link href="/helpdesk/tickets/new" className="btn-primary">

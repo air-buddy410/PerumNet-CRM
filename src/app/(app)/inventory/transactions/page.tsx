@@ -42,7 +42,7 @@ export default async function TransactionsPage({
     <div>
       <PageHeader
         title="Transaksi Stock"
-        subtitle="Transaksi posted immutable — koreksi hanya lewat reversal (PRD §7.2)."
+        subtitle="Transaksi yang sudah diposting tidak dapat diedit; koreksi dilakukan melalui reversal."
       />
       {/* Toolbar berdiri sendiri: slot `action` PageHeader dirancang untuk satu
           tombol ringkas (flex: 0 0 auto), sehingga deretan tombol di sana

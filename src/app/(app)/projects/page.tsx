@@ -34,7 +34,7 @@ export default async function ProjectsPage({
     <div>
       <PageHeader
         title="Projects"
-        subtitle="Proyek tidak dapat ditutup sebelum material & biaya direkonsiliasi (PRD §19, rule 8)."
+        subtitle="Proyek hanya dapat ditutup setelah material dan biaya direkonsiliasi."
         action={
           user.permissions.has(PERMISSIONS.PROJECTS_MANAGE) ? (
             <Link href="/projects/new" className="btn-primary">+ Proyek</Link>

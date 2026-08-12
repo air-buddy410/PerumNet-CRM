@@ -18,7 +18,7 @@ export default async function NewTicketPage({
       <BackLink href="/it/tickets" label="Kembali ke daftar tiket" />
       <PageHeader
         title="Tiket IT Baru"
-        subtitle="Laporkan kendala perangkat kerja, akun, aplikasi, atau permintaan IT lainnya (PRD §39)."
+        subtitle="Laporkan kendala perangkat kerja, akun, aplikasi, atau permintaan bantuan IT."
       />
       <Flash error={sp.error} />
 

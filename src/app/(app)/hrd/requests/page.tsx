@@ -42,7 +42,7 @@ export default async function HrdRequestsPage({
     <div>
       <PageHeader
         title="Izin & Lembur"
-        subtitle="Pengajuan lewat approval engine — BERJENJANG (atasan → HRD), bukan satu tingkat (§8)."
+        subtitle="Pengajuan diproses bertahap melalui atasan lalu HRD."
         action={
           <form action={syncRequestsAction}>
             <button type="submit" className="btn-secondary">Sinkronkan Keputusan</button>

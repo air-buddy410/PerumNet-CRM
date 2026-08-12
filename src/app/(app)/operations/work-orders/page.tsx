@@ -41,7 +41,7 @@ export default async function WorkOrdersPage({
     <div>
       <PageHeader
         title="Work Orders"
-        subtitle="WO hanya bisa ditutup bila material dipertanggungjawabkan, foto bukti ada, dan pelanggan konfirmasi (PRD §18)."
+        subtitle="Work order ditutup setelah material dipertanggungjawabkan, bukti foto tersedia, dan pelanggan mengonfirmasi."
         action={
           canCreate ? (
             <Link href="/operations/work-orders/new" className="btn-primary">

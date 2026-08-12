@@ -30,7 +30,7 @@ export default async function AnnouncementsPage({
     <div>
       <PageHeader
         title="Pengumuman & Promo"
-        subtitle="Konten untuk portal & aplikasi pelanggan (§9) — hanya yang diterbitkan dan dalam periode tayang yang tampil ke pelanggan."
+        subtitle="Kelola konten portal dan aplikasi pelanggan; hanya pengumuman yang diterbitkan dan sedang tayang yang terlihat."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

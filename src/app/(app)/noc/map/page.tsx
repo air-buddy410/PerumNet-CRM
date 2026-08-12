@@ -3,12 +3,15 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, EmptyState } from "@/components/ui";
+import { NetworkMap } from "@/components/network-map";
 import {
   loadNetworkMap,
   projector,
   OCCUPANCY_COLOR,
   OCCUPANCY_LABEL,
   SUBSCRIPTION_COLOR,
+  type LinkStatus,
+  type NetworkMapData,
   type OccupancyLevel,
 } from "@/lib/noc-map";
 
@@ -25,11 +28,30 @@ const OCCUPANCY_FILTERS: { value: OccupancyLevel | ""; label: string }[] = [
 ];
 
 const STATUS_FILTERS = ["", "ACTIVE", "ISOLATED", "SUSPENDED"] as const;
+const LINK_STATUS_FILTERS: { value: LinkStatus | ""; label: string }[] = [
+  { value: "", label: "Semua status koneksi" },
+  { value: "ONLINE", label: "Online" },
+  { value: "OFFLINE", label: "Offline" },
+  { value: "DISABLED", label: "Disabled" },
+  { value: "UNKNOWN", label: "Belum tersedia" },
+];
+const LINK_STATUS_LABEL: Record<LinkStatus, string> = {
+  ONLINE: "Online",
+  OFFLINE: "Offline",
+  DISABLED: "Disabled",
+  UNKNOWN: "Belum tersedia",
+};
+const LINK_STATUS_COLOR: Record<LinkStatus, string> = {
+  ONLINE: "#0f9f91",
+  OFFLINE: "#dc5b58",
+  DISABLED: "#64748b",
+  UNKNOWN: "#d39a3a",
+};
 
 // Fase 23 (PRD-NOC-TOOLS N1) — peta ODP + pelanggan dalam satu tampilan.
-// Digambar sebagai SVG, tanpa pustaka peta dan tanpa server ubin eksternal,
-// sehingga tetap jalan di jaringan tertutup. Basemap sungguhan bisa dipasang
-// belakangan tanpa mengubah lapisan data (lib/noc-map.ts).
+// Data dan permission tetap server-side. Renderer MapLibre berjalan di client
+// bila style internal tersedia, dengan SVG relatif sebagai fallback jaringan
+// tertutup tanpa tile server.
 export default async function NetworkMapPage({
   searchParams,
 }: {
@@ -38,6 +60,8 @@ export default async function NetworkMapPage({
     olt?: string;
     occ?: string;
     status?: string;
+    router?: string;
+    link?: string;
     odp?: string;
   }>;
 }) {
@@ -50,6 +74,8 @@ export default async function NetworkMapPage({
       oltId: sp.olt || null,
       minOccupancy: (sp.occ as OccupancyLevel) || null,
       subscriptionStatus: sp.status || null,
+      routerId: sp.router || null,
+      linkStatus: isLinkStatus(sp.link) ? sp.link : null,
     }),
     db.networkSite.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.oltDevice.findMany({
@@ -70,7 +96,6 @@ export default async function NetworkMapPage({
       })
     : [];
 
-  const project = data.bounds ? projector(data.bounds, WIDTH, HEIGHT) : null;
   const totalPorts = data.odps.reduce((s, o) => s + o.capacity, 0);
   const usedPorts = data.odps.reduce((s, o) => s + o.used, 0);
 
@@ -80,6 +105,8 @@ export default async function NetworkMapPage({
     if (sp.olt) params.set("olt", sp.olt);
     if (sp.occ) params.set("occ", sp.occ);
     if (sp.status) params.set("status", sp.status);
+    if (sp.router) params.set("router", sp.router);
+    if (sp.link) params.set("link", sp.link);
     for (const [k, v] of Object.entries(extra)) {
       if (v) params.set(k, v);
       else params.delete(k);
@@ -87,6 +114,10 @@ export default async function NetworkMapPage({
     const q = params.toString();
     return q ? `/noc/map?${q}` : "/noc/map";
   };
+
+  const odpHrefs = Object.fromEntries(
+    data.odps.map((odp) => [odp.id, keep({ odp: selected?.id === odp.id ? "" : odp.id })]),
+  );
 
   return (
     <div>
@@ -134,88 +165,43 @@ export default async function NetworkMapPage({
             ))}
           </select>
         </div>
+        <div>
+          <label className="label" htmlFor="router">Router</label>
+          <select id="router" name="router" defaultValue={sp.router ?? ""} className="input">
+            <option value="">Semua router</option>
+            {data.routers.map((router) => (
+              <option key={router.id} value={router.id}>{router.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="link">Status koneksi</label>
+          <select id="link" name="link" defaultValue={sp.link ?? ""} className="input">
+            {LINK_STATUS_FILTERS.map((filter) => (
+              <option key={filter.value} value={filter.value}>{filter.label}</option>
+            ))}
+          </select>
+        </div>
         <button type="submit" className="btn-primary">Terapkan</button>
         <Link href="/noc/map" className="btn-secondary">Reset</Link>
       </form>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="card overflow-x-auto p-3">
-          {!project || data.odps.length === 0 ? (
-            <EmptyState message="Belum ada ODP berkoordinat untuk digambar. Isi koordinat ODP di modul FTTH." />
-          ) : (
-            <svg
-              viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-              className="h-auto w-full"
-              role="img"
-              aria-label="Peta sebaran ODP dan pelanggan"
-            >
-              {/* Kaskade ODP → ODP induk */}
-              {data.cascades.map((c) => {
-                const from = data.odps.find((o) => o.id === c.fromId)!;
-                const to = data.odps.find((o) => o.id === c.toId)!;
-                const a = project(from.latitude, from.longitude);
-                const b = project(to.latitude, to.longitude);
-                return (
-                  <line
-                    key={`${c.fromId}-${c.toId}`}
-                    x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 3"
-                  />
-                );
-              })}
-
-              {/* Garis pelanggan → ODP tempat port-nya berada */}
-              {data.customers.map((c) => {
-                const odp = data.odps.find((o) => o.id === c.odpId);
-                if (!odp) return null;
-                const a = project(c.latitude, c.longitude);
-                const b = project(odp.latitude, odp.longitude);
-                return (
-                  <line
-                    key={`link-${c.subscriptionId}`}
-                    x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                    stroke="#cbd5e1" strokeWidth={0.75}
-                  />
-                );
-              })}
-
-              {/* Pelanggan */}
-              {data.customers.map((c) => {
-                const p = project(c.latitude, c.longitude);
-                return (
-                  <circle
-                    key={c.subscriptionId}
-                    cx={p.x} cy={p.y} r={3}
-                    fill={SUBSCRIPTION_COLOR[c.status] ?? "#94a3b8"}
-                    opacity={0.85}
-                  >
-                    <title>{`${c.customerName} · ${c.serviceNumber} · ${c.status}${
-                      c.portNumber ? ` · port ${c.portNumber}` : ""
-                    }`}</title>
-                  </circle>
-                );
-              })}
-
-              {/* ODP — diwarnai menurut okupansi port */}
-              {data.odps.map((o) => {
-                const p = project(o.latitude, o.longitude);
-                const isSelected = selected?.id === o.id;
-                return (
-                  <Link key={o.id} href={keep({ odp: isSelected ? "" : o.id })}>
-                    <g>
-                      <rect
-                        x={p.x - 7} y={p.y - 7} width={14} height={14} rx={3}
-                        fill={OCCUPANCY_COLOR[o.occupancy]}
-                        stroke={isSelected ? "#0f172a" : "#ffffff"}
-                        strokeWidth={isSelected ? 3 : 1.5}
-                      />
-                      <title>{`${o.code} · ${o.used}/${o.capacity} port · ${OCCUPANCY_LABEL[o.occupancy]}`}</title>
-                    </g>
-                  </Link>
-                );
-              })}
-            </svg>
-          )}
+          <NetworkMap
+            data={data}
+            selectedOdpId={selected?.id ?? null}
+            palette={{ occupancy: OCCUPANCY_COLOR, subscription: SUBSCRIPTION_COLOR, linkStatus: LINK_STATUS_COLOR }}
+            occupancyLabels={OCCUPANCY_LABEL}
+            fallback={
+              <NetworkMapSvg
+                data={data}
+                selectedOdpId={selected?.id ?? null}
+                odpHrefs={odpHrefs}
+                linkPalette={LINK_STATUS_COLOR}
+              />
+            }
+          />
 
           <div className="mt-3 flex flex-wrap gap-4 px-2 text-xs text-slate-500">
             {(Object.keys(OCCUPANCY_COLOR) as OccupancyLevel[]).map((k) => (
@@ -236,10 +222,27 @@ export default async function NetworkMapPage({
                 Pelanggan {s.toLowerCase()}
               </span>
             ))}
+            {(Object.keys(LINK_STATUS_COLOR) as LinkStatus[]).map((status) => (
+              <span key={status} className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: LINK_STATUS_COLOR[status] }} />
+                Link {LINK_STATUS_LABEL[status].toLowerCase()}
+              </span>
+            ))}
           </div>
         </div>
 
         <div className="card p-5">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(Object.keys(LINK_STATUS_COLOR) as LinkStatus[]).map((status) => (
+              <div key={status} className="rounded-lg border border-slate-100 bg-slate-50/60 p-2">
+                <span className="block text-[10px] uppercase tracking-wide text-slate-400">{LINK_STATUS_LABEL[status]}</span>
+                <strong className="block text-lg text-slate-700">{data.linkCounts[status]}</strong>
+              </div>
+            ))}
+          </div>
+          <p className="mb-4 text-[11px] text-slate-500">
+            Sinkronisasi terakhir: {data.lastSyncedAt ? formatMapTimestamp(data.lastSyncedAt) : "belum tersedia"}
+          </p>
           {selected ? (
             <>
               <h2 className="mb-1 text-sm font-medium">{selected.code}</h2>
@@ -285,4 +288,127 @@ export default async function NetworkMapPage({
       </div>
     </div>
   );
+}
+
+function NetworkMapSvg({
+  data,
+  selectedOdpId,
+  odpHrefs,
+  linkPalette,
+}: {
+  data: NetworkMapData;
+  selectedOdpId: string | null;
+  odpHrefs: Record<string, string>;
+  linkPalette: Record<LinkStatus, string>;
+}) {
+  const project = data.bounds ? projector(data.bounds, WIDTH, HEIGHT) : null;
+  if (!project || data.odps.length === 0) {
+    return <EmptyState message="Belum ada ODP berkoordinat untuk digambar. Isi koordinat ODP di modul FTTH." />;
+  }
+
+  const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
+
+  return (
+    <svg
+      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      className="h-full w-full"
+      role="img"
+      aria-label="Peta sebaran ODP dan pelanggan"
+    >
+      {/* Kaskade ODP → ODP induk */}
+      {data.cascades.map((cascade) => {
+        const from = odpById.get(cascade.fromId);
+        const to = odpById.get(cascade.toId);
+        if (!from || !to) return null;
+        const a = project(from.latitude, from.longitude);
+        const b = project(to.latitude, to.longitude);
+        return (
+          <line
+            key={`${cascade.fromId}-${cascade.toId}`}
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            stroke="#94a3b8"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+          />
+        );
+      })}
+
+      {/* Garis pelanggan → ODP tempat port-nya berada */}
+      {data.customers.map((customer) => {
+        const odp = customer.odpId ? odpById.get(customer.odpId) : null;
+        if (!odp) return null;
+        const a = project(customer.latitude, customer.longitude);
+        const b = project(odp.latitude, odp.longitude);
+        return (
+          <line
+            key={`link-${customer.subscriptionId}`}
+            x1={a.x}
+            y1={a.y}
+            x2={b.x}
+            y2={b.y}
+            stroke="#cbd5e1"
+            strokeWidth={0.75}
+          />
+        );
+      })}
+
+      {/* Pelanggan */}
+      {data.customers.map((customer) => {
+        const point = project(customer.latitude, customer.longitude);
+        return (
+          <circle
+            key={customer.subscriptionId}
+            cx={point.x}
+            cy={point.y}
+            r={3}
+            fill={linkPalette[customer.linkStatus]}
+            opacity={0.85}
+          >
+            <title>{`${customer.customerName} · ${customer.serviceNumber} · subscription ${customer.status} · link ${customer.linkStatus}${
+              customer.portNumber ? ` · port ${customer.portNumber}` : ""
+            }`}</title>
+          </circle>
+        );
+      })}
+
+      {/* ODP — diwarnai menurut okupansi port */}
+      {data.odps.map((odp) => {
+        const point = project(odp.latitude, odp.longitude);
+        const isSelected = selectedOdpId === odp.id;
+        return (
+          <Link key={odp.id} href={odpHrefs[odp.id] ?? `/noc/map?odp=${encodeURIComponent(odp.id)}`}>
+            <g>
+              <rect
+                x={point.x - 7}
+                y={point.y - 7}
+                width={14}
+                height={14}
+                rx={3}
+                fill={OCCUPANCY_COLOR[odp.occupancy]}
+                stroke={isSelected ? "#0f172a" : "#ffffff"}
+                strokeWidth={isSelected ? 3 : 1.5}
+              />
+              <title>{`${odp.code} · ${odp.used}/${odp.capacity} port · ${OCCUPANCY_LABEL[odp.occupancy]}`}</title>
+            </g>
+          </Link>
+        );
+      })}
+    </svg>
+  );
+}
+
+function isLinkStatus(value: string | undefined): value is LinkStatus {
+  return value === "ONLINE" || value === "OFFLINE" || value === "DISABLED" || value === "UNKNOWN";
+}
+
+function formatMapTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "belum tersedia";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }

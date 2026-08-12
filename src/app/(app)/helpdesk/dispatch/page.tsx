@@ -1,117 +1,229 @@
-import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
-import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { PERMISSIONS } from "@/lib/constants";
+import TicketWall, {
+  type TicketWallItem,
+  type TicketWallSnapshot,
+  type TicketWallStep,
+} from "@/components/ticket-wall";
 
-export const metadata = { title: "Dispatch Board" };
+export const metadata = { title: "Ticket Wall Dashboard" };
 
-const ctStatusLabel = (s: string) => (s === "OPEN" ? "Baru" : s === "PENDING" ? "Dijeda" : statusLabel(s));
+const TICKET_STATUSES = ["OPEN", "IN_PROGRESS", "PENDING", "SOLVED", "CLOSED"] as const;
+const APP_TIME_ZONE = "Asia/Makassar";
 
-// TV Wall / dispatch board (§6): view di atas CustomerTicket + WorkOrder
-// terjadwal hari ini per teknisi — tanpa model baru.
-export default async function DispatchPage() {
-  await requirePermission(PERMISSIONS.CTICKETS_VIEW);
+function todayInputValue() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(startOfDay.getTime() + 86400e3);
+function validDateInput(value: string | undefined) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00+08:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function rangeFromSearchParams(fromValue?: string, toValue?: string) {
+  const defaultDate = todayInputValue();
+  const fromInput = validDateInput(fromValue) ? fromValue! : defaultDate;
+  const toInput = validDateInput(toValue) ? toValue! : fromInput;
+  const from = validDateInput(fromInput)!;
+  const to = validDateInput(toInput)!;
+  if (from.getTime() > to.getTime()) {
+    return {
+      fromInput: toInput,
+      toInput: fromInput,
+      from: to,
+      to: new Date(from.getTime() + 86400e3),
+    };
+  }
+  return {
+    fromInput,
+    toInput,
+    from,
+    to: new Date(to.getTime() + 86400e3),
+  };
+}
+
+function maskPhone(phone: string | null | undefined) {
+  const value = phone?.trim() ?? "";
+  if (!value) return null;
+  if (value.length <= 4) return "••••";
+  const visiblePrefix = value.slice(0, Math.min(2, value.length - 4));
+  return `${visiblePrefix}${"•".repeat(Math.max(2, value.length - visiblePrefix.length - 4))}${value.slice(-4)}`;
+}
+
+function splitTags(tags: string | null) {
+  return [...new Set((tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean))];
+}
+
+function workflowSnapshot(
+  workflow: { name: string; steps: Array<{ id: string; name: string; order: number }> } | null,
+  progress: Array<{ stepId: string; doneAt: Date | null }>
+) {
+  if (!workflow || workflow.steps.length === 0) return null;
+  const progressByStep = new Map(progress.map((item) => [item.stepId, item]));
+  const firstIncomplete = workflow.steps.findIndex((step) => !progressByStep.get(step.id)?.doneAt);
+  const completed = workflow.steps.filter((step) => Boolean(progressByStep.get(step.id)?.doneAt)).length;
+  const steps: TicketWallStep[] = workflow.steps.map((step, index) => ({
+    id: step.id,
+    label: step.name,
+    state: progressByStep.get(step.id)?.doneAt
+      ? "DONE"
+      : index === firstIncomplete
+        ? "CURRENT"
+        : "PENDING",
+  }));
+  return {
+    name: workflow.name,
+    percentage: Math.round((completed / workflow.steps.length) * 100),
+    steps,
+  };
+}
+
+const WORK_ORDER_TYPE_LABELS: Record<string, string> = {
+  NEW_INSTALLATION: "Instalasi Baru",
+  TROUBLESHOOTING: "Troubleshoot",
+  DEVICE_REPLACEMENT: "Penggantian Perangkat",
+  DEVICE_RETRIEVAL: "Penarikan Perangkat",
+  MAINTENANCE: "Maintenance",
+};
+
+export default async function DispatchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    status?: string;
+    category?: string;
+    tag?: string;
+    engineer?: string;
+  }>;
+}) {
+  const user = await requirePermission(PERMISSIONS.CTICKETS_VIEW);
+  const sp = await searchParams;
+  const range = rangeFromSearchParams(sp.from, sp.to);
+  const seesAllTickets = user.permissions.has(PERMISSIONS.CTICKETS_MANAGE);
+  const canSeeWorkOrders = user.permissions.has(PERMISSIONS.WORK_ORDERS_VIEW);
+  const technicianOnly =
+    canSeeWorkOrders &&
+    user.permissions.has(PERMISSIONS.WORK_ORDERS_EXECUTE) &&
+    !user.permissions.has(PERMISSIONS.WORK_ORDERS_CREATE) &&
+    !user.permissions.has(PERMISSIONS.WORK_ORDERS_CLOSE) &&
+    !user.roles.some((role) => ["super_admin", "management"].includes(role.code));
+
+  const dateFilter = {
+    OR: [
+      { scheduledAt: { gte: range.from, lt: range.to } },
+      { scheduledAt: null, createdAt: { gte: range.from, lt: range.to } },
+    ],
+  };
 
   const [tickets, workOrders] = await Promise.all([
     db.customerTicket.findMany({
-      where: {
-        status: { in: ["OPEN", "IN_PROGRESS", "PENDING"] },
-        OR: [
-          { scheduledAt: { gte: startOfDay, lt: endOfDay } },
-          { scheduledAt: null },
-        ],
+      where: seesAllTickets
+        ? dateFilter
+        : {
+            AND: [
+              dateFilter,
+              {
+                OR: [
+                  { assigneeId: user.id },
+                  { members: { some: { userId: user.id } } },
+                  { createdById: user.id },
+                ],
+              },
+            ],
+          },
+      include: {
+        customer: true,
+        category: { include: { workflow: { include: { steps: { orderBy: { order: "asc" } } } } } },
+        assignee: true,
+        progress: true,
       },
-      include: { customer: true, category: true, assignee: true },
       orderBy: [{ scheduledAt: "asc" }, { createdAt: "asc" }],
     }),
-    db.workOrder.findMany({
-      where: {
-        status: { in: ["ASSIGNED", "IN_PROGRESS"] },
-        scheduledAt: { gte: startOfDay, lt: endOfDay },
-      },
-      include: { customer: true, technician: true },
-      orderBy: { scheduledAt: "asc" },
-    }),
+    canSeeWorkOrders
+      ? db.workOrder.findMany({
+          where: {
+            scheduledAt: { gte: range.from, lt: range.to },
+            ...(technicianOnly ? { technicianId: user.id } : {}),
+          },
+          include: { customer: true, technician: true },
+          orderBy: { scheduledAt: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
-  // Kelompokkan per petugas (tiket tanpa petugas → "Belum Ditugaskan").
-  const board = new Map<string, { name: string; tickets: typeof tickets; wos: typeof workOrders }>();
-  const keyFor = (id: string | null, name: string | null) => id ?? "__unassigned";
-  for (const t of tickets) {
-    const key = keyFor(t.assigneeId, t.assignee?.name ?? null);
-    const row = board.get(key) ?? { name: t.assignee?.name ?? "Belum Ditugaskan", tickets: [], wos: [] };
-    row.tickets.push(t);
-    board.set(key, row);
+  const statusCounts = Object.fromEntries(TICKET_STATUSES.map((status) => [status, 0]));
+  const items: TicketWallItem[] = tickets.map((ticket) => {
+    statusCounts[ticket.status] = (statusCounts[ticket.status] ?? 0) + 1;
+    return {
+      kind: "TICKET",
+      id: ticket.id,
+      number: ticket.ticketNumber,
+      title: ticket.title,
+      customerName: ticket.customer.name,
+      maskedPhone: maskPhone(ticket.customer.phone),
+      categoryName: ticket.category.name,
+      tags: splitTags(ticket.tags),
+      status: ticket.status,
+      priority: ticket.priority,
+      engineerName: ticket.assignee?.name ?? null,
+      assignedAt: null,
+      scheduledAt: ticket.scheduledAt?.toISOString() ?? null,
+      createdAt: ticket.createdAt.toISOString(),
+      href: `/helpdesk/tickets/${ticket.id}`,
+      workflow: workflowSnapshot(ticket.category.workflow, ticket.progress),
+    };
+  });
+
+  for (const workOrder of workOrders) {
+    items.push({
+      kind: "WORK_ORDER",
+      id: workOrder.id,
+      number: workOrder.woNumber,
+      title: workOrder.description,
+      customerName: workOrder.customer?.name ?? null,
+      maskedPhone: maskPhone(workOrder.customer?.phone),
+      categoryName: WORK_ORDER_TYPE_LABELS[workOrder.type] ?? workOrder.type,
+      tags: ["Work Order"],
+      status: workOrder.status,
+      priority: null,
+      engineerName: workOrder.technician?.name ?? null,
+      assignedAt: null,
+      scheduledAt: workOrder.scheduledAt?.toISOString() ?? null,
+      createdAt: workOrder.createdAt.toISOString(),
+      href: `/operations/work-orders/${workOrder.id}`,
+      workflow: null,
+    });
   }
-  for (const wo of workOrders) {
-    const key = keyFor(wo.technicianId, wo.technician?.name ?? null);
-    const row = board.get(key) ?? { name: wo.technician?.name ?? "Belum Ditugaskan", tickets: [], wos: [] };
-    row.wos.push(wo);
-    board.set(key, row);
-  }
-  const columns = [...board.entries()].sort(([a], [b]) =>
-    a === "__unassigned" ? -1 : b === "__unassigned" ? 1 : 0
-  );
+
+  const snapshot: TicketWallSnapshot = {
+    generatedAt: new Date().toISOString(),
+    from: range.fromInput,
+    to: range.toInput,
+    statusCounts,
+    totalCount: items.length,
+    items,
+  };
 
   return (
-    <div>
-      <PageHeader
-        title="Dispatch Board"
-        subtitle={`Papan kerja hari ini (${formatDateTime(startOfDay).split(",")[0]}) — tiket aktif & work order terjadwal per petugas. Refresh halaman untuk data terbaru.`}
-      />
-
-      {columns.length === 0 ? (
-        <div className="card"><EmptyState message="Tidak ada pekerjaan aktif hari ini. 🎉" /></div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {columns.map(([key, col]) => (
-            <div key={key} className="card p-4">
-              <h2 className={`mb-3 border-b border-slate-100 pb-2 text-sm font-semibold ${key === "__unassigned" ? "text-red-600" : ""}`}>
-                {col.name}
-                <span className="ml-2 text-xs font-normal text-slate-400">
-                  {col.tickets.length + col.wos.length} pekerjaan
-                </span>
-              </h2>
-              <ul className="space-y-2">
-                {col.tickets.map((t) => (
-                  <li key={t.id} className="rounded-lg border border-slate-100 px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <Link href={`/helpdesk/tickets/${t.id}`} className="font-mono text-xs text-brand-600 hover:underline">
-                        {t.ticketNumber}
-                      </Link>
-                      <Badge value={t.status} label={ctStatusLabel(t.status)} />
-                    </div>
-                    <p className="mt-0.5 truncate font-medium" title={t.title}>{t.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {t.customer.name} · {t.category.name}
-                      {t.scheduledAt ? ` · ${formatDateTime(t.scheduledAt).split(", ")[1] ?? ""}` : ""}
-                    </p>
-                  </li>
-                ))}
-                {col.wos.map((wo) => (
-                  <li key={wo.id} className="rounded-lg border border-teal-100 bg-teal-50/40 px-3 py-2 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <Link href={`/operations/work-orders/${wo.id}`} className="font-mono text-xs text-brand-600 hover:underline">
-                        {wo.woNumber}
-                      </Link>
-                      <Badge value={wo.status} label={statusLabel(wo.status)} />
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      WO · {wo.customer?.name ?? "-"}
-                      {wo.scheduledAt ? ` · ${formatDateTime(wo.scheduledAt).split(", ")[1] ?? ""}` : ""}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <TicketWall
+      snapshot={snapshot}
+      initialFilters={{
+        status: sp.status ?? "ALL",
+        category: sp.category ?? "ALL",
+        tag: sp.tag ?? "ALL",
+        engineer: sp.engineer ?? "ALL",
+      }}
+    />
   );
 }

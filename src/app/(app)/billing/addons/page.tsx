@@ -26,7 +26,7 @@ export default async function AddonsPage({
     <div>
       <PageHeader
         title="Addon Services"
-        subtitle="Layanan tambahan berbayar di luar paket (gap G13) — ditagih otomatis bersama tagihan bulanan."
+        subtitle="Layanan tambahan di luar paket yang ditagihkan otomatis bersama tagihan bulanan."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

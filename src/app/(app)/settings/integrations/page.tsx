@@ -33,7 +33,7 @@ export default async function IntegrationsPage({
     <div>
       <PageHeader
         title="Integrasi Eksternal"
-        subtitle="Registry adapter §56 — monitoring, billing, WhatsApp, dll. Secret disimpan di environment variable, bukan di sini (NFR §57)."
+        subtitle="Kelola konektor monitoring, billing, WhatsApp, dan layanan lain. Secret tetap dikelola melalui environment, bukan di halaman ini."
       />
       <Flash ok={sp.ok} error={sp.error} />
 

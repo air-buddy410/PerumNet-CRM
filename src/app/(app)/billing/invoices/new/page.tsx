@@ -72,7 +72,7 @@ export default async function NewInvoicePage({
           <p className="label">Baris Tagihan (isi deskripsi untuk baris yang dipakai)</p>
           <div className="space-y-2">
             {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="grid grid-cols-[8rem_1fr_4rem_8rem] gap-2">
+              <div key={i} className="crm-invoice-line-grid grid grid-cols-[8rem_1fr_4rem_8rem] gap-2">
                 <select name={`line${i}_kind`} className="input" defaultValue={i === 0 ? "INSTALLATION" : "ADJUSTMENT"}>
                   {INVOICE_LINE_KINDS.map(([v, l]) => (
                     <option key={v} value={v}>{l}</option>

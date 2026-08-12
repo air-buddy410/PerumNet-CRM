@@ -26,7 +26,7 @@ export default async function TemplatesPage({
     <div>
       <PageHeader
         title="Template Pesan"
-        subtitle="Template WA/email/app dengan placeholder {{nama}}, {{nomor}}, dst. — dirender saat pesan diantrikan (§9)."
+        subtitle="Template pesan untuk WhatsApp, email, dan aplikasi dengan placeholder yang diisi saat pesan masuk antrean."
       />
       <Flash ok={sp.ok} error={sp.error} />
 
