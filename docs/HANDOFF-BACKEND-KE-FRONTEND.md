@@ -37,6 +37,7 @@ ingatan.
 | 15 | **Unggah gambar tanda tangan + redirect kembali ke portal** (§20 PRD-mu) | action belum ada | ✅ siap — lihat §14 |
 | 16 | **Identitas terpusat aktif** — `provider` bisa bernilai `OIDC` | menunggu IdP | ✅ **sudah jalan** — lihat §15 |
 | 17 | **Tiga dependency dari PRD §24–25** — field HR di `profileView`, filter tanggal arsip, gambar tanda tangan IRF | kontrak belum ada | ✅ siap — lihat §16 |
+| 18 | **Sinkronisasi divisi → grup Authentik** | mesin belum ada | ⚠️ mesin siap, **halaman `/it/identity-groups` perlu dibuat** — lihat §17 |
 
 ---
 
@@ -653,6 +654,80 @@ mengembalikan role, nama, waktu, dan `attachmentId` sekaligus.
 
 Gambarnya disajikan lewat `/api/files/<attachmentId>` seperti lampiran lain,
 sudah terdaftar di daftar-putih izin.
+
+---
+
+## 17. Sinkronisasi divisi → grup Authentik (Fase 46) — PERLU HALAMAN
+
+Mesinnya sudah jadi dan teruji. **Halamannya belum ada, dan itu bagianmu** —
+`/it/identity-groups` masih 404, jadi ketiga action di bawah mengalihkan ke
+halaman yang belum ada sampai kamu membuatnya.
+
+Fitur ini juga masih menunggu **API token Authentik** dari PO. Sampai token itu
+diisi, loader mengembalikan `error` yang menjelaskan sebabnya — bukan gagal.
+
+**Rute:** `/it/identity-groups` · **Izin:** `integrations.manage` (it_manager)
+
+### Loader
+
+```ts
+import { previewGroupSync, loadAuthentikIntegration, authentikBlocker } from "@/lib/identity-groups";
+
+const cfg  = await loadAuthentikIntegration();   // AuthentikConfig | null
+const stop = authentikBlocker(cfg);              // string | null — alasan belum siap
+const view = await previewGroupSync();           // { plan, divisionNames, error }
+```
+
+`previewGroupSync()` **hanya membaca**. Tidak ada perubahan yang diterapkan —
+di CRM maupun di Authentik — sampai tombol Terapkan ditekan.
+
+### Bentuk `plan`
+
+```ts
+groupsToCreate : string[]          // grup yang belum ada di Authentik
+changes        : GroupChange[]     // { groupName, divisionCode, groupPk, add[], remove[] }
+warnings       : SyncWarning[]
+totalAdd       : number
+totalRemove    : number
+```
+
+`SyncWarning` punya tiga bentuk, labelnya di `WARNING_LABELS`:
+
+| `kind` | Artinya |
+|---|---|
+| `NO_IDP_USER` | Akun CRM berdivisi tetapi belum punya pengguna Authentik |
+| `UNKNOWN_MEMBER` | Anggota grup CRM yang bukan orang CRM — **dilaporkan, tidak dikeluarkan** |
+| `NO_DIVISION` | Akun CRM belum berdivisi |
+
+### Actions
+
+```
+saveAuthentikAction   field: baseUrl?, credentialRef, isEnabled, notes
+testAuthentikAction   tanpa field
+applyGroupSyncAction  tanpa field
+```
+
+### Empat hal yang tolong dipertahankan di UI
+
+1. **Jumlah `remove` ditampilkan menonjol, terpisah dari `add`.** Mengeluarkan
+   orang dari grup berarti mencabut aksesnya ke aplikasi yang bersandar pada
+   grup itu. Angka itu yang paling perlu dilihat sebelum menekan Terapkan.
+
+2. **`UNKNOWN_MEMBER` jangan ditampilkan sebagai kesalahan.** Akun layanan,
+   admin IdP, dan konsultan luar memang boleh ada di grup itu. Backend sengaja
+   tidak pernah mengeluarkannya; UI cukup memberitahu bahwa mereka ada.
+
+3. **Tidak ada field untuk token API.** Sama seperti `/it/mailserver`: kolomnya
+   berlabel "Nama Environment Variable", contoh `AUTHENTIK_API_TOKEN`. Kalau
+   nanti ada permintaan menambahkan field tokennya sendiri, tolak.
+
+4. **Tombol Terapkan tidak mengirim rencana.** `applyGroupSyncAction` menghitung
+   ulang rencananya di server. Rencana yang dikirim dari peramban bisa sudah
+   basi, dan menerapkan rencana basi berarti mengeluarkan orang berdasarkan
+   keadaan yang sudah tidak berlaku.
+
+Arahnya satu — divisi CRM → grup Authentik. Tidak ada fungsi di backend yang
+menulis `User.divisionId` dari grup, sama seperti tag mailcow pada Fase 44.
 
 ---
 
