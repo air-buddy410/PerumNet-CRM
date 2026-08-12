@@ -803,6 +803,7 @@ export const INTEGRATION_PROVIDERS = [
   ["PAYMENT_GATEWAY", "Payment Gateway"],
   ["WHATSAPP", "WhatsApp Gateway"],
   ["EMAIL", "Email/SMTP"],
+  ["MAILCOW", "mailcow (mailserver)"],
   ["GITHUB", "GitHub"],
   ["GITLAB", "GitLab"],
   ["SENTRY", "Sentry"],

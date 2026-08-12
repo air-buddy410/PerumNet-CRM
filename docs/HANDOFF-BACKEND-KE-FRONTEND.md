@@ -33,6 +33,7 @@ ingatan.
 | 11 | **Data pegawai lengkap** (alamat, shift, jenjang, masa kontrak) | field belum ada | ✅ siap — lihat §9 |
 | 12 | **Akun beku & pencairan** | konsep belum ada | ✅ siap — lihat §10 |
 | 13 | **Halaman arsip `/settings/trash`** | mekanisme belum ada | ✅ siap — lihat §11 |
+| 14 | **Setting mailserver + label divisi mailbox** | integrasi belum ada | ✅ siap — lihat §13 |
 
 ---
 
@@ -424,6 +425,49 @@ tampilannya.
 **Belum ada di navigasi.** `src/components/nav.tsx` sedang kamu pegang, jadi
 saya tidak menyentuhnya — tolong tambahkan sendiri entri `/settings/trash`
 (izin `archive.view`) di grup Pengaturan.
+
+---
+
+## 13. Mailserver & label divisi (Fase 43–44) — SIAP
+
+Dua halaman baru, keduanya sudah berfungsi. Yang mungkin ingin kamu perbaiki
+hanya tampilannya.
+
+| Halaman | Izin | Isi |
+|---|---|---|
+| `/it/mailserver` | `integrations.manage` (it_manager) | Setting sambungan + tombol Uji Koneksi |
+| `/it/mailboxes` | `access.manage` (it_support & it_manager) | Perbandingan CRM ↔ mailcow + tombol Terapkan |
+
+**Aturan yang tolong tidak dilanggar di `/it/mailserver`:**
+
+- Field `credentialRef` berlabel **"Nama Environment Variable"**, contoh
+  `MAILCOW_API_KEY`. **Tidak boleh ada field untuk API key-nya sendiri** —
+  `saveIntegration()` menolaknya, tapi jangan sampai UI mengundangnya.
+- Tombol Uji Koneksi memeriksa **versi DAN daftar mailbox**. Jangan
+  disederhanakan jadi cek versi saja: "terhubung" yang ternyata tidak bisa
+  membaca mailbox adalah kabar baik yang menyesatkan.
+
+**Aturan di `/it/mailboxes` — inilah wujud keputusan E2:**
+
+Arah datanya satu: **divisi ditetapkan di CRM, lalu didorong ke mailcow.** Tag
+mailcow tidak pernah mengubah divisi di CRM. Alasannya bukan kerapian — divisi
+menentukan siapa approver supervisor, jadi tag yang bisa mengubahnya berarti
+siapa pun yang bisa mengedit mailbox bisa mengubah siapa yang menyetujui.
+
+- **Divisi CRM dan tag mailcow ditampilkan berdampingan**, jangan digabung
+  jadi satu nilai. Yang perlu diputuskan orangnya justru selisihnya.
+- Baris berkeadaan `NO_DIVISION_IN_CRM` **tidak punya tombol Terapkan** —
+  mendorong "tanpa divisi" akan menghapus tag yang mungkin benar. Yang perlu
+  diperbaiki adalah data di CRM.
+- Mailbox bersama (`info@`, `billing@`) muncul sebagai "Tanpa akun CRM". Itu
+  bukan kesalahan; jangan diberi gaya peringatan.
+
+Keadaan yang mungkin muncul ada di `SYNC_STATE_LABELS` (`@/lib/mailbox-tag`):
+`MATCHED`, `TAG_MISMATCH`, `TAG_MISSING`, `TAG_AMBIGUOUS`,
+`NO_DIVISION_IN_CRM`, `NO_CRM_ACCOUNT`, `NO_MAILBOX`.
+
+**Belum ada di navigasi.** Sama seperti `/settings/trash` — `nav.tsx` kamu yang
+pegang. Tolong tambahkan `/it/mailserver` dan `/it/mailboxes` di grup IT.
 
 ---
 

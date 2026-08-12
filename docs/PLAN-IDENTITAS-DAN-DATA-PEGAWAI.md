@@ -63,9 +63,13 @@ hanya tiga: kolom pegawai tambahan, jembatan ke mailcow, dan penyedia identitas.
 | **E5** | ✅ **`STAFF \| LEADER` saja dulu.** Nilai lain ditambah manual belakangan. |
 | **E-IT** | ✅ **IT dan DevOps digabung** — dan memang sudah begitu sejak awal. Lihat §3.1. |
 | **E4** | ✅ **Kontrak habis → akun DIBEKUKAN, bukan langsung mati.** Setelah 3 bulan beku barulah diarsipkan. Lihat §4b. |
+| **E1** | ✅ **Authentik** sebagai penyedia identitas. Fase 45 dibentuk untuk OIDC Authentik. |
+| **E2** | ✅ **CRM sebagai editor tag.** Divisi ditetapkan di CRM lalu didorong ke mailcow; arah sebaliknya hanya dilaporkan, tidak pernah mengubah divisi. |
+| **T1** | ✅ **`ArchivedRecord` disetujui** sebagai mekanisme trash tunggal. |
 
-Masih terbuka: **E1** (penyedia identitas), **E2** (tag sebagai otoritas atau
-usulan).
+**Seluruh keputusan sudah diambil.** E2 ditegakkan secara struktural di
+`src/lib/mailserver.ts`: tidak ada satu pun fungsi di modul itu yang menulis
+`User.divisionId`, dan tes integrasi membuktikannya.
 
 ---
 
@@ -314,15 +318,15 @@ dikerjakan **setelah** 41–42 supaya pembekuan akun bisa langsung memakainya.
 |---|---|---|
 | **41** | **Data pegawai lengkap** — alamat, shift/non-shift, `jobLevel` (`STAFF\|LEADER`), `contractStartAt`/`contractEndAt`. Aditif murni, tanpa integrasi. | ✅ **SELESAI** |
 | **42** | **Kontrak berakhir → pembekuan akun** — worker Fase 27 memberi tahu H-30 & H-7, lalu membekukan akun saat jatuh tempo (§4b.1). Data pegawai tetap utuh. | ✅ **SELESAI** |
-| **43** | **Setting mailserver** — `Integration` provider `MAILCOW`, halaman `/it/mailserver`, uji koneksi. Belum menyentuh mailbox. | siap setelah 41 |
-| **44** | **Pengelolaan mailbox & label divisi** — daftar mailbox, tautkan ke pegawai, ubah divisi lewat dropdown, tulis tag ke mailcow, laporkan selisih. | 43 + **E2** |
-| **45** | **Adapter identitas (OIDC)** — login lewat IdP, akun dicocokkan lewat email, jalur lokal tetap ada sebagai cadangan darurat. | menunggu **E1** + VPS |
+| **43** | **Setting mailserver** — `Integration` provider `MAILCOW`, halaman `/it/mailserver`, uji koneksi. Belum menyentuh mailbox. | ✅ **SELESAI** |
+| **44** | **Pengelolaan mailbox & label divisi** — bandingkan CRM ↔ mailcow, dorong divisi CRM jadi tag, laporkan selisih. | ✅ **SELESAI** |
+| **45** | **Adapter identitas (OIDC/Authentik)** — login lewat IdP, akun dicocokkan lewat email, jalur lokal tetap ada sebagai cadangan darurat. | ⏸ menunggu Authentik berdiri — lihat §8b |
 | **46** | **Katalog & akses aplikasi lain** — captive portal dkk. terdaftar di `Application`, dengan daftar divisi yang boleh masuk; IdP menerbitkan grupnya. | 45 |
 | **47** | **Arsip & pemulihan terpadu** — `ArchivedRecord` + halaman `/settings/trash`, alasan wajib (§4b.3). Pengarsipan akun beku 3 bulan memakainya. | ✅ **SELESAI** |
 
-**Fase 41, 42, dan 47 sudah di branch `feat/employee-lifecycle-archive`.**
-Dijaga 230 tes unit + 104 tes integrasi. Sisanya (43–46) menunggu keputusan
-E1/E2 dan VPS lokal.
+**Fase 41, 42, 43, 44, dan 47 sudah selesai.** Dijaga 279 tes unit + 120 tes
+integrasi. Sisanya: **45** menunggu Authentik berdiri (lihat §8b), **46**
+mengikuti setelahnya.
 
 **Fase 41 tidak menunggu apa pun** — E3 dan E5 sudah kamu putuskan, jadi bisa
 mulai sekarang.
@@ -459,12 +463,44 @@ Tabel: jenis · label · alasan · diarsipkan oleh · tanggal · aksi Pulihkan.
 
 ## 8. Yang masih saya butuhkan
 
-| # | Pertanyaan | Kapan dibutuhkan |
-|---|---|---|
-| **E1** | Penyedia identitas: **Authentik** (saranku), Keycloak, atau tunda? | Fase 45, saat VPS lokal berdiri |
-| **E2** | Sinkronisasi mailcow: CRM sebagai editor tag (saranku) atau mailcow sebagai sumber? | Fase 44 |
-| **M1** | Versi mailcow yang kamu pasang — untuk memeriksa endpoint API mana yang tersedia | Fase 43 |
-| **T1** | Apakah `ArchivedRecord` (§4b.3) disetujui sebagai mekanisme trash tunggal? | Fase 47 |
+Seluruh keputusan sudah diambil. Yang tersisa bukan pertanyaan, melainkan
+perangkat yang harus berdiri lebih dulu.
+
+## 8b. Fase 45 — apa yang saya butuhkan dari Authentik
+
+Fase 45 **tidak saya kerjakan sekarang**, dan alasannya bukan waktu.
+
+Menambah jalur autentikasi baru adalah perubahan paling berkonsekuensi yang
+bisa dilakukan pada sistem ini: kalau salah, seluruh perusahaan terkunci di
+luar CRM. Menulisnya tanpa satu pun IdP untuk diuji berarti menyerahkan
+pembuktiannya ke hari pertama pemakaian — dan hari itu adalah hari yang paling
+buruk untuk menemukan kesalahan.
+
+**Yang perlu kamu siapkan di Authentik lebih dulu:**
+
+1. Buat **Application** + **Provider (OAuth2/OIDC)** untuk CRM.
+2. Redirect URI: `https://<alamat-crm>/api/auth/callback/oidc`
+3. Catat tiga hal ini dan kirim ke saya — **kecuali yang ketiga**:
+   - **Issuer URL** (mis. `https://auth.perumnet.id/application/o/perumnet-crm/`)
+   - **Client ID**
+   - **Client Secret** → jangan dikirim ke saya. Kamu sendiri yang menaruhnya
+     di `.env` server sebagai `OIDC_CLIENT_SECRET`. Yang masuk database tetap
+     hanya nama variabelnya, sama seperti API key mailcow dan kredensial
+     MikroTik.
+4. Di Authentik, pastikan scope `openid profile email` tersedia.
+
+Begitu Issuer URL dan Client ID ada, Fase 45 bisa saya kerjakan dan diuji
+sungguhan — bukan ditebak.
+
+**Yang sudah siap menyambutnya:** kerangka `AUTH_PROVIDER` (Fase 34),
+`passwordChangeAvailable()` yang sudah dihormati frontend, dan `sessionEpoch`
+untuk mencabut sesi. Nilai baru `"OIDC"` tinggal diperlakukan seperti
+`"MAILSERVER"`.
+
+**Cadangan darurat tetap wajib** (prinsip §7 no. 3): minimal satu akun lokal
+harus tetap bisa masuk saat Authentik mati, dan pemakaiannya tercatat di audit
+log. Tanpa itu, IdP yang tumbang berarti tidak ada seorang pun bisa masuk —
+termasuk untuk memperbaiki IdP-nya.
 
 ---
 
