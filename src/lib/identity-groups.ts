@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { notifyPermission } from "@/lib/notify";
+import { PERMISSIONS } from "@/lib/constants";
 import {
   listUsers,
   listGroups,
@@ -170,6 +172,62 @@ export async function previewGroupSync(fetcher?: Fetcher): Promise<GroupSyncPrev
       error: e instanceof Error ? e.message : String(e),
     };
   }
+}
+
+/**
+ * Penyapu harian: memeriksa selisih antara divisi CRM dan grup Authentik,
+ * lalu MEMBERI TAHU. Tidak menerapkan apa pun.
+ *
+ * Sengaja hanya memberi tahu, bukan menerapkan otomatis. Menerapkan berarti
+ * mengeluarkan orang dari grup — dan mencabut akses seseorang ke aplikasi lain
+ * adalah keputusan yang harus dilihat manusia lebih dulu, bukan efek samping
+ * cron yang berjalan jam tiga pagi. Pola yang sama dipakai `recovery.sla`:
+ * memperingatkan, tidak memvonis.
+ */
+export async function sweepGroupDrift(fetcher?: Fetcher): Promise<string> {
+  const cfg = await loadAuthentikIntegration();
+  const blocker = authentikBlocker(cfg);
+  // Integrasi yang belum disiapkan bukan kegagalan — jangan bunyikan alarm
+  // untuk sesuatu yang memang belum dipasang.
+  if (blocker || !cfg) return `dilewati: ${blocker}`;
+
+  const view = await previewGroupSync(fetcher);
+  if (!view.plan) {
+    await logEvent(cfg.id, "AUTHENTIK_DRIFT", "ERROR", view.error ?? "tanpa keterangan");
+    throw new Error(`Tidak bisa memeriksa selisih grup: ${view.error}`);
+  }
+
+  const p = view.plan;
+  const pending = p.groupsToCreate.length + p.totalAdd + p.totalRemove;
+  const summary =
+    `${p.groupsToCreate.length} grup belum ada · ${p.totalAdd} perlu ditambahkan · ` +
+    `${p.totalRemove} perlu dikeluarkan`;
+
+  if (pending === 0) return `selaras — ${summary}`;
+
+  // Ditahan supaya tidak berbunyi tiap hari untuk selisih yang sama; orang
+  // yang mengabaikan notifikasi berulang akan mengabaikan yang penting juga.
+  const link = "/it/identity-groups";
+  const since = new Date(Date.now() - 20 * 60 * 60 * 1000);
+  const recent = await db.notification.findFirst({
+    where: { type: "AUTHENTIK_GROUP_DRIFT", link, createdAt: { gte: since } },
+    select: { id: true },
+  });
+  if (!recent) {
+    await notifyPermission(PERMISSIONS.INTEGRATIONS_MANAGE, {
+      type: "AUTHENTIK_GROUP_DRIFT",
+      title: "Grup Authentik belum selaras dengan divisi CRM",
+      body:
+        `${summary}.` +
+        (p.totalRemove > 0
+          ? ` ${p.totalRemove} orang akan KEHILANGAN akses grup — periksa dulu sebelum menerapkan.`
+          : ""),
+      link,
+      module: "integrations",
+    });
+  }
+  await logEvent(cfg.id, "AUTHENTIK_DRIFT", "OK", summary);
+  return summary;
 }
 
 export interface ApplyResult {

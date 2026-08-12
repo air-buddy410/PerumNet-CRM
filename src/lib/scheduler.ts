@@ -6,6 +6,7 @@ import { runQueuedJobs, evaluateDunning } from "@/lib/dunning";
 import { sweepOverdueRecoveries } from "@/lib/device-recovery";
 import { applyDueTerminations } from "@/lib/termination";
 import { sweepEmploymentLifecycle } from "@/lib/employment-lifecycle";
+import { sweepGroupDrift } from "@/lib/identity-groups";
 
 // ── Penjadwal Pekerjaan Berkala (Fase 27) ───────────────────────
 //
@@ -188,6 +189,21 @@ export const TASKS: TaskDefinition[] = [
       // Sengaja TIDAK memakai assertNotTotalFailure: nol pembekuan adalah
       // keadaan normal dan sehat, bukan kegagalan.
       return { detail: r.summary };
+    },
+  },
+  {
+    code: "identity.group-drift",
+    name: "Periksa selisih grup Authentik",
+    description:
+      "Membandingkan divisi CRM dengan grup di penyedia identitas, lalu memberi tahu bila mulai berbeda. TIDAK menerapkan apa pun.",
+    defaultIntervalSec: 24 * 3600,
+    enabledByDefault: true,
+    run: async () => {
+      // Sengaja hanya memberi tahu. Mengeluarkan orang dari grup berarti
+      // mencabut aksesnya ke aplikasi lain, dan itu keputusan yang harus
+      // dilihat manusia — bukan efek samping cron jam tiga pagi.
+      const detail = await sweepGroupDrift();
+      return { detail };
     },
   },
   {

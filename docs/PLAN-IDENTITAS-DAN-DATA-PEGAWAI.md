@@ -321,7 +321,7 @@ dikerjakan **setelah** 41–42 supaya pembekuan akun bisa langsung memakainya.
 | **43** | **Setting mailserver** — `Integration` provider `MAILCOW`, halaman `/it/mailserver`, uji koneksi. Belum menyentuh mailbox. | ✅ **SELESAI** |
 | **44** | **Pengelolaan mailbox & label divisi** — bandingkan CRM ↔ mailcow, dorong divisi CRM jadi tag, laporkan selisih. | ✅ **SELESAI** |
 | **45** | **Adapter identitas (OIDC/Authentik)** — login lewat IdP, akun terikat `oidcSubject`, jalur darurat lokal dengan audit tersendiri. | ✅ **SELESAI** — diuji sungguhan terhadap Authentik di `auth.perumnet.id` |
-| **46** | **Katalog & akses aplikasi lain** — captive portal dkk. terdaftar di `Application`, dengan daftar divisi yang boleh masuk; IdP menerbitkan grupnya. | 45 |
+| **46** | **Divisi CRM diterbitkan jadi grup Authentik** (`crm-divisi-<kode>`), dengan pratinjau sebelum diterapkan. Aplikasi lain tinggal mengikat kebijakannya ke grup itu. | ✅ **SELESAI** — 10 grup dibuat di `auth.perumnet.id`, halaman menyusul |
 | **47** | **Arsip & pemulihan terpadu** — `ArchivedRecord` + halaman `/settings/trash`, alasan wajib (§4b.3). Pengarsipan akun beku 3 bulan memakainya. | ✅ **SELESAI** |
 
 **Fase 41, 42, 43, 44, dan 47 sudah selesai.** Dijaga 279 tes unit + 120 tes
