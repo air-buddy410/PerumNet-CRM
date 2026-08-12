@@ -85,10 +85,22 @@ async function call<T>(
     );
   }
 
-  if (res.status === 401 || res.status === 403) {
+  // 401 dan 403 SENGAJA dibedakan. Keduanya sama-sama "ditolak", tetapi
+  // perbaikannya berlawanan: yang satu soal nilai token, yang satu soal izin
+  // pemiliknya. Menyamakannya membuat orang memeriksa hal yang salah — dan
+  // itu benar-benar terjadi saat integrasi ini pertama kali dicoba.
+  if (res.status === 401) {
     throw new AuthentikError(
-      "Token API ditolak Authentik (401/403). Periksa nilainya dan izin service account-nya.",
-      res.status
+      `Token tidak dikenali Authentik (401). Periksa nilai ${opts.credentialRef} di .env — ` +
+        "kemungkinan tersalin sebagian atau tokennya sudah dihapus.",
+      401
+    );
+  }
+  if (res.status === 403) {
+    throw new AuthentikError(
+      `Token dikenali, tetapi pemiliknya tidak berizin untuk ${path} (403). ` +
+        "Beri service account izin authentik_core: view_user, view_group, add_group, change_group.",
+      403
     );
   }
   if (!res.ok) {
