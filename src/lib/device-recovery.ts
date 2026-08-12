@@ -147,8 +147,16 @@ export async function recordAttempt(
   if (!RECOVERY_ATTEMPT_RESULTS.some(([code]) => code === data.result)) {
     return { ok: false, error: "Hasil kunjungan tidak dikenal." };
   }
-  const dri = await db.deviceRecoveryIssue.findUnique({ where: { id: recoveryId } });
-  if (!dri) return { ok: false, error: "Penarikan tidak ditemukan." };
+  const dri = await db.deviceRecoveryIssue.findUnique({
+    where: { id: recoveryId },
+    include: { workOrder: { select: { technicianId: true } } },
+  });
+  // Fase 48 — cakupan teknisi. Tanpa ini, siapa pun yang memegang izin pickup
+  // bisa mencatat kunjungan pada penarikan milik teknisi lain hanya dengan
+  // tahu id-nya, dan catatan itu terbaca sebagai bukti dia yang datang.
+  if (!dri || !withinScope(user, dri)) {
+    return { ok: false, error: "Penarikan tidak ditemukan." };
+  }
   if (["COMPLETED", "CLOSED_UNRECOVERED"].includes(dri.status)) {
     return { ok: false, error: "Penarikan ini sudah selesai." };
   }
@@ -214,7 +222,13 @@ export async function pickupDevices(
     where: { id: recoveryId },
     include: { items: true, workOrder: { select: { id: true, technicianId: true, woNumber: true } } },
   });
-  if (!dri) return { ok: false, error: "Penarikan tidak ditemukan." };
+  // Fase 48 — cakupan teknisi. Ini yang paling berkonsekuensi di antara
+  // jalur tulis: perangkat masuk ke custody teknisi yang ditugaskan, sehingga
+  // tanpa pemeriksaan ini orang lain bisa memindahkan tanggung jawab barang
+  // ke pundak seseorang yang tidak pernah menyentuhnya.
+  if (!dri || !withinScope(user, dri)) {
+    return { ok: false, error: "Penarikan tidak ditemukan." };
+  }
   if (["COMPLETED", "CLOSED_UNRECOVERED"].includes(dri.status)) {
     return { ok: false, error: "Penarikan ini sudah selesai." };
   }
@@ -356,9 +370,14 @@ export async function confirmPhysicalDisconnect(
       termination: {
         select: { terminationNumber: true, subscriptionId: true, status: true },
       },
+      workOrder: { select: { technicianId: true } },
     },
   });
-  if (!dri) return { ok: false, error: "Penarikan tidak ditemukan." };
+  // Fase 48 — cakupan teknisi. Aksi ini MELEPAS port ODP: dijalankan pada
+  // penarikan orang lain, ia memutus sambungan pelanggan yang bukan urusannya.
+  if (!dri || !withinScope(user, dri)) {
+    return { ok: false, error: "Penarikan tidak ditemukan." };
+  }
   if (dri.physicalDisconnectedAt) {
     return { ok: false, error: "Pemutusan fisik sudah dikonfirmasi sebelumnya." };
   }
@@ -946,6 +965,30 @@ async function notifiedRecently(type: string, link: string, hours = 24): Promise
  * lebih dulu, dan tetap terbedakan dari foto penarikan karena entityType-nya
  * berbeda.
  */
+// ── Cakupan teknisi, dipakai bersama (Fase 40 + 48) ─────────────
+// Aturan §9.2 FR-PICK-002 ("teknisi hanya melihat penarikan yang ditugaskan
+// kepadanya") ditegakkan di lapisan layanan. Bentuk select dan pemeriksanya
+// ditulis SEKALI di sini supaya jalur baru tidak bisa lupa memakainya —
+// tepat itu yang terjadi pada jalur unggah sampai Fase 48.
+
+const RECOVERY_SCOPE_SELECT = {
+  assigneeId: true,
+  workOrder: { select: { technicianId: true } },
+} as const;
+
+function withinScope(
+  user: CurrentUser,
+  recovery: { assigneeId: string | null; workOrder: { technicianId: string | null } }
+): boolean {
+  return canViewRecovery(
+    { id: user.id, permissions: user.permissions },
+    {
+      assigneeId: recovery.assigneeId,
+      workOrderTechnicianId: recovery.workOrder.technicianId,
+    }
+  );
+}
+
 const EVIDENCE_KINDS = {
   ATTEMPT: {
     entityType: "DeviceRecoveryAttempt",
@@ -985,11 +1028,28 @@ export async function attachRecoveryEvidence(
     return { ok: false, error: "Anda tidak memiliki izin melampirkan bukti ini." };
   }
 
-  const exists =
+  // Fase 48 — cakupan teknisi ditegakkan juga di jalur UNGGAH, bukan hanya
+  // pada jalur baca (Fase 40). Sebelumnya izin `device_recovery.pickup` sudah
+  // cukup untuk melampirkan berkas pada penarikan MILIK TEKNISI LAIN: cukup
+  // tahu id-nya. Berkas yang menempel pada dokumen orang lain bukan sekadar
+  // sampah — ia terbaca sebagai bukti lapangan atas pekerjaan yang bukan
+  // miliknya.
+  const parent =
     spec.anchor === "attempt"
-      ? await db.deviceRecoveryAttempt.findUnique({ where: { id: entityId }, select: { id: true } })
-      : await db.deviceRecoveryItem.findUnique({ where: { id: entityId }, select: { id: true } });
-  if (!exists) return { ok: false, error: "Data yang mau dilampiri tidak ditemukan." };
+      ? await db.deviceRecoveryAttempt.findUnique({
+          where: { id: entityId },
+          select: { id: true, recovery: { select: RECOVERY_SCOPE_SELECT } },
+        })
+      : await db.deviceRecoveryItem.findUnique({
+          where: { id: entityId },
+          select: { id: true, recovery: { select: RECOVERY_SCOPE_SELECT } },
+        });
+  if (!parent) return { ok: false, error: "Data yang mau dilampiri tidak ditemukan." };
+  if (!withinScope(user, parent.recovery)) {
+    // Pesan sama dengan "tidak ditemukan" supaya penebak id tidak bisa
+    // memastikan penarikan itu ada.
+    return { ok: false, error: "Data yang mau dilampiri tidak ditemukan." };
+  }
 
   const saved = await saveAttachment(file, spec.entityType, entityId, user.id);
   if (!saved.ok) return saved;
@@ -1019,6 +1079,58 @@ export async function recoveryEvidence(kind: EvidenceKind, entityId: string) {
 export const RECOVERY_SIGNATURE_ROLES = ["CUSTOMER", "TECHNICIAN"] as const;
 export const RECOVERY_PICKUP_DOCTYPE = "RECOVERY_PICKUP";
 
+/// entityType lampiran gambar tanda tangan. Sengaja BERBEDA dari bukti foto:
+/// gambar tanda tangan memuat coretan tangan pelanggan, dan memisahkannya
+/// membuat izin penyajiannya bisa dibedakan kelak tanpa mengubah data lama.
+export const RECOVERY_SIGNATURE_ENTITY = "DeviceRecoverySignature";
+
+/**
+ * Menyimpan GAMBAR tanda tangan dan mengembalikan attachmentId-nya (Fase 48).
+ *
+ * Diminta frontend (PRD-FRONTEND §20): kanvas tanda tangan menghasilkan berkas
+ * gambar yang harus diunggah lebih dulu, baru id-nya dipakai signRecoveryPickup.
+ *
+ * Dipisahkan dari attachRecoveryEvidence karena jangkarnya berbeda — tanda
+ * tangan menempel pada PENARIKANNYA, bukan pada satu kunjungan atau satu
+ * perangkat. Satu penarikan bisa punya dua tanda tangan (pelanggan dan
+ * teknisi), dan keduanya berlaku untuk seluruh dokumen.
+ *
+ * Fungsi ini TIDAK menjadikan gambar wajib. Nama penanda tangan tetap satu-
+ * satunya yang wajib, karena itulah yang masih terbaca bertahun-tahun kemudian
+ * ketika berkas gambarnya sudah tidak bisa dibuka.
+ */
+export async function saveRecoverySignatureImage(
+  user: CurrentUser,
+  recoveryId: string,
+  file: File
+): Promise<Result> {
+  if (!user.permissions.has(PERMISSIONS.RECOVERY_PICKUP)) {
+    return { ok: false, error: "Anda tidak memiliki izin menyimpan tanda tangan." };
+  }
+  const dri = await db.deviceRecoveryIssue.findUnique({
+    where: { id: recoveryId },
+    select: { id: true, recoveryNumber: true, ...RECOVERY_SCOPE_SELECT },
+  });
+  // Pesan yang sama untuk "tidak ada" dan "bukan milikmu" — membedakannya
+  // memberi tahu penebak id bahwa penarikan itu memang ada.
+  if (!dri || !withinScope(user, dri)) {
+    return { ok: false, error: "Penarikan tidak ditemukan." };
+  }
+
+  const saved = await saveAttachment(file, RECOVERY_SIGNATURE_ENTITY, recoveryId, user.id);
+  if (!saved.ok) return saved;
+
+  await logAudit({
+    userId: user.id,
+    action: "RECOVERY_SIGNATURE_UPLOAD",
+    module: "device_recovery",
+    entityType: RECOVERY_SIGNATURE_ENTITY,
+    entityId: recoveryId,
+    description: `${dri.recoveryNumber}: gambar tanda tangan diunggah (${file.name})`,
+  });
+  return { ok: true, id: saved.id };
+}
+
 /**
  * Menyimpan tanda tangan serah terima di lokasi pelanggan.
  *
@@ -1044,9 +1156,14 @@ export async function signRecoveryPickup(
   }
   const dri = await db.deviceRecoveryIssue.findUnique({
     where: { id: recoveryId },
-    select: { id: true, recoveryNumber: true },
+    select: { id: true, recoveryNumber: true, ...RECOVERY_SCOPE_SELECT },
   });
-  if (!dri) return { ok: false, error: "Penarikan tidak ditemukan." };
+  // Fase 48 — cakupan teknisi. Tanda tangan adalah pernyataan serah terima;
+  // membubuhkannya pada penarikan orang lain berarti membuat bukti atas
+  // peristiwa yang tidak dia saksikan.
+  if (!dri || !withinScope(user, dri)) {
+    return { ok: false, error: "Penarikan tidak ditemukan." };
+  }
 
   const signature = await db.documentSignature.upsert({
     where: {

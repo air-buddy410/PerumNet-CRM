@@ -24,6 +24,11 @@ const ENTITY_PERMISSION: Record<string, string> = {
   DeviceRecoveryAttempt: PERMISSIONS.INVENTORY_VIEW,
   DeviceRecoveryItem: PERMISSIONS.INVENTORY_VIEW,
   DeviceInspectionPhoto: PERMISSIONS.INVENTORY_VIEW,
+  // Fase 48 — gambar tanda tangan serah terima. Didaftarkan terpisah dari
+  // bukti foto justru karena isinya berbeda sifatnya (coretan tangan
+  // pelanggan), sehingga izinnya bisa diperketat kelak tanpa menyentuh
+  // lampiran lama.
+  DeviceRecoverySignature: PERMISSIONS.INVENTORY_VIEW,
 };
 
 export async function GET(
