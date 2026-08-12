@@ -186,18 +186,24 @@ export default async function AppLayout({
   }
 
   if (can(PERMISSIONS.IT_VIEW)) {
-    groups.push({
-      title: "IT/DevOps",
-      items: [
-        { href: "/it/tickets", label: "IT Tickets" },
-        { href: "/it/access", label: "Access" },
-        { href: "/it/deployments", label: "Deployments" },
-        { href: "/it/backups", label: "Backup & DR" },
-        { href: "/it/servers", label: "Servers" },
-        { href: "/it/applications", label: "Applications" },
-        { href: "/it/assets", label: "Domain & License" },
-      ],
-    });
+    const itItems = [
+      { href: "/it/tickets", label: "IT Tickets" },
+      { href: "/it/access", label: "Access" },
+      { href: "/it/deployments", label: "Deployments" },
+      { href: "/it/backups", label: "Backup & DR" },
+      { href: "/it/servers", label: "Servers" },
+      { href: "/it/applications", label: "Applications" },
+      { href: "/it/assets", label: "Domain & License" },
+    ];
+    // Fase 43–44. Disaring per-izin, bukan ikut `it.view` seperti item di
+    // atas: `developer` memegang it.view tetapi tidak memegang keduanya, dan
+    // tautan yang berujung "akses ditolak" lebih membingungkan daripada
+    // tautan yang memang tidak ada.
+    if (can(PERMISSIONS.ACCESS_MANAGE))
+      itItems.push({ href: "/it/mailboxes", label: "Mailbox & Divisi" });
+    if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
+      itItems.push({ href: "/it/mailserver", label: "Mailserver" });
+    groups.push({ title: "IT/DevOps", items: itItems });
   } else {
     // Service desk terbuka untuk seluruh staff (PRD §39–40).
     const supportItems = [];
@@ -261,6 +267,11 @@ export default async function AppLayout({
   }
   if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
     settingItems.push({ href: "/settings/integrations", label: "Integrasi" });
+  // Fase 47 — arsip lintas modul. Diletakkan paling bawah karena jarang
+  // dibuka, tetapi HARUS ada jalan masuknya: tanpa entri ini satu-satunya
+  // cara memulihkan baris yang diarsipkan adalah mengetik URL-nya.
+  if (can(PERMISSIONS.ARCHIVE_VIEW))
+    settingItems.push({ href: "/settings/trash", label: "Arsip" });
   if (settingItems.length)
     groups.push({ title: "Pengaturan", items: settingItems });
 

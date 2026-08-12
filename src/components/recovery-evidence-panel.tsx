@@ -28,6 +28,7 @@ export function RecoveryEvidencePanel({
   title,
   items,
   canUpload = true,
+  origin,
 }: {
   action: FormAction;
   recoveryId: string;
@@ -36,6 +37,7 @@ export function RecoveryEvidencePanel({
   title: string;
   items: RecoveryEvidenceItem[];
   canUpload?: boolean;
+  origin?: "portal" | "backoffice";
 }) {
   return (
     <section className="recovery-evidence-panel" aria-label={title}>
@@ -57,6 +59,7 @@ export function RecoveryEvidencePanel({
           <input type="hidden" name="recoveryId" value={recoveryId} />
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="entityId" value={entityId} />
+          {origin && <input type="hidden" name="origin" value={origin} />}
           <label className="label" htmlFor={`evidence-${kind}-${entityId}`}>Tambah bukti</label>
           <input id={`evidence-${kind}-${entityId}`} name="file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" capture="environment" required />
           <small>JPG, PNG, WebP, atau PDF · maksimal 5 MB.</small>

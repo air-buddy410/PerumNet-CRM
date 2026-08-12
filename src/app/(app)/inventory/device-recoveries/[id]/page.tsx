@@ -298,13 +298,15 @@ export default async function RecoveryDetailPage({
               </ul>
             )}
             {can(PERMISSIONS.RECOVERY_PICKUP) ? (
-              <form action={signPickupAction} className="space-y-3">
+              <form action={signPickupAction} encType="multipart/form-data" className="space-y-3">
                 <input type="hidden" name="recoveryId" value={dri.id} />
                 <select name="role" className="input" defaultValue="CUSTOMER">
                   {RECOVERY_SIGNATURE_ROLES.map((role) => <option key={role} value={role}>{role === "CUSTOMER" ? "Pelanggan" : "Teknisi"}</option>)}
                 </select>
                 <input name="signerName" className="input" placeholder="Nama penanda tangan" required />
-                <p className="text-xs text-slate-500">Upload gambar tanda tangan belum tersedia pada kontrak saat ini.</p>
+                <label className="label" htmlFor="backoffice-signature-file">Gambar tanda tangan (opsional)</label>
+                <input id="backoffice-signature-file" name="signatureFile" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" />
+                <p className="text-xs text-slate-500">Nama tetap wajib. Gambar PNG/JPG dapat ditambahkan bila tersedia.</p>
                 <button type="submit" className="btn-secondary w-full justify-center">Simpan tanda tangan</button>
               </form>
             ) : signatures.length === 0 ? <p className="text-xs text-slate-500">Belum ada tanda tangan.</p> : null}

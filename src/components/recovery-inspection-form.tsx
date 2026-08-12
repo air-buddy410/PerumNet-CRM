@@ -13,6 +13,7 @@ export function RecoveryInspectionForm({
   checklist,
   decisions,
   statusLabel,
+  origin,
 }: {
   action: FormAction;
   recoveryId: string;
@@ -20,6 +21,7 @@ export function RecoveryInspectionForm({
   checklist: ReadonlyArray<InspectionChecklistItem>;
   decisions: readonly string[];
   statusLabel: (value: string) => string;
+  origin?: "portal" | "backoffice";
 }) {
   const [answers, setAnswers] = useState<Record<string, "on" | "off">>({});
   const [decision, setDecision] = useState("LAYAK_DIGUNAKAN");
@@ -34,6 +36,7 @@ export function RecoveryInspectionForm({
     <form action={action} onSubmit={handleSubmit} className="mt-3 space-y-4">
       <input type="hidden" name="recoveryId" value={recoveryId} />
       <input type="hidden" name="itemId" value={itemId} />
+      {origin && <input type="hidden" name="origin" value={origin} />}
       <div className="grid gap-3 sm:grid-cols-2">
         {checklist.map(([key, label]) => {
           const value = answers[key];

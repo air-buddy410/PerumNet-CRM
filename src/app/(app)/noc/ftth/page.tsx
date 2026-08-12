@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, OLT_VENDORS, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { FtthCoordinatePicker } from "@/components/ftth-coordinate-picker";
 import { saveOltAction, savePonPortAction, saveOdpAction, reconcilePortsAction } from "./actions";
 
 export const metadata = { title: "FTTH — OLT, PON & ODP" };
@@ -196,15 +197,11 @@ export default async function FtthPage({
                     <label className="label" htmlFor="opticPowerDbm">Optic Power (dBm)</label>
                     <input id="opticPowerDbm" name="opticPowerDbm" type="number" step="0.01" className="input" defaultValue={editRow?.opticPowerDbm ?? ""} />
                   </div>
-                  <div>
-                    <label className="label" htmlFor="latitude">Latitude</label>
-                    <input id="latitude" name="latitude" type="number" step="any" className="input" defaultValue={editRow?.latitude ?? ""} />
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="longitude">Longitude</label>
-                    <input id="longitude" name="longitude" type="number" step="any" className="input" defaultValue={editRow?.longitude ?? ""} />
-                  </div>
                 </div>
+                <FtthCoordinatePicker
+                  initialLatitude={editRow?.latitude}
+                  initialLongitude={editRow?.longitude}
+                />
                 <div>
                   <label className="label" htmlFor="status">Status</label>
                   <select id="status" name="status" className="input" defaultValue={editRow?.status ?? "ACTIVE"}>

@@ -12,13 +12,15 @@ import type { LinkStatus, NetworkMapData, OccupancyLevel } from "@/lib/noc-map";
 
 const MAP_STYLE_URL = "/maps/style.json";
 const NETWORK_SOURCE_ID = "perumnet-network-overlay";
+const ROUTE_LAYER_ID = "perumnet-fiber-routes";
 const CUSTOMER_LINK_LAYER_ID = "perumnet-customer-links";
 const CASCADE_LAYER_ID = "perumnet-odp-cascades";
+const SITE_LAYER_ID = "perumnet-network-sites";
 const CUSTOMER_LAYER_ID = "perumnet-customers";
 const ODP_LAYER_ID = "perumnet-odps";
 
 type NetworkFeatureProperties = {
-  kind: "odp" | "customer" | "customer-link" | "cascade";
+  kind: "site" | "route" | "odp" | "customer" | "customer-link" | "cascade";
   id: string;
   color: string;
   label: string;
@@ -26,6 +28,10 @@ type NetworkFeatureProperties = {
   used?: number;
   capacity?: number;
   occupancyLabel?: string;
+  role?: string;
+  siteType?: string;
+  routeType?: string;
+  lengthMeters?: number;
   serviceNumber?: string;
   customerName?: string;
   portNumber?: number | null;
@@ -44,6 +50,8 @@ type NetworkMapPalette = {
   occupancy: Record<OccupancyLevel, string>;
   subscription: Record<string, string>;
   linkStatus: Record<LinkStatus, string>;
+  site: Record<string, string>;
+  route: Record<string, string>;
 };
 
 type NetworkMapProps = {
@@ -70,6 +78,37 @@ function buildOverlay(
   const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
   const features: NetworkFeatureCollection["features"] = [];
 
+  for (const site of data.sites) {
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [site.longitude, site.latitude] },
+      properties: {
+        kind: "site",
+        id: site.id,
+        color: palette.site[site.type] ?? palette.site.DEFAULT ?? "#0e7490",
+        label: site.name,
+        status: site.status,
+        siteType: site.type,
+      },
+    });
+  }
+
+  for (const route of data.routes) {
+    if (route.coordinates.length < 2) continue;
+    features.push({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates: route.coordinates },
+      properties: {
+        kind: "route",
+        id: route.id,
+        color: palette.route[route.routeType] ?? palette.route.DEFAULT ?? "#64748b",
+        label: route.name,
+        routeType: route.routeType,
+        lengthMeters: route.lengthMeters,
+      },
+    });
+  }
+
   for (const odp of data.odps) {
     features.push({
       type: "Feature",
@@ -83,6 +122,7 @@ function buildOverlay(
         used: odp.used,
         capacity: odp.capacity,
         occupancyLabel: occupancyLabels[odp.occupancy],
+        role: odp.role,
         selected: odp.id === selectedOdpId,
       },
     });
@@ -170,8 +210,14 @@ function createPopupContent(
   root.append(heading);
 
   const detail = document.createElement("p");
-  if (properties.kind === "odp") {
-    detail.textContent = `${featureText(properties, "used", "0")}/${featureText(properties, "capacity", "0")} port · ${featureText(properties, "occupancyLabel")}`;
+  if (properties.kind === "site") {
+    detail.textContent = `${featureText(properties, "siteType")} · status ${featureText(properties, "status")}`;
+  } else if (properties.kind === "route") {
+    const length = Number(properties.lengthMeters);
+    const lengthLabel = Number.isFinite(length) ? `${Math.round(length)} m (perkiraan)` : "panjang belum tersedia";
+    detail.textContent = `${featureText(properties, "routeType")} · ${lengthLabel}`;
+  } else if (properties.kind === "odp") {
+    detail.textContent = `${featureText(properties, "role", "ODP")} · ${featureText(properties, "used", "0")}/${featureText(properties, "capacity", "0")} port · ${featureText(properties, "occupancyLabel")}`;
   } else {
     const lastSeen = featureText(properties, "lastSeenAt", "belum tersedia");
     detail.textContent = `${featureText(properties, "serviceNumber")} · subscription ${featureText(properties, "status")} · link ${featureText(properties, "linkStatus", "UNKNOWN")}`;
@@ -206,6 +252,25 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
   });
 
   map.addLayer({
+    id: ROUTE_LAYER_ID,
+    type: "line",
+    source: NETWORK_SOURCE_ID,
+    filter: ["==", ["get", "kind"], "route"],
+    paint: {
+      "line-color": ["get", "color"],
+      "line-opacity": 0.84,
+      "line-width": [
+        "match",
+        ["get", "routeType"],
+        "FEEDER", 3.4,
+        "DISTRIBUTION", 2.5,
+        "DROP", 1.4,
+        1.8,
+      ],
+    },
+  });
+
+  map.addLayer({
     id: CUSTOMER_LINK_LAYER_ID,
     type: "line",
     source: NETWORK_SOURCE_ID,
@@ -231,6 +296,19 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
   });
 
   map.addLayer({
+    id: SITE_LAYER_ID,
+    type: "circle",
+    source: NETWORK_SOURCE_ID,
+    filter: ["==", ["get", "kind"], "site"],
+    paint: {
+      "circle-color": ["get", "color"],
+      "circle-radius": ["match", ["get", "siteType"], "POP", 8, "MINI_POP", 6, 7],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 2,
+    },
+  });
+
+  map.addLayer({
     id: CUSTOMER_LAYER_ID,
     type: "circle",
     source: NETWORK_SOURCE_ID,
@@ -250,13 +328,15 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
     source: NETWORK_SOURCE_ID,
     filter: ["==", ["get", "kind"], "odp"],
     paint: {
-      "circle-color": ["get", "color"],
+      "circle-color": ["case", ["==", ["get", "role"], "MS"], "#f59e0b", ["get", "color"]],
       "circle-opacity": 0.98,
-      "circle-radius": 8,
+      "circle-radius": ["case", ["==", ["get", "role"], "MS"], 10, 8],
       "circle-stroke-color": [
         "case",
         ["boolean", ["get", "selected"], false],
         "#0f172a",
+        ["==", ["get", "role"], "MS"],
+        "#f59e0b",
         "#ffffff",
       ],
       "circle-stroke-width": [
@@ -411,6 +491,8 @@ export function NetworkMap({
         };
 
         map.on("click", ODP_LAYER_ID, showPopup);
+        map.on("click", SITE_LAYER_ID, showPopup);
+        map.on("click", ROUTE_LAYER_ID, showPopup);
         map.on("click", CUSTOMER_LAYER_ID, showPopup);
         map.on("mouseenter", ODP_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -418,10 +500,22 @@ export function NetworkMap({
         map.on("mouseenter", CUSTOMER_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
+        map.on("mouseenter", SITE_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseenter", ROUTE_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
         map.on("mouseleave", ODP_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
         map.on("mouseleave", CUSTOMER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseleave", SITE_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseleave", ROUTE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
       } catch (error) {
