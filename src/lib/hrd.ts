@@ -126,6 +126,8 @@ export async function saveEmployee(
     address?: string | null;
     workPattern?: string;
     jobLevel?: string;
+    /** Divisi menurut HRD. TIDAK menyentuh User.divisionId — lihat schema. */
+    divisionId?: string | null;
     contractStartAt?: Date | null;
     contractEndAt?: Date | null;
   }
@@ -201,6 +203,7 @@ export async function saveEmployee(
     address: data.address?.trim() || null,
     workPattern,
     jobLevel,
+    divisionId: data.divisionId || null,
     contractStartAt: data.contractStartAt ?? null,
     contractEndAt: data.contractEndAt ?? null,
   };

@@ -35,7 +35,16 @@ COLS = [
     ("NIK Atasan",          14, False, "NIK atasan langsung, harus ada di daftar ini"),
     ("Email Akun CRM",      26, False, "Kosongkan bila belum punya akun sistem"),
     ("Aktif",               9,  True,  "Ya atau Tidak"),
+    ("Divisi",              20, True,  "Divisi tempat orang ini bekerja"),
     ("Cek",                 40, False, "Terisi otomatis - jangan diketik"),
+]
+
+# Nama divisi HARUS sama persis dengan tabel Division di database. Kalau daftar
+# di sana berubah, daftar ini ikut diperbarui — impor mencocokkannya per huruf,
+# dan nama yang tidak dikenal DITOLAK, bukan dikosongkan diam-diam.
+DIVISI = [
+    "Customer Service", "Finance", "IT/DevOps", "Management", "Marketing",
+    "NOC", "Operational", "Project", "Sales", "Warehouse",
 ]
 
 HDR_ROW = 3
@@ -76,7 +85,7 @@ ws.row_dimensions[HDR_ROW].height = 30
 EXAMPLE = [
     "", "Teguh Santoso", "Teknisi Lapangan", "Staff", "Kontrak",
     "Shift", "2026-01-06", "2026-01-06", "2026-12-31",
-    "Jl. Melati No. 7, Denpasar", "", "teguh@perumnet.id", "Ya",
+    "Jl. Melati No. 7, Denpasar", "", "teguh@perumnet.id", "Ya", "Operational",
 ]
 for i, val in enumerate(EXAMPLE, start=1):
     c = ws.cell(row=EX_ROW, column=i, value=val)
@@ -119,6 +128,8 @@ dropdown("E", ["Karyawan Tetap", "Paruh Waktu", "Kontrak", "Masa Percobaan"],
 dropdown("F", ["Non-Shift", "Shift"], "Pola kerja tidak dikenal",
          "Pilih Non-Shift atau Shift dari daftar.")
 dropdown("M", ["Ya", "Tidak"], "Isian tidak dikenal", "Pilih Ya atau Tidak.")
+dropdown("N", DIVISI, "Divisi tidak dikenal",
+         "Pilih divisi dari daftar. Nama di luar daftar akan ditolak saat impor.")
 
 # ── Kolom Cek ───────────────────────────────────────────────────
 # Menangkap tiga kesalahan yang paling sering terjadi dan paling menyusahkan
@@ -126,9 +137,9 @@ dropdown("M", ["Ya", "Tidak"], "Isian tidak dikenal", "Pilih Ya atau Tidak.")
 # kontrak terisi pada jenis yang bukan Kontrak (tanggal nyasar itu yang
 # dipakai penyapu untuk membekukan akun).
 for r in range(EX_ROW, LAST + 1):
-    ws[f"N{r}"] = (
+    ws[f"O{r}"] = (
         f'=IF(B{r}="","",'
-        f'IF(OR(D{r}="",E{r}="",F{r}="",G{r}="",M{r}=""),'
+        f'IF(OR(D{r}="",E{r}="",F{r}="",G{r}="",M{r}="",N{r}=""),'
         f'"PERIKSA: ada kolom wajib yang kosong",'
         f'IF(AND(E{r}="Kontrak",I{r}=""),'
         f'"PERIKSA: Kontrak wajib punya Kontrak Berakhir",'
@@ -138,8 +149,8 @@ for r in range(EX_ROW, LAST + 1):
         f'"PERIKSA: Kontrak Berakhir harus setelah Kontrak Mulai",'
         f'"OK")))))'
     )
-    ws[f"N{r}"].font = Font(name=FONT, size=9, color="C00000")
-    ws[f"N{r}"].border = BORDER
+    ws[f"O{r}"].font = Font(name=FONT, size=9, color="C00000")
+    ws[f"O{r}"].border = BORDER
 
 ws.freeze_panes = "A4"
 
@@ -167,7 +178,10 @@ guide += [
     ("Hal yang sering keliru", ""),
     ("Tanggal kontrak", "HANYA diisi bila Status Kepegawaian = Kontrak. Pada jenis lain harus KOSONG."),
     ("", "Alasannya: sistem membekukan akun otomatis saat tanggal kontrak lewat. Tanggal yang tertinggal pada karyawan tetap akan membekukan orang yang masih bekerja."),
-    ("NIK Atasan", "Diisi NIK, bukan nama. Atasan harus ada di daftar ini atau sudah ada di sistem."),
+    ("NIK Atasan", "Boleh diisi NIK, boleh juga NAMA LENGKAP persis seperti tertulis di kolom Nama Lengkap. Nama dipakai karena pada pengisian pertama belum ada seorang pun yang punya NIK."),
+    ("", "Kalau ada DUA orang bernama sama di file ini, rujukan namanya ditolak dan diminta memakai NIK - bukan diambil salah satu."),
+    ("Divisi", "Pilih dari dropdown. Ini yang menentukan pegawai masuk kelompok mana, dan dipakai untuk melabeli kotak email serta akses ke aplikasi PerumNet lainnya."),
+    ("", "Divisi BUKAN hak akses. Peran dan kewenangan di CRM tetap ditetapkan IT, tidak bisa ditentukan dari file ini."),
     ("Email Akun CRM", "Hanya untuk yang akan punya akun sistem. Alamatnya harus sama persis dengan email di Authentik, kalau tidak yang bersangkutan tidak bisa login."),
     ("Format tanggal", "YYYY-MM-DD, contoh 2026-01-06."),
     ("NIK", "KOSONGKAN saja. Sistem menerbitkannya berurutan mulai 10000001 - delapan angka diawali 1, dan dijamin tidak kembar walau dua orang menyimpan bersamaan."),

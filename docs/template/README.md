@@ -57,6 +57,30 @@ berkas.
 **Satu baris bermasalah menahan seluruh berkas.** Tidak ada impor separuh
 jalan: impor separuh jauh lebih sulit dibereskan daripada impor yang ditolak.
 
+## Kolom Divisi (ditambahkan Fase 52)
+
+Nama divisi di dropdown **harus sama persis** dengan tabel `Division` di
+database. Kalau daftar di sana berubah, `DIVISI` di
+`scripts/_buat-template-pegawai.py` ikut diperbarui — impor mencocokkannya per
+huruf, dan nama yang tidak dikenal **ditolak**, bukan dikosongkan diam-diam.
+Kode divisi (`MKT`, `NOC`, …) juga diterima.
+
+**Berkas yang sudah terlanjur diisi tanpa kolom ini tetap bisa diimpor.**
+Importer mencocokkan kolom lewat judulnya, jadi HRD cukup menambahkan satu
+kolom berjudul `Divisi` di mana saja — tidak perlu mengunduh ulang. Tapi kalau
+kolomnya ada dan ada sel yang kosong, itu **ditolak**: sel kosong berarti
+seseorang terlewat, dan pegawai tanpa divisi tidak bisa dibuatkan akun maupun
+dilabeli kotak emailnya.
+
+**Divisi bukan hak akses.** Ia menentukan kelompok, label kotak surat, dan
+akses ke aplikasi PerumNet lain. Peran serta kewenangan di CRM tetap ditetapkan
+IT — tidak bisa ditentukan dari berkas ini. Kalau bisa, spreadsheet berubah
+menjadi penentu kewenangan.
+
+Divisi dari berkas disimpan di `Employee.divisionId` (fakta kepegawaian) dan
+**tidak pernah** menimpa `User.divisionId` (yang dibaca mesin akses). Perbedaan
+keduanya dilaporkan sebagai catatan di pratinjau, bukan diselaraskan diam-diam.
+
 ### Cara membuat ulang
 
 `scripts/_buat-template-pegawai.py` (butuh `openpyxl`). Templatenya sendiri

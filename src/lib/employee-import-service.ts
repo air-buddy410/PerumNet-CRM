@@ -97,6 +97,20 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
   const issues: RowIssue[] = [...parsed.issues];
   const rows = parsed.rows;
 
+  // Daftar divisi dibaca sekali di muka: isinya DATA, bukan konstanta kode,
+  // jadi tidak bisa divalidasi di lapisan murni.
+  const divisions = await db.division.findMany({
+    where: { isActive: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const divisionByKey = new Map<string, (typeof divisions)[number]>();
+  for (const d of divisions) {
+    divisionByKey.set(d.name.trim().toLowerCase(), d);
+    divisionByKey.set(d.code.trim().toLowerCase(), d);
+  }
+  const divisionNames = divisions.map((d) => d.name).join(", ");
+
   const numbers = rows.map((r) => r.employeeNo).filter(Boolean);
   const names = rows.map((r) => r.fullName);
   const emails = rows.map((r) => r.accountEmail).filter((e): e is string => !!e);
@@ -113,7 +127,12 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
     }),
     db.user.findMany({
       where: { email: { in: emails } },
-      select: { id: true, email: true, employee: { select: { id: true, employeeNo: true } } },
+      select: {
+        id: true,
+        email: true,
+        employee: { select: { id: true, employeeNo: true } },
+        division: { select: { code: true, name: true } },
+      },
     }),
     db.employee.findMany({
       where: { employeeNo: { in: refs.map(normalizeEmployeeNo) } },
@@ -162,6 +181,15 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
       continue;
     }
 
+    // ── Divisi ──
+    let division: { id: string; code: string; name: string } | null = null;
+    if (r.divisionRef) {
+      division = divisionByKey.get(r.divisionRef.trim().toLowerCase()) ?? null;
+      if (!division) {
+        problem("Divisi", `"${r.divisionRef}" tidak dikenal. Pilih salah satu: ${divisionNames}.`);
+      }
+    }
+
     // ── Akun CRM ──
     if (r.accountEmail) {
       const u = userByEmail.get(r.accountEmail);
@@ -170,6 +198,15 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
         notes.push(`Akun CRM ${r.accountEmail} belum ada — pegawai dibuat tanpa tautan akun.`);
       } else if (u.employee) {
         problem("Email Akun CRM", `Akun ini sudah tertaut ke pegawai ${u.employee.employeeNo}.`);
+      } else if (division && u.division && u.division.code !== division.code) {
+        // DILAPORKAN, bukan diselaraskan. User.divisionId menentukan ke mana
+        // persetujuan cuti berjalan dan grup Authentik mana yang diikuti;
+        // mengubahnya sebagai efek samping mengunggah spreadsheet berarti
+        // memindahkan kewenangan orang tanpa ada yang memutuskan.
+        notes.push(
+          `Divisi akun CRM (${u.division.name}) berbeda dari berkas ini (${division.name}). ` +
+            `Akun TIDAK diubah — perbaiki di /settings/users bila memang perlu.`
+        );
       }
     }
 
@@ -252,6 +289,16 @@ export async function applyEmployeeImport(user: CurrentUser, file: File): Promis
   const users = await db.user.findMany({ where: { email: { in: emails } }, select: { id: true, email: true } });
   const userIdByEmail = new Map(users.map((u) => [u.email.toLowerCase(), u.id]));
 
+  // Divisi dicocokkan ulang di sini, bukan dibawa dari rencana: penerapan
+  // membaca ulang dari berkas, jadi ia tidak boleh bergantung pada apa pun
+  // yang sudah dihitung sebelumnya.
+  const divisions = await db.division.findMany({ select: { id: true, code: true, name: true } });
+  const divisionByKey = new Map<string, string>();
+  for (const d of divisions) {
+    divisionByKey.set(d.name.trim().toLowerCase(), d.id);
+    divisionByKey.set(d.code.trim().toLowerCase(), d.id);
+  }
+
   const idByRow = new Map<number, string>();
   const created: ImportOutcome["created"] = [];
 
@@ -269,6 +316,7 @@ export async function applyEmployeeImport(user: CurrentUser, file: File): Promis
       address: r.address,
       workPattern: r.workPattern,
       jobLevel: r.jobLevel,
+      divisionId: r.divisionRef ? (divisionByKey.get(r.divisionRef.trim().toLowerCase()) ?? null) : null,
       contractStartAt: r.contractStartAt,
       contractEndAt: r.contractEndAt,
     });
