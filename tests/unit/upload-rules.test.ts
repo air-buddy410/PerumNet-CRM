@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   safeExtension,
   uploadRejection,
@@ -7,6 +8,7 @@ import {
   contentMismatch,
   MAX_UPLOAD_BYTES,
 } from "@/lib/upload-rules";
+import { AVATAR_MAX_BYTES } from "@/lib/avatar";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -103,5 +105,33 @@ describe("sniffMime & contentMismatch", () => {
 
   test("format sah tapi bukan yang diakui → ditolak", () => {
     assert.match(String(contentMismatch("image/png", JPEG)), /sebenarnya image\/jpeg/);
+  });
+});
+
+describe("batas Server Action lebih longgar dari batas kita sendiri", () => {
+  // Ini menjaga kegagalan yang sudah pernah terjadi di produksi (Fase 60).
+  //
+  // Bawaan Next adalah 1 MB. Selama pemeriksa kita mengizinkan 5 MB, setiap
+  // berkas di antara keduanya ditolak SEBELUM kode kita berjalan — dan yang
+  // dilihat orang adalah halaman error putih dengan digest, bukan kalimat
+  // "Ukuran foto maksimal 5MB" yang sudah ditulis tepat untuk saat itu.
+  //
+  // Yang diuji bukan angkanya, melainkan HUBUNGAN keduanya: batas luar harus
+  // tetap lebih longgar meski salah satunya kelak diubah orang lain.
+  const config = readFileSync("next.config.ts", "utf8");
+
+  test("bodySizeLimit disetel, tidak dibiarkan pada bawaan 1 MB", () => {
+    assert.match(config, /bodySizeLimit:\s*"(\d+)mb"/);
+  });
+
+  test("nilainya melampaui berkas terbesar yang kita terima", () => {
+    const mb = Number(/bodySizeLimit:\s*"(\d+)mb"/.exec(config)![1]);
+    const terbesar = Math.max(MAX_UPLOAD_BYTES, AVATAR_MAX_BYTES);
+    assert.equal(
+      mb * 1024 * 1024 > terbesar,
+      true,
+      `bodySizeLimit ${mb}MB harus melebihi ${Math.round(terbesar / 1024 / 1024)}MB, ` +
+        "kalau tidak penolakan kita yang ramah tidak pernah terbaca"
+    );
   });
 });

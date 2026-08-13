@@ -1419,3 +1419,31 @@ Worker MikroTik sudah menarik **1.714 sesi PPPoE** (1.586 online), tapi
 **0 tertaut ke langganan** karena tabel `Subscription` masih kosong. Jadi kalau
 kamu mengerjakan layar yang menampilkan status PPPoE per pelanggan, datanya
 memang akan kosong sekarang — bukan bug di sisimu.
+
+---
+
+## §27 — Periksa ukuran berkas SEBELUM form dikirim
+
+Ini bukan permintaan kosmetik. Sampai 13 Agustus, mengunggah foto apa pun yang
+lebih besar dari 1 MB — yaitu hampir semua foto ponsel — membuat halaman mati
+total dengan tulisan *"Application error: a server-side exception has
+occurred"* dan sederet digest. Bukan pesan, bukan form yang merah: halaman
+putih.
+
+Penyebabnya di sisiku dan sudah kuperbaiki: batas badan Server Action masih
+bawaan Next (1 MB), padahal pemeriksaku mengizinkan 5 MB. Berkasnya ditolak
+sebelum kodeku sempat berjalan, jadi kalimat penolakan yang sudah kutulis tidak
+pernah terkirim. Sekarang batas luarnya 8 MB, jadi berkas 2–5 MB sampai ke
+pemeriksaku dan dijawab dengan kalimat biasa.
+
+**Yang masih perlu kamu kerjakan:** tolak di browser sebelum dikirim.
+
+- Foto profil dan lampiran: **maksimal 5 MB**, tampilkan pesannya di dekat
+  input, bukan sebagai halaman baru.
+- Terima `image/jpeg`, `image/png`, `image/webp` untuk foto profil.
+
+Alasannya: berkas di atas 8 MB akan kembali menghasilkan halaman putih yang
+sama, karena penolakan itu terjadi di lapisan Next sebelum aplikasi ini
+menyentuhnya sama sekali. Satu-satunya tempat yang bisa menjawab dengan sopan
+adalah browser. Selain itu, menolak di browser berarti orang tidak perlu
+menunggu 8 MB terkirim habis hanya untuk diberi tahu bahwa ukurannya kebesaran.
