@@ -90,9 +90,13 @@ describe("layanan tools punya lingkungan yang sama dengan app", () => {
     // Itu benar-benar terjadi saat mendorong tag pertama kali dari server.
     const kunci = (s: string) => [...s.matchAll(/^\s{6}([A-Z][A-Z0-9_]+):/gm)].map((m) => m[1]);
     const app = kunci(blok("app"));
-    const tools = new Set(kunci(blok("tools")));
     assert.equal(app.length > 5, true, "blok app tidak terbaca");
-    const hilang = app.filter((k) => !tools.has(k));
-    assert.deepEqual(hilang, [], `variabel ini tidak diteruskan ke tools: ${hilang.join(", ")}`);
+    // Worker ikut diperiksa: ia menyentuh router MikroTik dan penjadwal, dan
+    // variabel yang hilang di sana juga gagal diam-diam.
+    for (const layanan of ["tools", "worker"]) {
+      const punya = new Set(kunci(blok(layanan)));
+      const hilang = app.filter((k) => !punya.has(k));
+      assert.deepEqual(hilang, [], `variabel ini tidak diteruskan ke ${layanan}: ${hilang.join(", ")}`);
+    }
   });
 });
