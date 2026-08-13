@@ -908,11 +908,20 @@ export const WORK_PATTERNS = [
 ] as const;
 
 // Fase 41 — jenjang jabatan. BUKAN User.level: yang itu hierarki persetujuan.
-// Nilai lain (SUPERVISOR, MANAGER) sengaja belum ada — ditambah saat memang
-// dibutuhkan, karena menambah nilai baru mudah tetapi mengubah artinya sulit.
+//
+// Fase 52 — SUPERVISOR dan CEO ditambahkan. Catatan asli di sini menulis nilai
+// lain "ditambah saat memang dibutuhkan"; berkas HRD yang pertama memang
+// memakai keempatnya. Menyeragamkannya menjadi dua akan meratakan struktur
+// jenjang PerumNet — Supervisor dan Leader tak lagi bisa dibedakan, dan itu
+// tidak bisa dikembalikan setelah datanya masuk.
+//
+// Urutannya urutan TAMPIL, bukan peringkat: tidak ada satu pun kode yang
+// membandingkan nilai ini. Kewenangan tetap dari User.level dan peran.
 export const JOB_LEVELS = [
   ["STAFF", "Staff"],
   ["LEADER", "Leader"],
+  ["SUPERVISOR", "Supervisor"],
+  ["CEO", "CEO"],
 ] as const;
 
 export const DAY_TYPES = [

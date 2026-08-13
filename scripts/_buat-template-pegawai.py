@@ -25,7 +25,7 @@ COLS = [
     ("NIK",                 14, False, "KOSONGKAN saja - sistem menerbitkannya otomatis (10000001, 10000002, ...). Isi hanya bila orang ini sudah punya NIK lama."),
     ("Nama Lengkap",        26, True,  ""),
     ("Jabatan",             22, False, "Teks bebas, mis. Teknisi Lapangan"),
-    ("Jenjang Jabatan",     16, True,  "Staff atau Leader"),
+    ("Jenjang Jabatan",     16, True,  "Staff, Leader, Supervisor, atau CEO"),
     ("Status Kepegawaian",  20, True,  "Tetap / Paruh Waktu / Kontrak / Masa Percobaan"),
     ("Pola Kerja",          13, True,  "Shift atau Non-Shift"),
     ("Tanggal Bergabung",   18, True,  "Format YYYY-MM-DD"),
@@ -42,9 +42,17 @@ COLS = [
 # Nama divisi HARUS sama persis dengan tabel Division di database. Kalau daftar
 # di sana berubah, daftar ini ikut diperbarui — impor mencocokkannya per huruf,
 # dan nama yang tidak dikenal DITOLAK, bukan dikosongkan diam-diam.
+# Fase 52 — daftar ini disamakan dengan departemen PerumNet yang sebenarnya,
+# menggantikan sepuluh nama tebakan awal. Accounting/Finance/Finance &
+# Accounting digabung jadi satu, begitu pula Manajement/Owner.
 DIVISI = [
-    "Customer Service", "Finance", "IT/DevOps", "Management", "Marketing",
-    "NOC", "Operational", "Project", "Sales", "Warehouse",
+    "Finance & Accounting",
+    "Management",
+    "Marketing",
+    "Network Operation Center",
+    "Network Operation Field",
+    "Operation Access & Customer",
+    "Sales",
 ]
 
 HDR_ROW = 3
@@ -121,8 +129,8 @@ def dropdown(col: str, options: list[str], title: str, msg: str) -> None:
     ws.add_data_validation(dv)
     dv.add(f"{col}{EX_ROW}:{col}{LAST}")
 
-dropdown("D", ["Staff", "Leader"], "Jenjang tidak dikenal",
-         "Pilih Staff atau Leader dari daftar.")
+dropdown("D", ["Staff", "Leader", "Supervisor", "CEO"], "Jenjang tidak dikenal",
+         "Pilih dari daftar: Staff, Leader, Supervisor, atau CEO.")
 dropdown("E", ["Karyawan Tetap", "Paruh Waktu", "Kontrak", "Masa Percobaan"],
          "Status tidak dikenal", "Pilih salah satu dari daftar.")
 dropdown("F", ["Non-Shift", "Shift"], "Pola kerja tidak dikenal",

@@ -980,6 +980,42 @@ dipakai — jangan tampilkan kolom password apa pun di halaman ini.
 
 ---
 
+## 21. ⚠️ Dua tempat yang perlu kamu perbaiki — akibat perubahanku
+
+Maaf, ini kesalahanku: `JOB_LEVELS` bertambah dari dua nilai menjadi **empat**
+(`STAFF`, `LEADER`, `SUPERVISOR`, `CEO`), karena data HRD yang asli memang
+memakai keempatnya. Dua tempat di frontend menganggapnya masih dua, dan
+sekarang menampilkan yang salah — **tanpa error apa pun**.
+
+Aku tidak menyentuhnya karena keduanya wilayahmu, dan salah satunya sedang
+kamu ubah.
+
+**1. `src/app/(app)/hrd/employees/page.tsx:166`**
+
+```tsx
+{e.jobLevel === "LEADER" ? "Leader" : "Staff"}
+```
+
+Supervisor dan CEO ikut tampil sebagai **"Staff"**. Dari 23 pegawai yang baru
+masuk, **5 orang salah tampil** (3 Supervisor + 2 CEO).
+
+Sudah ada pemetaan siap pakai, dipakai di halaman detail sebelahnya:
+
+```tsx
+const jobLevelLabels = Object.fromEntries(JOB_LEVELS) as Record<string, string>;
+// ...
+{jobLevelLabels[e.jobLevel] ?? e.jobLevel}
+```
+
+**2. `src/app/(app)/profile/page.tsx:25`** — `jobLevelLabels` di situ ditulis
+tangan dan hanya memuat dua nilai. Ganti dengan `Object.fromEntries(JOB_LEVELS)`
+supaya nilai baru berikutnya tidak perlu diingat lagi.
+
+Pola `?? nilai mentah` itu yang membuat kesalahan ini kelihatan, bukan diam:
+kalau suatu nilai belum punya label, yang tampil kodenya — jelek, tapi jujur.
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan

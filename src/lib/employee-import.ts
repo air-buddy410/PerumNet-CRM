@@ -129,12 +129,35 @@ function loose(s: string): string {
  * salah ketik "Kontark" yang diam-diam menjadi Karyawan Tetap akan mematikan
  * seluruh pengingat masa kontraknya.
  */
+/**
+ * Kata yang dipakai HRD di lapangan, dipetakan ke kode yang sama.
+ *
+ * Fase 52 — berkas HRD yang pertama menulis "Jadwal Kantor" dan "Jam Shift"
+ * untuk seluruh 23 barisnya. Maknanya tidak ambigu sedikit pun, dan menyuruh
+ * mereka memperbaiki dua puluh tiga baris demi perbedaan kata adalah cara
+ * paling cepat membuat orang berhenti memakai sistemnya.
+ *
+ * Yang boleh masuk daftar ini HANYA padanan yang maknanya tunggal. Begitu
+ * sebuah kata bisa berarti dua hal, ia harus ditolak dan ditanyakan — bukan
+ * dimasukkan ke sini.
+ */
+const ALIASES: Record<string, string> = {
+  jadwalkantor: "NON_SHIFT",
+  jamkantor: "NON_SHIFT",
+  jamshift: "SHIFT",
+  jadwalshift: "SHIFT",
+};
+
 function codeFromLabel(pairs: readonly (readonly [string, string])[], raw: string): string | null {
   const s = raw.trim();
   if (!s) return null;
   for (const [code, label] of pairs) {
     if (loose(code) === loose(s) || loose(label) === loose(s)) return code;
   }
+  // Padanan hanya berlaku bila kodenya memang ada di daftar yang diminta —
+  // supaya alias pola kerja tidak bisa nyasar menjadi jawaban kolom lain.
+  const alias = ALIASES[loose(s)];
+  if (alias && pairs.some(([code]) => code === alias)) return alias;
   return null;
 }
 
