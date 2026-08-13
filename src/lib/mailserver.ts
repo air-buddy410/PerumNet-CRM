@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit";
 import {
   listMailboxes,
   setMailboxTags,
+  setMailboxPassword,
   probeConnection,
   type Fetcher,
   type MailboxRecord,
@@ -11,6 +12,7 @@ import {
 import {
   probeImapLogin,
   imapHostFrom,
+  newMailPasswordRejection,
   type ImapProbe,
   type MailAuthResult,
 } from "@/lib/mail-auth";
@@ -316,4 +318,66 @@ export async function verifyMailserverPassword(
     // Password TIDAK PERNAH ikut ke pesan galat.
     return { ok: false, reason: "UNREACHABLE", detail: (e as Error).message };
   }
+}
+
+/**
+ * Mengganti password email MILIK SENDIRI.
+ *
+ * Tiga hal yang membuat ini aman, dan ketiganya wajib:
+ *
+ * 1. Alamatnya diambil dari akun yang sedang login, TIDAK PERNAH dari input.
+ *    Dengan API key read-write, satu parameter email yang bisa dikendalikan
+ *    pemanggil berarti siapa pun bisa mengganti password mailbox siapa pun.
+ * 2. Password LAMA diverifikasi ke mailserver lebih dulu. Tanpa itu, sesi CRM
+ *    yang dibajak cukup untuk mengambil alih kotak surat seseorang — dan lewat
+ *    itu, seluruh akun lain miliknya.
+ * 3. Password tidak pernah masuk log maupun pesan galat.
+ */
+export async function changeOwnMailPassword(
+  account: { id: string; name: string; email: string },
+  currentPassword: string,
+  newPassword: string,
+  confirmPassword: string,
+  deps: { probe?: ImapProbe; fetcher?: Fetcher } = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const invalid = newMailPasswordRejection(currentPassword, newPassword, confirmPassword);
+  if (invalid) return { ok: false, error: invalid };
+
+  const cfg = await loadMailcowIntegration();
+  const blocker = mailcowBlocker(cfg);
+  if (!cfg || blocker) {
+    return { ok: false, error: blocker ?? "Integrasi mailserver belum disiapkan." };
+  }
+
+  const sekarang = await verifyMailserverPassword(account.email, currentPassword, deps.probe);
+  if (!sekarang.ok) {
+    return {
+      ok: false,
+      error:
+        sekarang.reason === "REJECTED"
+          ? "Password email Anda saat ini salah."
+          : "Mailserver sedang tidak bisa dihubungi, jadi password belum diganti. Coba lagi sebentar lagi.",
+    };
+  }
+
+  try {
+    await setMailboxPassword(clientOptions(cfg, deps.fetcher), account.email, newPassword);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logEvent(cfg.id, "MAILCOW_PASSWORD_CHANGE", "ERROR", `${account.email}: ${msg}`);
+    // Kegagalan di sini paling sering berarti API key-nya read-only.
+    return { ok: false, error: `Mailserver menolak perubahan: ${msg}` };
+  }
+
+  await logEvent(cfg.id, "MAILCOW_PASSWORD_CHANGE", "OK", account.email);
+  await logAudit({
+    userId: account.id,
+    action: "MAIL_PASSWORD_CHANGE",
+    module: "auth",
+    entityType: "User",
+    entityId: account.id,
+    // Nilai passwordnya — lama maupun baru — tidak pernah ikut.
+    description: `${account.name} mengganti password email ${account.email}`,
+  });
+  return { ok: true };
 }

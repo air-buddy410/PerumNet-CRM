@@ -202,10 +202,19 @@ describe("kontrak frontend", () => {
       // Kalau invarian ini pernah bocor, orang bisa mengubah hash lokal lalu
       // merasa aman padahal kredensial yang dipakai tidak berubah.
       assert.ok(["LOCAL", "MAILSERVER", "OIDC"].includes(view!.auth.provider));
+      // Fase 54 — invariannya DIPERLUAS, bukan dilonggarkan. Dulu berbunyi
+      // "hanya saat LOCAL" karena saat itu CRM cuma bisa mengubah hash lokal.
+      // Sekarang di mode MAILSERVER ia benar-benar mengubah kredensial yang
+      // dipakai: diteruskan ke mailcow. Yang tetap dijaga tetap sama —
+      // tombolnya menyala HANYA bila yang berubah adalah password yang
+      // sungguh-sungguh dipakai untuk masuk.
+      //
+      // OIDC tetap false, dan itu intinya: di sana passwordnya memang bukan
+      // milik CRM, jadi mengubah apa pun hanya memberi rasa aman palsu.
       assert.equal(
         view!.auth.passwordChangeAvailable,
-        view!.auth.provider === "LOCAL",
-        "ganti password harus tersedia HANYA saat provider LOCAL"
+        view!.auth.provider !== "OIDC",
+        "ganti password menyala persis bila CRM memang bisa mengubah kredensial yang dipakai"
       );
     });
 

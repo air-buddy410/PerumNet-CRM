@@ -226,3 +226,24 @@ export async function probeConnection(opts: MailcowOptions): Promise<ConnectionP
     };
   }
 }
+
+/**
+ * Mengganti password sebuah mailbox.
+ *
+ * Butuh API key berizin TULIS. Endpoint-nya sama dengan penulisan tag, hanya
+ * atributnya berbeda — mailcow meminta password dikirim dua kali.
+ *
+ * Pemanggilnya WAJIB sudah memastikan orang tersebut memang pemilik mailbox
+ * ini; fungsi ini tidak punya cara mengetahuinya sendiri. Dengan API key
+ * read-write, ia bisa mengganti password mailbox SIAPA PUN.
+ */
+export async function setMailboxPassword(
+  opts: MailcowOptions,
+  email: string,
+  password: string
+): Promise<void> {
+  await call(opts, "/edit/mailbox", {
+    method: "POST",
+    body: JSON.stringify({ items: [email], attr: { password, password2: password } }),
+  });
+}

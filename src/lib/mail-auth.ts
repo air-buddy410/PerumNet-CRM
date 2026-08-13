@@ -153,3 +153,40 @@ export async function probeImapLogin(
     );
   });
 }
+
+// ── Aturan ganti password mailserver (Fase 54) ──────────────────
+
+/**
+ * Panjang minimum password email baru.
+ *
+ * Lebih ketat dari minimum password CRM (8) DENGAN SENGAJA: password email
+ * adalah saluran reset untuk hampir semua akun lain. Yang menguasainya bisa
+ * mengambil alih sisanya, jadi ia tidak boleh selemah password biasa.
+ */
+export const MIN_MAIL_PASSWORD = 10;
+
+/**
+ * Alasan penolakan password email baru, atau null bila boleh dipakai.
+ *
+ * Password LAMA tetap wajib diisi dan diverifikasi ke mailserver sebelum
+ * fungsi ini berarti apa-apa. Tanpa itu, sesi CRM yang dibajak cukup untuk
+ * mengganti password email seseorang — dan dengan begitu mengambil alih
+ * seluruh akun lain miliknya.
+ */
+export function newMailPasswordRejection(
+  current: string,
+  next: string,
+  confirm: string
+): string | null {
+  if (!current) return "Isi password email Anda saat ini.";
+  if (!next) return "Isi password baru.";
+  if (next !== confirm) return "Konfirmasi password tidak sama.";
+  if (next.length < MIN_MAIL_PASSWORD) {
+    return `Password email baru minimal ${MIN_MAIL_PASSWORD} karakter — ini kunci ke seluruh akun Anda yang lain.`;
+  }
+  if (next === current) return "Password baru harus berbeda dari yang sekarang.";
+  // Alasannya sama dengan saat login: karakter ini bisa menyisipkan perintah.
+  const bad = credentialRejection(next);
+  if (bad) return bad;
+  return null;
+}
