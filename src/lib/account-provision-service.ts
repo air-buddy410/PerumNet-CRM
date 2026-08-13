@@ -11,6 +11,7 @@ import {
   normalizePersonName,
   type MailboxSuggestion,
 } from "@/lib/account-provision";
+import { authProviderMode } from "@/lib/oidc";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Pembuatan akun CRM massal dari kotak surat (Fase 52) ────────
@@ -247,7 +248,15 @@ export async function createAccountsFromMailboxes(
         level: i.level,
         divisionId: i.divisionId ?? null,
         passwordHash,
-        mustChangePassword: true,
+        // Wajib-ganti HANYA berlaku bila CRM memang yang menerbitkan
+        // kredensialnya. Di mode MAILSERVER tidak: yang dipakai masuk adalah
+        // password EMAIL yang sudah lama dipegang orangnya sendiri, dan
+        // password lokal di sini acak serta tidak pernah dipakai siapa pun.
+        //
+        // Menyalakannya di mode itu memunculkan peringatan "ganti password
+        // dulu" kepada orang yang tidak pernah diberi password apa pun — dan
+        // mendorongnya mengganti password EMAIL tanpa sebab.
+        mustChangePassword: authProviderMode() !== "MAILSERVER",
         roles: { create: i.roleIds.map((roleId) => ({ roleId })) },
       },
     });
