@@ -91,6 +91,12 @@ describe("layanan tools punya lingkungan yang sama dengan app", () => {
     const kunci = (s: string) => [...s.matchAll(/^\s{6}([A-Z][A-Z0-9_]+):/gm)].map((m) => m[1]);
     const app = kunci(blok("app"));
     assert.equal(app.length > 5, true, "blok app tidak terbaca");
+    // Variabel yang hilang dari SEMUA layanan tidak akan tertangkap
+    // perbandingan di bawah — jadi yang menentukan sambungan luar disebut
+    // namanya di sini.
+    for (const wajib of ["MAILCOW_API_KEY", "MIKROTIK_POP1_CRED", "MIKROTIK_INSECURE_TLS", "SMTP_PASSWORD"]) {
+      assert.equal(app.includes(wajib), true, `${wajib} tidak diteruskan ke app`);
+    }
     // Worker ikut diperiksa: ia menyentuh router MikroTik dan penjadwal, dan
     // variabel yang hilang di sana juga gagal diam-diam.
     for (const layanan of ["tools", "worker"]) {
