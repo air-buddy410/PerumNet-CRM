@@ -4,6 +4,7 @@ import { db, actor, makeUser, tag, ensureMasterData, resetTransactionalData } fr
 import { listAccountCandidates, createAccountsFromMailboxes } from "@/lib/account-provision-service";
 import { MAILCOW_CODE } from "@/lib/mailserver";
 import { PERMISSIONS } from "@/lib/constants";
+import { authProviderMode } from "@/lib/oidc";
 import type { Fetcher } from "@/lib/mailcow";
 
 // Pembuatan akun massal dari kotak surat. Yang diuji di sini bukan cuma "bisa
@@ -204,7 +205,21 @@ describe("menyiapkan akun CRM dari kotak surat", () => {
       assert.equal(akun!.divisionId, divNoc);
       assert.equal(akun!.roles.length, 1);
       assert.equal(akun!.employee?.employeeNo, "10000701");
-      assert.equal(akun!.mustChangePassword, true);
+
+      // Wajib-ganti mengikuti SIAPA yang menerbitkan kredensialnya (Fase 58).
+      //
+      // Di mode MAILSERVER yang dipakai masuk adalah password EMAIL yang sudah
+      // lama dipegang orangnya sendiri; password lokal di sini acak dan tidak
+      // pernah dipakai siapa pun. Menyalakannya berarti menyambut orang dengan
+      // "ganti password dulu" padahal ia tidak pernah diberi password apa pun —
+      // dan mendorongnya mengganti password EMAIL tanpa sebab.
+      //
+      // Itu benar-benar terjadi pada 23 akun di server sebelum diperbaiki.
+      assert.equal(
+        akun!.mustChangePassword,
+        authProviderMode() !== "MAILSERVER",
+        "wajib-ganti hanya bila CRM yang menerbitkan kredensialnya"
+      );
     });
 
     test("PERAN wajib dipilih — tidak ada peran bawaan", async () => {
