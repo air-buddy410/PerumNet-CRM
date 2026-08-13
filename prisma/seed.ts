@@ -209,18 +209,34 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 // Struktur organisasi: staff -> supervisor -> owner; staff & supervisor per divisi.
+/// Divisi PerumNet yang SEBENARNYA, mengikuti berkas kepegawaian dari HRD
+/// (Fase 52). Sebelumnya daftar ini berisi sepuluh nama tebakan awal:
+/// IT/DevOps, Project, dan Warehouse tidak ada orangnya sama sekali,
+/// sedangkan dua kelompok terbesar — Accounting dan Network Operation Field —
+/// tidak punya tempat.
+///
+/// Ini bukan sekadar penamaan: divisi menentukan grup Authentik dan tag kotak
+/// surat, jadi daftar yang tidak mencerminkan organisasi akan terus terasa
+/// janggal di kedua sistem itu.
+///
+/// Penggabungan yang disengaja: Accounting + Finance + Finance & Accounting
+/// menjadi satu fungsi keuangan; Manajement (salah ketik di berkas) + Owner
+/// menjadi Management.
 const DIVISIONS: [string, string][] = [
   ["MGT", "Management"],
   ["MKT", "Marketing"],
   ["SLS", "Sales"],
-  ["CS", "Customer Service"],
-  ["FIN", "Finance"],
-  ["WH", "Warehouse"],
-  ["OPS", "Operational"],
-  ["PRJ", "Project"],
-  ["NOC", "NOC"],
-  ["IT", "IT/DevOps"],
+  ["FIN", "Finance & Accounting"],
+  ["NOC", "Network Operation Center"],
+  ["NOF", "Network Operation Field"],
+  ["OAC", "Operation Access & Customer"],
 ];
+
+/// Divisi lama yang tidak dipakai lagi. DINONAKTIFKAN, bukan dihapus —
+/// menonaktifkan bisa dibatalkan sedetik, menghapus tidak. Dan kalau suatu
+/// saat ada baris yang terlanjur menunjuk salah satunya, penghapusan akan
+/// ditolak foreign key di tengah seed.
+const RETIRED_DIVISIONS = ["CS", "WH", "OPS", "PRJ", "IT"];
 
 const COST_CENTERS: [string, string][] = [
   ["GA", "General and Administration"],
@@ -387,8 +403,18 @@ async function main() {
 
   console.log("Seeding divisions...");
   for (const [code, name] of DIVISIONS) {
-    await db.division.upsert({ where: { code }, update: { name }, create: { code, name } });
+    await db.division.upsert({
+      where: { code },
+      update: { name, isActive: true },
+      create: { code, name, isActive: true },
+    });
   }
+  // Yang lama dimatikan, bukan dihapus — dan hanya BILA sudah ada. Seed pada
+  // database kosong tidak membuatnya lebih dulu supaya bisa dimatikan.
+  await db.division.updateMany({
+    where: { code: { in: RETIRED_DIVISIONS } },
+    data: { isActive: false },
+  });
   const divisionMap = new Map(
     (await db.division.findMany()).map((d) => [d.code, d.id])
   );
