@@ -138,7 +138,7 @@ export default async function DeviceDetailPage({
               <p className="mb-3 text-xs text-slate-500">
                 Perangkat lama otomatis tercatat <strong>Milik PERUMNET</strong> saat migrasi.
                 Hanya perangkat milik PERUMNET yang boleh ditarik saat pelanggan terminasi
-                (PRD §13.1), jadi perangkat milik pelanggan wajib dikoreksi di sini sebelum
+                sehingga perangkat milik pelanggan wajib dikoreksi di sini sebelum
                 proses terminasi dijalankan. Perubahan dicatat di audit log.
               </p>
               <form action={setOwnershipAction} className="space-y-3">
@@ -169,8 +169,8 @@ export default async function DeviceDetailPage({
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Lapor Hilang / Rusak</h2>
               <p className="mb-3 text-xs text-slate-500">
-                Wajib kronologi + approval (PRD §16.5). Perangkat masuk status Inspeksi
-                sampai approval selesai.
+                Sertakan kronologi dan ajukan persetujuan. Perangkat masuk status Inspeksi
+                sampai persetujuan selesai.
               </p>
               <form action={requestWriteoffAction} className="space-y-3">
                 <input type="hidden" name="deviceId" value={device.id} />

@@ -467,6 +467,57 @@ WFM nantinya dapat menambahkan status kerja mulai/berhenti, durasi perjalanan, l
 - Tidak ada horizontal overflow, teks keluar card, overlap, blank page, framework overlay, atau console error.
 - QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
 
+## 31. Audit Total Responsive — Tabel, Microcopy, dan Hydration
+
+Audit frontend production dilakukan pada 127 route statis dengan viewport 1440×900,
+1920×1080, 1024×768, 768×1024, 390×844, dan 360×800. Dynamic route dengan ID
+`demo` dianggap placeholder dan harus diuji ulang memakai ID data nyata.
+
+### Temuan dan perbaikan
+
+- Pada 14 halaman list, `TableControls` sebelumnya menjadi kolom kedua dari grid
+  dua kolom. Akibatnya label `Tampilkan`, `Urutkan`, dan pagination menyempit hingga
+  pecah satu karakter per baris. Tabel dan kontrol sekarang berada dalam
+  `.crm-list-column` yang sama; panel form tetap berada di kolom kanan pada layar lebar.
+- `.crm-list-column` wajib memiliki `min-width: 0`, lebar penuh, dan jarak vertikal
+  yang konsisten. Kontrol tabel wajib berada di bawah card tabel, bukan di sampingnya.
+- Tabel tetap memakai `width: max-content`, `min-width: 100%`, dan horizontal scroll
+  terkontrol. Kolom action, badge, dan tombol tidak boleh menjadi teks vertikal.
+- Copy produksi tidak boleh menampilkan nomor section PRD, `business rule`, `Phase`,
+  `NFR`, atau istilah perencanaan internal. Constraint tetap dijelaskan secara
+  operasional, misalnya bukti wajib sebelum posting, owner wajib sebelum status maju,
+  dan persetujuan wajib sebelum write-off.
+- Formatter UI memakai locale `id-ID` dan timezone `Asia/Makassar` yang eksplisit.
+  Format tanggal client dan server tidak boleh bergantung pada timezone browser.
+  `suppressHydrationWarning` tidak digunakan untuk menutupi mismatch.
+- Judul topbar untuk `/profile` dan `/notifications` berasal dari route title override
+  sehingga tidak fallback ke `Dashboard`.
+
+### Acceptance dan bukti QA
+
+Untuk setiap viewport, browser audit wajib memeriksa:
+
+- `document.scrollWidth <= innerWidth`;
+- right edge card, wrapper, heading, tombol, dropdown, form, logo, dan icon tidak
+  melewati viewport atau parent card;
+- `TableControls` memiliki parent `.crm-list-column` yang sama dengan card tabel;
+- select, sorting, page size, dan pagination tetap dapat digunakan tanpa kehilangan
+  filter/query;
+- tidak ada teks satu karakter per baris di luar kebutuhan tabel dan tidak ada asset
+  image dengan `naturalWidth === 0`;
+- tidak ada framework overlay, React hydration error, blank page, atau console error
+  relevan;
+- screenshot desktop, tablet, dan mobile diambil ulang setelah setiap perbaikan.
+
+Route production yang mengembalikan 404 tetapi memiliki source lokal,
+`/finance/transactions/new`, `/inventory/transactions/new`, dan
+`/it/identity-groups`, harus diverifikasi terhadap build/deployment aktif. Placeholder
+dynamic `/demo` tidak dianggap sebagai defect. Berkas dirty atau untracked milik Opus
+tidak boleh diubah untuk menutup gap deployment.
+
+Perbaikan bagian ini frontend-only dan tidak mengubah API, DTO, `src/lib/**`, Prisma,
+database, auth, RBAC, middleware, Server Action, atau business rule.
+
 ## 20. Handoff Backend ke Frontend — 12 Agustus 2026
 
 Bagian ini mencatat pekerjaan frontend yang mengikuti `docs/HANDOFF-BACKEND-KE-FRONTEND.md`. Implementasi hanya mengonsumsi kontrak yang sudah tersedia dari backend; tidak ada perubahan pada API, DTO, server action, database, auth, RBAC, atau `src/lib/**`.
@@ -728,3 +779,51 @@ menjadi susunan field yang dapat dibaca pada layar sempit.
 - Print menampilkan dua sisi B4 tanpa clipping dan tombol print nonaktif bila kartu tidak aktif atau QR resmi belum tersedia.
 - Data publik tidak membocorkan NIK, email, telepon, divisi, atau token privat.
 - QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+
+## 32. Handoff Opus — Data Diri, Foto Profil, dan Ulang Tahun
+
+Frontend mengonsumsi field profile dan loader HRD yang sudah tersedia dari Opus.
+Perubahan ini tetap frontend-only: tidak mengubah action penyimpanan HRD,
+`src/lib/**`, API, database, auth, RBAC, middleware, atau business rule.
+
+### Data diri pegawai
+
+- `/profile` menampilkan `birthPlace`, `birthDate`, `education`, dan
+  `bloodType` sebagai data read-only.
+- `/hrd/employees/[id]` menampilkan empat field yang sama pada panel Data diri
+  untuk user dengan permission `hrd.view`.
+- Label pendidikan dan golongan darah memakai mapping resmi dari
+  `EDUCATION_LEVELS` dan `BLOOD_TYPES`; kode yang belum dikenal tetap tampil
+  sebagai fallback. `UNKNOWN` ditampilkan sebagai “Tidak diketahui”.
+- Tanggal lahir tidak menjadi filter daftar pegawai dan umur tidak ditampilkan.
+- Golongan darah adalah data kesehatan: tidak ditampilkan pada daftar pegawai,
+  ekspor, kartu pegawai, atau verifikasi kartu publik.
+- Form edit HRD belum menampilkan input baru sampai `saveEmployeeAction`
+  meneruskan dan memvalidasi empat field tersebut. Frontend tidak membuat
+  persistence semu atau mengirim field ke action yang belum menerimanya.
+
+### Foto profil aplikasi
+
+- Foto profil aplikasi memakai `user.avatarUrl` dan terpisah dari foto resmi
+  kartu pegawai. Jika belum ada, UI menampilkan inisial nama dan tidak jatuh ke
+  foto resmi kartu.
+- Upload memakai `uploadAvatarAction`, field multipart `avatar`, dan hapus
+  memakai `removeAvatarAction`.
+- Browser menolak file kosong, format selain JPG/PNG/WebP, dan file di atas
+  5 MB sebelum upload. Input mendukung kamera mobile.
+- UI menjelaskan bahwa foto ini hanya untuk tampilan aplikasi; pemrosesan
+  persegi, WebP, dan penghapusan EXIF tetap menjadi tanggung jawab server.
+
+### Ulang tahun dashboard
+
+- Dashboard memanggil `birthdaysToday()` secara paralel dengan metrik lain.
+- Panel hanya ditampilkan bila ada pegawai aktif yang berulang tahun hari itu.
+- Kartu menampilkan nama, jabatan/divisi, foto profil atau inisial, dan ucapan
+  dari backend. Umur dan tahun lahir tidak ditampilkan.
+- Tampilan kartu ulang tahun menggunakan grid responsif dan wrapping aman pada
+  1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+
+Status handoff: field profile, avatar action, dan birthday loader siap dipakai;
+konfirmasi apakah empat field data diri juga harus diedit melalui form pegawai
+masih dicatat di `docs/PERMINTAAN-FRONTEND-KE-BACKEND.md` karena action saat ini
+belum meneruskannya.

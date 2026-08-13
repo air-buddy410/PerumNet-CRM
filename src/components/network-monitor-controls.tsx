@@ -3,17 +3,12 @@
 import { RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatUiTime } from "@/components/ui-formatters";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
 function formatUpdatedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "belum tersedia";
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
+  return formatUiTime(value);
 }
 
 export function NetworkMonitorControls({

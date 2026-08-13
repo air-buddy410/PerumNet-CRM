@@ -128,7 +128,7 @@ export default async function NewTransactionPage({
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="purpose">Tujuan (wajib — PRD §16.2)</label>
+            <label className="label" htmlFor="purpose">Tujuan (wajib)</label>
             <input
               id="purpose"
               name="purpose"
@@ -190,7 +190,7 @@ export default async function NewTransactionPage({
               ))}
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Qty otomatis = jumlah SN. SN duplikat ditolak (PRD §16.1).
+              Qty otomatis mengikuti jumlah SN. SN duplikat akan ditolak.
             </p>
           </div>
         ) : (

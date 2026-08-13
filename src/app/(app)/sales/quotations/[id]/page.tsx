@@ -9,6 +9,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge } from "@/components/ui";
+import { formatUiDate } from "@/components/ui-formatters";
 import {
   updateQuotationAction,
   sendQuotationAction,
@@ -158,7 +159,7 @@ export default async function QuotationDetailPage({
                   <tr>
                     <td className="py-2 text-slate-500">Berlaku sampai</td>
                     <td className="py-2 text-right">
-                      {q.validUntil ? q.validUntil.toLocaleDateString("id-ID") : "-"}
+                      {formatUiDate(q.validUntil, "-")}
                     </td>
                   </tr>
                 </tbody>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell, BellDot, CheckCheck, ExternalLink, Inbox, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { formatUiNotificationTime } from "@/components/ui-formatters";
 
 export type NotificationPreview = {
   id: string;
@@ -31,18 +32,6 @@ type NotificationMenuProps = {
   openNotificationAction: FormAction;
   markAllReadAction: EmptyAction;
 };
-
-function formatNotificationTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Waktu tidak tersedia";
-
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 export function NotificationMenu({
   data,
@@ -143,7 +132,7 @@ export function NotificationMenu({
                     <span className="crm-notification-item-copy">
                       <span className="crm-notification-item-meta">
                         <small>{item.module || item.type}</small>
-                        <time dateTime={item.createdAt}>{formatNotificationTime(item.createdAt)}</time>
+                        <time dateTime={item.createdAt}>{formatUiNotificationTime(item.createdAt)}</time>
                       </span>
                       <strong>{item.title}</strong>
                       {item.body && <span>{item.body}</span>}

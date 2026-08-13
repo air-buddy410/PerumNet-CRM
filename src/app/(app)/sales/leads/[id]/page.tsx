@@ -79,7 +79,7 @@ export default async function LeadDetailPage({
       {!lead.salesOwnerId && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Lead ini belum memiliki Sales owner. Status tidak dapat maju sampai owner ditentukan
-          (business rule 14).
+          sampai owner ditentukan.
         </div>
       )}
 
@@ -272,7 +272,7 @@ export default async function LeadDetailPage({
             ) : (
               <>
                 <p className="mb-3 text-xs text-slate-500">
-                  Memerlukan quotation berstatus Diterima (PRD §11).
+                  Memerlukan quotation berstatus Diterima.
                   {acceptedQuotation
                     ? ` Tersedia: ${acceptedQuotation.quotationNumber} v${acceptedQuotation.version}.`
                     : " Saat ini belum ada."}

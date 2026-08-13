@@ -50,7 +50,8 @@ export default async function InvoiceRunsPage({
       <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="card overflow-x-auto">
+        <div className="crm-list-column">
+          <div className="card overflow-x-auto">
           {runs.length === 0 ? (
             <EmptyState message="Belum ada invoice run." />
           ) : (
@@ -83,9 +84,10 @@ export default async function InvoiceRunsPage({
               </tbody>
             </table>
           )}
-        </div>
+          </div>
 
         <TableControls basePath="/billing/runs" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
+        </div>
 
         {canCreate && (
           <div className="card h-fit p-5">

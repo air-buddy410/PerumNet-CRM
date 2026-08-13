@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { NetworkMap } from "@/components/network-map";
+import { formatUiDateTime } from "@/components/ui-formatters";
 import {
   loadNetworkMap,
   projector,
@@ -490,10 +491,5 @@ function isLinkStatus(value: string | undefined): value is LinkStatus {
 }
 
 function formatMapTimestamp(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "belum tersedia";
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatUiDateTime(value, "belum tersedia");
 }

@@ -12,6 +12,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { formatUiDate } from "@/components/ui-formatters";
 import {
   submitCashAction,
   postCashAction,
@@ -92,8 +93,8 @@ export default async function CashTransactionDetailPage({
 
       {overdue && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Advance ini melewati jatuh tempo ({tx.dueDate!.toLocaleDateString("id-ID")}) dan belum
-          diselesaikan — pengajuan advance baru oleh pembuat diblokir (business rule 13).
+          Advance ini melewati jatuh tempo ({formatUiDate(tx.dueDate, "—")}) dan belum
+          diselesaikan — pengajuan advance baru oleh pembuat diblokir sampai diselesaikan.
         </div>
       )}
       {tx.reversalOf && (
@@ -172,7 +173,7 @@ export default async function CashTransactionDetailPage({
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-slate-400">Jatuh Tempo</dt>
                     <dd className="mt-0.5 text-sm">
-                      {tx.dueDate ? tx.dueDate.toLocaleDateString("id-ID") : "—"}
+                      {formatUiDate(tx.dueDate)}
                     </dd>
                   </div>
                   <div>
@@ -285,7 +286,7 @@ export default async function CashTransactionDetailPage({
               </form>
             )}
             {attachments.length === 0 ? (
-              <EmptyState message="Belum ada bukti — wajib sebelum diajukan/diposting (PRD §7.4)." />
+              <EmptyState message="Belum ada bukti. Bukti wajib tersedia sebelum transaksi diajukan atau diposting." />
             ) : (
               <div className="grid gap-4 p-5 sm:grid-cols-3">
                 {attachments.map((a) => (
