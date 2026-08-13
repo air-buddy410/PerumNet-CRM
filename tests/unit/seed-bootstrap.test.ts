@@ -43,3 +43,37 @@ describe("pemasangan baru harus bisa dimasuki", () => {
     assert.equal(localLoginBlocker("OIDC", { allowLocalLogin: true }), null);
   });
 });
+
+describe("divisi di seed mengikuti organisasi yang sebenarnya", () => {
+  const seed = readFileSync("prisma/seed.ts", "utf8");
+  const daftar = seed.slice(seed.indexOf("const DIVISIONS"), seed.indexOf("RETIRED_DIVISIONS"));
+
+  test("memuat divisi PerumNet yang nyata", () => {
+    // Divisi menentukan grup Authentik dan tag kotak surat. Daftar yang tidak
+    // mencerminkan organisasi akan terus terasa janggal di kedua sistem itu —
+    // dan pemasangan baru mana pun akan menolak berkas kepegawaian dari HRD
+    // karena nama divisinya tidak dikenal.
+    for (const nama of [
+      "Network Operation Center",
+      "Network Operation Field",
+      "Operation Access & Customer",
+      "Finance & Accounting",
+    ]) {
+      assert.match(daftar, new RegExp(nama.replace(/[&]/g, "\\&")), `"${nama}" hilang dari seed`);
+    }
+  });
+
+  test("nama tebakan lama tidak dihidupkan lagi", () => {
+    // IT/DevOps, Project, dan Warehouse tidak ada orangnya sama sekali.
+    for (const usang of ["IT/DevOps", "Project", "Warehouse", "Customer Service"]) {
+      assert.equal(daftar.includes(`"${usang}"`), false, `"${usang}" seharusnya sudah pensiun`);
+    }
+  });
+
+  test("yang pensiun DINONAKTIFKAN, bukan dihapus", () => {
+    // Menghapus tidak bisa dibatalkan, dan akan ditolak foreign key di tengah
+    // seed bila ada baris yang terlanjur menunjuknya.
+    assert.match(seed, /RETIRED_DIVISIONS[\s\S]{0,200}isActive:\s*false/);
+    assert.equal(/division\.delete/.test(seed), false, "seed tidak boleh menghapus divisi");
+  });
+});
