@@ -175,9 +175,17 @@ describe("localLoginBlocker — jalur darurat", () => {
     assert.equal(localLoginBlocker("OIDC", { allowLocalLogin: true }), null);
   });
 
-  test("provider MAILSERVER diperlakukan sama dengan OIDC", () => {
-    assert.notEqual(localLoginBlocker("MAILSERVER", { allowLocalLogin: false }), null);
+  test("MAILSERVER TIDAK lagi diperlakukan sama dengan OIDC (Fase 53)", () => {
+    // Diubah saat mailserver benar-benar menjadi sumber identitas. Bedanya:
+    // di mode OIDC tidak ada form password sama sekali, sedangkan di mode
+    // MAILSERVER form-nya justru tetap dipakai — yang pindah cuma tempat
+    // pemeriksaannya, dari hash lokal ke mailserver. Memblokirnya di sini
+    // akan mematikan satu-satunya jalan masuk yang tersedia.
+    assert.equal(localLoginBlocker("MAILSERVER", { allowLocalLogin: false }), null);
     assert.equal(localLoginBlocker("MAILSERVER", { allowLocalLogin: true }), null);
+    // Tapi pemakaiannya tetap dianggap jalur darurat bila akunnya memang
+    // ditandai begitu — catatan dan pemberitahuannya tidak boleh hilang.
+    assert.equal(isBreakGlassLogin("MAILSERVER", { allowLocalLogin: true }), true);
   });
 
   test("pemakaian darurat dikenali untuk dicatat", () => {
