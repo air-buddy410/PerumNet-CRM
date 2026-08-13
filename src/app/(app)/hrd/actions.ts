@@ -22,6 +22,7 @@ import {
   markCardLost,
   revokeCard,
 } from "@/lib/employee-card-service";
+import { previewEmployeeImport, applyEmployeeImport } from "@/lib/employee-import-service";
 
 function num(v: FormDataEntryValue | null): number {
   return Number(String(v ?? "").trim());
@@ -44,7 +45,7 @@ export async function saveEmployeeAction(formData: FormData): Promise<void> {
   const result = await saveEmployee(user, {
     id: String(formData.get("id") ?? "") || undefined,
     userId: String(formData.get("userId") ?? "") || null,
-    employeeNo: String(formData.get("employeeNo") ?? ""),
+    employeeNo: String(formData.get("employeeNo") ?? ""), // kosong = diterbitkan sistem
     fullName: String(formData.get("fullName") ?? ""),
     jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
     employeeType: String(formData.get("employeeType") ?? "FULL_TIME"),
@@ -62,6 +63,28 @@ export async function saveEmployeeAction(formData: FormData): Promise<void> {
     "/hrd/employees?" +
       (result.ok ? "ok=" + encodeURIComponent("Karyawan tersimpan.") : "error=" + encodeURIComponent(result.error))
   );
+}
+
+// ── Impor pegawai dari Excel (Fase 51) ──────────────────────────
+//
+// Dua aksi terpisah, dan keduanya menerima BERKASNYA — bukan hasil pratinjau.
+// Penerapan membaca ulang berkas itu dari nol. Kalau ia menerima daftar baris
+// dari peramban, siapa pun yang bisa memanggil server action bisa mengirim
+// data pegawai apa saja dan melewati seluruh pemeriksaan.
+//
+// Keduanya MENGEMBALIKAN nilai alih-alih redirect: hasil pratinjau adalah
+// tabel yang harus dibaca dulu sebelum HRD memutuskan.
+
+export async function previewEmployeeImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  return previewEmployeeImport(user, formData.get("file") as File);
+}
+
+export async function applyEmployeeImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const result = await applyEmployeeImport(user, formData.get("file") as File);
+  if (result.ok) revalidatePath("/hrd/employees");
+  return result;
 }
 
 export async function saveShiftAction(formData: FormData): Promise<void> {

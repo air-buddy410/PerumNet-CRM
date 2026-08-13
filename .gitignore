@@ -33,3 +33,6 @@ prisma/*.db-journal
 
 # direktori build terpisah antar-proses (NEXT_DIST_DIR)
 .next-*
+
+# Berkas kunci sementara Excel — muncul saat template dibuka, bukan bagian repo.
+~$*
