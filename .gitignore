@@ -18,8 +18,13 @@ npm-debug.log*
 
 # env
 .env
-.env.local
-.env*.local
+# SEMUA turunan .env, bukan cuma .local — cadangan seperti
+# ".env.cadangan-sebelum-mailserver" memuat SESSION_SECRET, OIDC_CLIENT_SECRET,
+# AUTHENTIK_API_TOKEN, dan MAILCOW_API_KEY. Sebelum ini berkas semacam itu
+# muncul sebagai untracked biasa, dan satu `git add -A` dari agen mana pun
+# sudah cukup mengirimnya ke GitHub.
+.env.*
+!.env.example
 
 # database (dev)
 prisma/*.db
