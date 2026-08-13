@@ -12,6 +12,11 @@ import {
   pushAllDivisionTags,
   MAILCOW_CODE,
 } from "@/lib/mailserver";
+import {
+  listAccountCandidates,
+  createAccountsFromMailboxes,
+  type NewAccountInput,
+} from "@/lib/account-provision-service";
 
 // Setting mailserver = kewenangan it_manager (`integrations.manage`).
 // Pengelolaan mailbox = kewenangan it_support DAN it_manager (`access.manage`),
@@ -58,6 +63,31 @@ export async function testMailserverAction(): Promise<void> {
           )
         : "error=" + encodeURIComponent(probe.error ?? "Gagal tanpa keterangan."))
   );
+}
+
+// ── Pembuatan akun massal dari kotak surat (Fase 52) ────────────
+//
+// Memakai `users.create`, BUKAN `access.manage` seperti aksi tag di bawah.
+// Membuat akun itu memberi jalan masuk ke sistem; menempelkan label divisi
+// tidak. Menyamakan izin keduanya berarti siapa pun yang boleh merapikan tag
+// juga boleh menerbitkan akun.
+//
+// Keduanya MENGEMBALIKAN nilai, bukan redirect: daftar calon adalah tabel yang
+// harus dibaca dan dicentang dulu.
+
+export async function listAccountCandidatesAction() {
+  const user = await requirePermission(PERMISSIONS.USERS_CREATE);
+  return listAccountCandidates(user);
+}
+
+export async function createAccountsAction(inputs: NewAccountInput[]) {
+  const user = await requirePermission(PERMISSIONS.USERS_CREATE);
+  const result = await createAccountsFromMailboxes(user, inputs);
+  if (result.ok) {
+    revalidatePath("/settings/users");
+    revalidatePath("/it/mailboxes");
+  }
+  return result;
 }
 
 export async function pushTagAction(formData: FormData): Promise<void> {

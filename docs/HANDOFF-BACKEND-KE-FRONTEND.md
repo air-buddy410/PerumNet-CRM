@@ -40,6 +40,12 @@ ingatan.
 | 18 | **Sinkronisasi divisi → grup Authentik** | mesin belum ada | ✅ siap, halamanmu sudah ada — lihat §17 |
 | 19 | **Kartu pegawai + foto resmi + QR** | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §18 |
 | 20 | **Impor pegawai dari Excel** (pratinjau + terapkan) | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §19 |
+| 21 | **Akun CRM massal dari kotak surat** (centang → buat) | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §20 |
+
+> **Catatan: tiga baris di tabel ini sudah kamu selesaikan** — checklist inspeksi
+> (#7), filter teknisi & cari serial (#8), dan tombol "Ajukan Terminasi" (#9).
+> Diperiksa langsung ke kode, bukan ke dokumen ini. Yang benar-benar tersisa:
+> #10, §18, §19, §20.
 
 ---
 
@@ -881,6 +887,96 @@ interface ImportOutcome {
 Berkasnya **tidak disimpan** sebagai lampiran. Mesin lampiran hanya menerima
 gambar dan PDF; melonggarkannya demi impor ini akan melonggarkannya untuk
 seluruh lampiran di aplikasi. Jejaknya ada di AuditLog (`EMPLOYEE_IMPORT`).
+
+---
+
+## 20. Akun CRM massal dari kotak surat (Fase 52) — PERLU HALAMAN
+
+Latar belakangnya: ada 32 kotak surat di mailcow dan nyaris tidak ada akun CRM.
+Mengetiknya satu per satu berarti 32 kali mengetik alamat email — dan salah
+ketik alamat adalah penyebab gagal nomor satu pada sinkronisasi mailbox, karena
+alamat itulah satu-satunya kunci pencocokan.
+
+```ts
+import {
+  listAccountCandidatesAction,
+  createAccountsAction,
+} from "@/app/(app)/it/mailserver/actions";
+import type {
+  AccountCandidate,
+  CandidateList,
+  NewAccountInput,
+} from "@/lib/account-provision-service";
+```
+
+`listAccountCandidatesAction()` tanpa argumen → `{ ok: true, data: CandidateList }`.
+`createAccountsAction(inputs: NewAccountInput[])` → `{ ok: true, data: { created } }`.
+
+```ts
+interface CandidateList {
+  candidates: AccountCandidate[];
+  alreadyHaveAccount: number;          // sudah punya akun, tidak ditampilkan
+  divisions: { id; code; name }[];     // untuk dropdown
+  roles: { id; code; name }[];         // untuk dropdown
+}
+
+interface AccountCandidate {
+  email: string;
+  suggestedName: string;               // "wayan_budiarta" → "Wayan Budiarta"
+  username: string;                    // DIJAMIN belum dipakai
+  likelyShared: boolean;               // dugaan: alamat fungsi, bukan orang
+  sharedReason: string | null;         // KENAPA diduga begitu
+  employee: { id; employeeNo; fullName; jobTitle; divisionId; divisionName } | null;
+  suggestedDivisionId: string | null;  // dari data HRD
+  suggestedSelected: boolean;          // usulan centang awal
+}
+```
+
+Izinnya **`users.create`**, bukan `access.manage` seperti aksi tag. Membuat
+akun memberi jalan masuk ke sistem; menempelkan label divisi tidak.
+
+### Enam hal yang menentukan bentuk halamannya
+
+1. **`likelyShared` adalah USULAN, bukan penyaring.** Alamat fungsi
+   (`helpdesk@`, `no-reply@`) tetap **ditampilkan**, hanya tidak tercentang.
+   Jangan disembunyikan: kalau suatu hari ada karyawan beralamat `sales@`, ia
+   akan lenyap dari daftar tanpa ada yang tahu.
+
+2. **Tampilkan `sharedReason` di sebelah centangnya.** IT harus bisa *menilai*
+   dugaan itu, bukan disuruh percaya. Satu baris kecil sudah cukup.
+
+3. **Peran wajib dipilih — jangan beri nilai bawaan di UI.** Server menolak
+   `roleIds` kosong. Peran adalah kewenangan sebenarnya; nilai bawaan berarti
+   32 akun terbit dengan hak akses yang tidak pernah diputuskan siapa pun.
+   Pengaturan borongan ("terapkan peran ini ke semua yang tercentang") boleh —
+   asal IT yang memilihnya.
+
+4. **`employee` bernilai `null` itu wajar**, bukan error. Artinya tidak ada
+   pegawai yang namanya cocok **persis**. Pencocokan sebagian sengaja tidak
+   dilakukan — "Budi Prabhawa" bukan "Budi Dharma Prabhawa". Nama kembar juga
+   menghasilkan `null`, dan itu disengaja.
+
+5. **Staff dan Supervisor wajib punya divisi**, Owner tidak. Aturan yang sama
+   dengan form pembuatan user satuan.
+
+6. **Semua atau tidak sama sekali.** Satu baris bermasalah menahan seluruh
+   pilihan. Tampilkan `error` apa adanya — isinya sudah menyebut alamat mana
+   yang bermasalah.
+
+### Yang sengaja TIDAK dilakukan
+
+**Tidak ada pembuatan otomatis.** Kotak surat tidak pernah berubah menjadi akun
+dengan sendirinya. Kalau bisa, siapa pun yang mampu membuat kotak surat mampu
+membuat akun di CRM — mailserver jadi pintu masuk. Batas yang sama dengan tag
+divisi.
+
+**Divisi diusulkan dari data HRD, bukan dari tag mailcow.** Membacanya dari
+mailcow akan membalik arah otoritas: pengedit tag ikut menentukan divisi, dan
+divisi menentukan grup Authentik serta akses ke aplikasi lain.
+
+**Password tidak pernah ditampilkan.** Akun dibuat dengan password acak dan
+`mustChangePassword`. Login memakai Authentik, jadi nilai itu memang tidak
+dipakai — jangan tampilkan kolom password apa pun di halaman ini.
 
 ---
 

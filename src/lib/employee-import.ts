@@ -37,6 +37,11 @@ const COLUMNS: readonly ColumnDef[] = [
   { key: "supervisorNo", label: "NIK Atasan" },
   { key: "accountEmail", label: "Email Akun CRM" },
   { key: "isActive", label: "Aktif", required: true },
+  // Kolomnya TIDAK wajib ada — berkas yang HRD sudah mulai isi sebelum kolom
+  // ini ditambahkan tetap bisa diimpor. Tapi kalau kolomnya ADA, isinya wajib:
+  // kolom kosong berarti seseorang terlewat, dan pegawai tanpa divisi tidak
+  // bisa dibuatkan akun maupun dilabeli kotak emailnya.
+  { key: "divisionRef", label: "Divisi" },
 ] as const;
 
 type RawRow = Record<
@@ -52,7 +57,8 @@ type RawRow = Record<
   | "address"
   | "supervisorNo"
   | "accountEmail"
-  | "isActive",
+  | "isActive"
+  | "divisionRef",
   string
 >;
 
@@ -83,6 +89,11 @@ export interface ImportRow {
   supervisorRowNumber: number | null;
   accountEmail: string | null;
   isActive: boolean;
+  /**
+   * Nama divisi apa adanya dari berkas; dicocokkan ke tabel Division saat
+   * penerapan, bukan di sini — daftarnya data, bukan konstanta kode.
+   */
+  divisionRef: string | null;
 }
 
 export interface RowIssue {
@@ -324,6 +335,14 @@ export function parseEmployeeSheet(rows: string[][]): ParsedSheet {
       }
     }
 
+    // Kolom Divisi boleh TIDAK ADA sama sekali (berkas lama), tapi kalau ada,
+    // sel kosong berarti seseorang terlewat — dan pegawai tanpa divisi tidak
+    // bisa dibuatkan akun maupun dilabeli kotak emailnya. Lebih baik ketahuan
+    // sekarang daripada saat IT bingung kenapa satu orang tidak muncul.
+    if (header.columns.has("divisionRef") && !raw.divisionRef) {
+      problem("Divisi", "Wajib diisi. Pilih dari daftar di dropdown.");
+    }
+
     if (issues.length > before) continue;
 
     out.push({
@@ -342,6 +361,7 @@ export function parseEmployeeSheet(rows: string[][]): ParsedSheet {
       supervisorRowNumber: null,
       accountEmail,
       isActive: isActive!,
+      divisionRef: raw.divisionRef || null,
     });
   }
 

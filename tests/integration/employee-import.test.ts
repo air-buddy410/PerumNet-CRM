@@ -12,20 +12,20 @@ import { PERMISSIONS } from "@/lib/constants";
 const HEADER = [
   "NIK", "Nama Lengkap *", "Jabatan", "Jenjang Jabatan *", "Status Kepegawaian *",
   "Pola Kerja *", "Tanggal Bergabung *", "Kontrak Mulai", "Kontrak Berakhir",
-  "Alamat", "NIK Atasan", "Email Akun CRM", "Aktif *",
+  "Alamat", "NIK Atasan", "Email Akun CRM", "Aktif *", "Divisi *",
 ];
 
 interface R {
   nik?: string; nama: string; jabatan?: string; jenjang?: string; status?: string;
   pola?: string; gabung?: string; kMulai?: string; kAkhir?: string; alamat?: string;
-  atasan?: string; email?: string; aktif?: string;
+  atasan?: string; email?: string; aktif?: string; divisi?: string;
 }
 
 function baris(r: R): string[] {
   return [
     r.nik ?? "", r.nama, r.jabatan ?? "", r.jenjang ?? "Staff", r.status ?? "Karyawan Tetap",
     r.pola ?? "Non-Shift", r.gabung ?? "2026-01-06", r.kMulai ?? "", r.kAkhir ?? "",
-    r.alamat ?? "", r.atasan ?? "", r.email ?? "", r.aktif ?? "Ya",
+    r.alamat ?? "", r.atasan ?? "", r.email ?? "", r.aktif ?? "Ya", r.divisi ?? "NOC",
   ];
 }
 
@@ -40,6 +40,18 @@ describe("impor pegawai dari Excel", () => {
   before(async () => {
     await resetTransactionalData();
     await ensureMasterData();
+    // Divisi dibuat sendiri, tidak menumpang apa pun yang kebetulan tertinggal
+    // di database tes dari berkas lain — divisi itu master data dan tidak ikut
+    // dibersihkan resetTransactionalData().
+    for (const [code, name] of [
+      ["NOC", "NOC"],
+      ["MKT", "Marketing"],
+      ["FIN", "Finance"],
+      ["WH", "Warehouse"],
+      ["SLS", "Sales"],
+    ]) {
+      await db.division.upsert({ where: { code }, update: { name }, create: { code, name } });
+    }
     HRD = actor((await makeUser(tag("hrd").toLowerCase(), "HRD")).id, "hrd");
     const orang = await makeUser(tag("gudang").toLowerCase(), "GUDANG");
     BUKAN_HRD = actor(orang.id, "gudang");
@@ -209,6 +221,66 @@ describe("impor pegawai dari Excel", () => {
     const r = await applyEmployeeImport(HRD, bukan);
     assert.equal(r.ok, false);
     assert.match(r.ok ? "" : r.error, /\.xls lama tidak didukung|bukan \.xlsx/i);
+  });
+
+  test("divisi dari berkas tersimpan di data pegawai", async () => {
+    const r = await applyEmployeeImport(HRD, berkas({ nama: "Punya Divisi", divisi: "Marketing" }));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const emp = await db.employee.findFirst({
+      where: { fullName: "Punya Divisi" },
+      select: { division: { select: { code: true } } },
+    });
+    assert.equal(emp!.division?.code, "MKT");
+  });
+
+  test("KODE divisi juga diterima, bukan cuma namanya", async () => {
+    const r = await applyEmployeeImport(HRD, berkas({ nama: "Pakai Kode", divisi: "FIN" }));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const emp = await db.employee.findFirst({
+      where: { fullName: "Pakai Kode" },
+      select: { division: { select: { code: true } } },
+    });
+    assert.equal(emp!.division?.code, "FIN");
+  });
+
+  test("divisi yang TIDAK ADA di sistem ditolak, bukan dikosongkan", async () => {
+    const p = await previewEmployeeImport(HRD, berkas({ nama: "Divisi Ngawur", divisi: "Divisi Rahasia" }));
+    assert.equal(p.ok && p.data.ok, false);
+    assert.match(p.ok ? p.data.issues[0].message : "", /tidak dikenal/);
+    // Pesannya menyebut pilihan yang sah supaya HRD tidak perlu menebak.
+    assert.match(p.ok ? p.data.issues[0].message : "", /Marketing/);
+
+    const a = await applyEmployeeImport(HRD, berkas({ nama: "Divisi Ngawur", divisi: "Divisi Rahasia" }));
+    assert.equal(a.ok, false);
+    assert.equal(await db.employee.count({ where: { fullName: "Divisi Ngawur" } }), 0);
+  });
+
+  test("DIVISI AKUN CRM TIDAK IKUT BERUBAH — hanya dilaporkan", async () => {
+    // Ini batas yang paling penting di seluruh impor ini. User.divisionId
+    // menentukan ke mana persetujuan cuti berjalan dan grup Authentik mana
+    // yang diikuti. Mengubahnya sebagai efek samping mengunggah spreadsheet
+    // berarti memindahkan kewenangan orang tanpa ada yang memutuskan.
+    const div = await db.division.findFirst({ where: { code: "WH" } });
+    const akun = await makeUser(tag("beda").toLowerCase(), "HRD");
+    await db.user.update({ where: { id: akun.id }, data: { divisionId: div!.id } });
+
+    const f = () => berkas({ nama: "Divisi Beda", email: akun.email, divisi: "Sales" });
+    const p = await previewEmployeeImport(HRD, f());
+    assert.equal(p.ok && p.data.ok, true, "perbedaan divisi BUKAN penghalang");
+    assert.match(p.ok ? p.data.rows[0].notes.join(" ") : "", /Akun TIDAK diubah/);
+
+    assert.equal((await applyEmployeeImport(HRD, f())).ok, true);
+    const sesudah = await db.user.findUnique({
+      where: { id: akun.id },
+      select: { division: { select: { code: true } } },
+    });
+    assert.equal(sesudah!.division?.code, "WH", "divisi akun harus tetap seperti semula");
+
+    const emp = await db.employee.findFirst({
+      where: { fullName: "Divisi Beda" },
+      select: { division: { select: { code: true } } },
+    });
+    assert.equal(emp!.division?.code, "SLS", "sedangkan data pegawai memakai isi berkas");
   });
 
   test("impor tercatat di AuditLog", async () => {

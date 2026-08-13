@@ -18,6 +18,7 @@ const HEADER = [
   "NIK Atasan",
   "Email Akun CRM",
   "Aktif *",
+  "Divisi *",
   "Cek",
 ];
 
@@ -37,13 +38,14 @@ function row(over: Partial<Record<string, string>> = {}): string[] {
     Atasan: "",
     Email: "",
     Aktif: "Ya",
+    Divisi: "NOC",
     Cek: "OK",
     ...over,
   };
   return [
     base.NIK, base.Nama, base.Jabatan, base.Jenjang, base.Status, base.Pola,
     base.Gabung, base.KMulai, base.KAkhir, base.Alamat, base.Atasan,
-    base.Email, base.Aktif, base.Cek,
+    base.Email, base.Aktif, base.Divisi, base.Cek,
   ];
 }
 
@@ -299,6 +301,36 @@ describe("hierarki atasan", () => {
     assert.equal(r.issues.length, 0);
     assert.equal(r.rows.length, 2);
     assert.equal(r.rows[0].supervisorRowNumber, 5);
+  });
+});
+
+describe("kolom Divisi — boleh tidak ada, tapi kalau ada wajib diisi", () => {
+  test("nilainya dibawa apa adanya untuk dicocokkan saat penerapan", () => {
+    // Daftar divisi itu DATA di tabel Division, bukan konstanta kode — jadi
+    // lapisan murni tidak boleh berpura-pura tahu isinya.
+    const r = parseEmployeeSheet(sheet(row({ Divisi: "Customer Service" })));
+    assert.equal(r.issues.length, 0, JSON.stringify(r.issues));
+    assert.equal(r.rows[0].divisionRef, "Customer Service");
+  });
+
+  test("BERKAS LAMA tanpa kolom Divisi tetap bisa diimpor", () => {
+    // HRD sudah mulai mengisi sebelum kolom ini ada. Menolak berkas mereka
+    // berarti menyuruh mengulang dua ratus baris.
+    const idx = HEADER.indexOf("Divisi *");
+    const lama = HEADER.filter((_, i) => i !== idx);
+    const isi = row().filter((_, i) => i !== idx);
+    const r = parseEmployeeSheet([["judul"], ["petunjuk"], lama, isi]);
+    assert.equal(r.issues.length, 0, JSON.stringify(r.issues));
+    assert.equal(r.rows[0].divisionRef, null);
+  });
+
+  test("kolomnya ADA tapi selnya kosong → DITOLAK", () => {
+    // Sel kosong berarti seseorang terlewat. Pegawai tanpa divisi tidak bisa
+    // dibuatkan akun maupun dilabeli kotak emailnya, dan itu baru ketahuan
+    // jauh belakangan kalau dibiarkan lewat.
+    const r = parseEmployeeSheet(sheet(row({ Divisi: "" })));
+    assert.equal(r.rows.length, 0);
+    assert.equal(r.issues[0].column, "Divisi");
   });
 });
 
