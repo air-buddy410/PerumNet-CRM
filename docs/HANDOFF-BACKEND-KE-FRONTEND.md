@@ -1018,6 +1018,26 @@ kalau suatu nilai belum punya label, yang tampil kodenya — jelek, tapi jujur.
 
 ## 22. Halaman login — Authentik turun jadi pilihan kedua (Fase 53)
 
+> ### ⚠️ DIPERBARUI — sebagian besar sudah beres sendiri, JANGAN dikerjakan ulang
+>
+> `AUTH_PROVIDER` sudah diubah ke `MAILSERVER` dan sudah diverifikasi di
+> peramban: halaman login kini **hanya** menampilkan email + password + tombol
+> Masuk. Tombol Authentik dan tulisan *"Password di bawah hanya untuk akun
+> darurat"* **hilang sendiri**, karena blok itu memang bersyarat
+> `oidcAvailable` — yang hanya menyala saat `AUTH_PROVIDER === "OIDC"`.
+>
+> Dan itu **lebih benar** daripada permintaan asli "kecilkan tombolnya":
+> tombol yang tetap tampil di mode MAILSERVER hanya akan mengantar orang ke
+> error, sebab jalur `/api/auth/oidc/start` memang menolak saat modenya bukan
+> OIDC.
+>
+> **Yang tersisa untukmu cuma satu, dan kecil:** label `Username atau Email`
+> sebaiknya menyebut email lebih dulu — yang dipakai mencocokkan ke mailserver
+> adalah **alamat email**, dan sekarang semua orang memakai alamat emailnya.
+>
+> Sisa bagian di bawah dibiarkan sebagai rekaman alasannya. Tidak perlu
+> dikerjakan.
+
 **Keputusan PO:** PerumNet fokus ke mailcow dulu. Authentik **tidak dibongkar**,
 hanya disimpan — jadi jangan hapus jalurnya, cukup kecilkan.
 
@@ -1064,6 +1084,65 @@ tidak bermasalah. Tampilkan `error` apa adanya.
 
 ---
 
+## 23. "Lupa password" di halaman login (Fase 55) — PERLU DIBUAT
+
+**Baca dulu bagian ini sebelum membuat apa pun — bentuknya BUKAN formulir reset
+password biasa, dan kalau dibuat begitu ia tidak akan pernah bisa bekerja.**
+
+### Kenapa bukan reset biasa
+
+`AUTH_PROVIDER` sekarang `MAILSERVER`: password CRM **adalah** password email.
+Alur reset yang normal mengirim tautan ke kotak surat — kotak surat yang justru
+sedang tidak bisa dibuka orangnya. Berputar, tidak ada ujungnya.
+
+Jadi yang dibuat adalah **formulir permintaan**, bukan formulir reset. Tidak ada
+tautan, tidak ada halaman "pasang password baru", tidak ada token.
+
+### Kontrak
+
+```ts
+import { requestRecoveryAction } from "@/app/login/recovery-actions";
+// field: email      → { ok: true, message: string }
+```
+
+Aksinya bisa dipanggil **tanpa login** — memang harus, sebab yang memakainya
+orang yang tidak bisa masuk.
+
+### Bentuk yang diminta
+
+1. Tautan kecil **"Lupa password?"** di bawah form masuk.
+2. Membukanya menampilkan satu kotak isian **alamat email** + tombol kirim.
+3. Setelah dikirim, tampilkan `message` **apa adanya**.
+
+### Empat hal yang menentukan, dan jangan diubah
+
+1. **Tampilkan `message` apa adanya, jangan dikarang ulang.** Kalimatnya sama
+   persis baik alamatnya terdaftar maupun tidak — itu disengaja. Membedakan
+   keduanya menjadikan formulir ini alat memeriksa siapa saja yang bekerja di
+   PerumNet.
+
+2. **`ok` selalu `true`.** Tidak ada jalur gagal yang perlu kamu tangani. Kalau
+   UI menampilkan "email tidak ditemukan", justru itu yang membocorkan.
+
+3. **Jangan tambahkan penghitung mundur atau pesan "tunggu 15 menit".** Jeda
+   memang ada di server, tapi menampilkannya ikut membocorkan apakah permintaan
+   sebelumnya diproses.
+
+4. **Jangan otomatis mengisi alamatnya dari kolom login.** Biarkan orang
+   mengetiknya sendiri — itu satu kesempatan lagi untuk menyadari kalau selama
+   ini ia salah ketik alamat.
+
+### Yang terjadi di belakang (tidak perlu kamu urus)
+
+Tim IT menerima pemberitahuan dalam aplikasi **dan** email berisi rincian
+pemohon beserta langkah pemastian identitas. Pemohon juga dikirimi email —
+bukan sebagai alat pemulihan, melainkan supaya kalau **orang lain** yang
+mengajukan atas namanya, ia melihatnya dari perangkat yang masih tersambung.
+
+Tidak ada kata sandi yang berubah otomatis. Reset tetap dilakukan IT.
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
@@ -1088,3 +1167,64 @@ npm test                 # unit, tanpa database
 npm run test:integration # butuh database tes terpisah
 npm run test:all         # keduanya
 ```
+
+---
+
+# Untuk Luna — pembagian peran resmi & rencana folder payung
+
+**Ditulis 2026-08-13 oleh Opus, atas permintaan pemilik proyek.**
+
+## Peran sudah ditetapkan
+
+| | Luna (OpenCode) | Opus (Claude Code) |
+|---|---|---|
+| | **FRONTEND** | **BACKEND · SERVER · DATABASE** |
+
+Aturan lengkapnya di **`docs/WORKFLOW-TIM.md`** — tolong dibaca sekali, isinya
+pendek. Ringkasnya:
+
+- **Wilayahmu:** `src/app/**/page.tsx` (tampilan), `src/components/**`,
+  `globals.css`, `tailwind.config.ts`. Aku tidak akan menyentuhnya. Kalau
+  sebuah fase butuh perubahan tampilan, aku tulis permintaannya, tidak
+  kukerjakan sendiri.
+- **Wilayahku:** `prisma/schema.prisma`, `src/lib/*.ts`, isi `actions.ts`,
+  worker, deploy. Kalau sebuah layar butuh data atau perilaku yang belum ada,
+  tulis di **`docs/PERMINTAAN-FRONTEND-KE-BACKEND.md`** — file baru, kanal
+  balik dari dokumen ini. Jangan diakali di sisi klien: validasi di form itu
+  kenyamanan, penegakannya tetap di service layer.
+- Halaman baru yang kubuat **hanya memakai kelas design system yang sudah
+  ada**, tidak menciptakan gaya baru, dan entri nav ditambahkan tanpa menata
+  ulang yang sudah ada.
+
+## Aturan yang sama sekarang berlaku di semua app PerumNet
+
+Bukan cuma CRM. `docs/WORKFLOW-TIM.md` (atau `AGENTS.md`) yang isinya sama
+sudah dipasang di **Monitoring NOC**, **Enterprise**, dan **Captive Portal**,
+disesuaikan dengan stack masing-masing. Jadi pindah aplikasi tidak berarti
+pindah kebiasaan.
+
+Peta lengkapnya ada di §6 `docs/WORKFLOW-TIM.md`. Satu hal yang perlu kamu
+tahu: **`PRTG PerumNet` sudah usang** — commit HEAD-nya ada di dalam riwayat
+Monitoring NOC yang lanjut sampai Phase 8. Kalau ada yang menyuruh mengerjakan
+"PRTG", yang dimaksud hampir pasti Monitoring NOC.
+
+## Rencana folder payung — BELUM dieksekusi
+
+Ada rencana memindahkan kelima folder app ke dalam satu folder payung
+`Dev Project/APP-Perumnet/`. **Belum dijalankan dan belum diputuskan.**
+
+Yang perlu kamu waspadai kalau nanti jadi:
+
+- Pemindahan pakai `mv`, jadi berkasmu yang belum di-commit **ikut pindah
+  utuh** — ini beda total dengan `git reset --hard` yang dulu menghapus 13
+  berkasmu.
+- Tapi kalau kamu sedang menulis saat foldernya berpindah, tulisanmu nyasar ke
+  path lama. **Aku tidak akan menjalankan pemindahan selama OpenCode terbuka.**
+- Jangan memindahkan folder sendiri.
+
+## Catatan keadaan (13 Agustus)
+
+Worker MikroTik sudah menarik **1.714 sesi PPPoE** (1.586 online), tapi
+**0 tertaut ke langganan** karena tabel `Subscription` masih kosong. Jadi kalau
+kamu mengerjakan layar yang menampilkan status PPPoE per pelanggan, datanya
+memang akan kosong sekarang — bukan bug di sisimu.
