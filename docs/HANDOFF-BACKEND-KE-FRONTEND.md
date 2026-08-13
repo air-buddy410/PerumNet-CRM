@@ -26,10 +26,10 @@ ingatan.
 | 5 | **Peta status PPPoE** (offline diwarnai, hitungan, pemilih router) | data belum menyatu | ✅ siap |
 | 5b | **Lapisan POP, MS/ODC, dan rute kabel di peta** | data belum dirakit | ✅ siap — lihat §5b |
 | 6 | Unggah foto bukti + tanda tangan + koordinat penarikan | action belum ada | ✅ siap |
-| 7 | Checklist inspeksi ya/tidak | — | ⚠️ perlu dibuat, lihat §6 |
-| 8 | Penyaringan teknisi & pencarian serial di daftar penarikan | — | ⚠️ perlu dibuat |
-| 9 | Tombol "Ajukan Terminasi" di Customer 360 | — | ⚠️ perlu dibuat |
-| 10 | Portal teknisi `/portal/recoveries` | — | ⚠️ perlu dibuat |
+| 7 | Checklist inspeksi ya/tidak | — | ✅ **sudah kamu buat** |
+| 8 | Penyaringan teknisi & pencarian serial di daftar penarikan | — | ✅ **sudah kamu buat** |
+| 9 | Tombol "Ajukan Terminasi" di Customer 360 | — | ✅ **sudah kamu buat** |
+| 10 | Portal teknisi `/portal/recoveries` | — | ✅ **sudah kamu buat** (commit fe7b4a3) — pemagarannya sudah kuperiksa, benar |
 | 11 | **Data pegawai lengkap** (alamat, shift, jenjang, masa kontrak) | field belum ada | ✅ siap — lihat §9 |
 | 12 | **Akun beku & pencairan** | konsep belum ada | ✅ siap — lihat §10 |
 | 13 | **Halaman arsip `/settings/trash`** | mekanisme belum ada | ✅ siap — lihat §11 |
@@ -42,10 +42,18 @@ ingatan.
 | 20 | **Impor pegawai dari Excel** (pratinjau + terapkan) | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §19 |
 | 21 | **Akun CRM massal dari kotak surat** (centang → buat) | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §20 |
 
-> **Catatan: tiga baris di tabel ini sudah kamu selesaikan** — checklist inspeksi
-> (#7), filter teknisi & cari serial (#8), dan tombol "Ajukan Terminasi" (#9).
-> Diperiksa langsung ke kode, bukan ke dokumen ini. Yang benar-benar tersisa:
-> #10, §18, §19, §20.
+> **Catatan: EMPAT baris di tabel ini sudah kamu selesaikan** — checklist
+> inspeksi (#7), filter teknisi & cari serial (#8), tombol "Ajukan Terminasi"
+> (#9), dan portal teknisi (#10). Semuanya diperiksa langsung ke kode, bukan ke
+> dokumen ini.
+>
+> Portalnya juga sudah kuperiksa pemagarannya: daftar maupun detail hanya
+> menampilkan penarikan milik teknisi itu sendiri, dan detail yang bukan
+> miliknya mengembalikan notFound — bukan sekadar disembunyikan dari daftar.
+> Jalur tulisnya (catat kunjungan, ambil perangkat, konfirmasi pemutusan fisik)
+> juga menolak penarikan milik orang lain.
+>
+> **Yang benar-benar tersisa: §18, §19, §20** — dan §24 kalau mau dipoles.
 
 ---
 
