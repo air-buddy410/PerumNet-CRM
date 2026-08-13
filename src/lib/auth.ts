@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { notifyPermission } from "@/lib/notify";
 import { AUDIT_ACTIONS, PERMISSIONS } from "@/lib/constants";
 import { localLoginBlocker, isBreakGlassLogin } from "@/lib/oidc-rules";
+import { verifyMailserverPassword } from "@/lib/mailserver";
 import { authProviderMode } from "@/lib/oidc";
 
 export async function login(
@@ -24,21 +25,60 @@ export async function login(
     return { ok: false, error: "Username atau password salah." };
   }
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    await logAudit({
-      userId: user.id,
-      action: AUDIT_ACTIONS.LOGIN_FAILED,
-      module: "auth",
-      description: `Login gagal untuk "${user.username}" (password salah)`,
-    });
-    return { ok: false, error: "Username atau password salah." };
+  const provider = authProviderMode();
+
+  // ── Di mana password diperiksa (Fase 53) ──────────────────────
+  //
+  // Mode MAILSERVER memindahkan pemeriksaan dari hash lokal ke mailserver:
+  // yang sah adalah password EMAIL orang itu. Hash lokal tetap dipakai untuk
+  // akun darurat (allowLocalLogin) — kalau tidak, mailserver yang mati berarti
+  // tidak ada seorang pun bisa masuk untuk membetulkannya.
+  //
+  // Tidak ada jalan mundur diam-diam. Mailserver tak terjawab berarti login
+  // GAGAL, bukan jatuh kembali ke hash lokal — jatuh balik seperti itu membuat
+  // mematikan mailbox tidak lagi berarti mencabut akses.
+  const lewatMailserver = provider === "MAILSERVER" && !user.allowLocalLogin;
+
+  if (lewatMailserver) {
+    const hasil = await verifyMailserverPassword(user.email, password);
+    if (!hasil.ok) {
+      await logAudit({
+        userId: user.id,
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        module: "auth",
+        // Password tidak pernah ikut dicatat — di sini pun tidak.
+        description:
+          hasil.reason === "REJECTED"
+            ? `Login gagal untuk "${user.username}" (ditolak mailserver)`
+            : `Login gagal untuk "${user.username}" (mailserver tidak terjawab: ${hasil.detail})`,
+      });
+      return {
+        ok: false,
+        error:
+          hasil.reason === "REJECTED"
+            ? "Username atau password salah."
+            : // Dibedakan dengan sengaja: memberitahu "password salah" saat
+              // mailserver-nya yang mati akan membuat orang mereset password
+              // email yang sebenarnya tidak bermasalah.
+              "Mailserver sedang tidak bisa dihubungi, jadi login belum bisa diproses. Coba lagi sebentar lagi atau hubungi IT.",
+      };
+    }
+  } else {
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      await logAudit({
+        userId: user.id,
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        module: "auth",
+        description: `Login gagal untuk "${user.username}" (password salah)`,
+      });
+      return { ok: false, error: "Username atau password salah." };
+    }
   }
 
   // Fase 45 — jalur password lokal saat identitas terpusat aktif.
   // Diperiksa setelah password benar, alasan yang sama dengan pembekuan di
   // bawah: keadaan akun tidak boleh bocor ke penebak nama pengguna.
-  const provider = authProviderMode();
   const blocker = localLoginBlocker(provider, user);
   if (blocker) {
     await logAudit({

@@ -9,6 +9,12 @@ import {
   type ConnectionProbe,
 } from "@/lib/mailcow";
 import {
+  probeImapLogin,
+  imapHostFrom,
+  type ImapProbe,
+  type MailAuthResult,
+} from "@/lib/mail-auth";
+import {
   applyDivisionTag,
   compareMailboxes,
   summarize,
@@ -273,4 +279,41 @@ export async function pushAllDivisionTags(
     else errors.push(`${row.email}: ${r.error}`);
   }
   return { pushed, failed: errors.length, errors };
+}
+
+// ── Mailserver sebagai sumber identitas (Fase 53) ───────────────
+//
+// PerumNet memilih mailcow lebih dulu; Authentik disimpan untuk nanti dan
+// tidak dibongkar, jadi bisa dinaikkan lagi tanpa membangun ulang.
+
+/**
+ * Memeriksa password seseorang ke mailserver.
+ *
+ * Alamat IMAP-nya diturunkan dari baseUrl integrasi yang SAMA dengan API
+ * mailcow — supaya tidak pernah ada dua alamat mailserver yang bisa berbeda
+ * diam-diam.
+ *
+ * Integrasi yang belum siap menghasilkan UNREACHABLE, BUKAN penolakan biasa.
+ * Bedanya menentukan: "password salah" akan membuat orang mencoba mereset
+ * password email yang sebenarnya tidak bermasalah.
+ */
+export async function verifyMailserverPassword(
+  email: string,
+  password: string,
+  probe: ImapProbe = probeImapLogin
+): Promise<MailAuthResult> {
+  const cfg = await loadMailcowIntegration();
+  const blocker = mailcowBlocker(cfg);
+  if (!cfg || blocker) {
+    return { ok: false, reason: "UNREACHABLE", detail: blocker ?? "Integrasi mailserver belum disiapkan." };
+  }
+  if (!email) {
+    return { ok: false, reason: "UNREACHABLE", detail: "Akun ini belum punya alamat email." };
+  }
+  try {
+    return await probe(imapHostFrom(cfg.baseUrl), email, password);
+  } catch (e) {
+    // Password TIDAK PERNAH ikut ke pesan galat.
+    return { ok: false, reason: "UNREACHABLE", detail: (e as Error).message };
+  }
 }

@@ -175,6 +175,15 @@ export function localLoginBlocker(
 ): string | null {
   if (provider === "LOCAL") return null;
   if (account.allowLocalLogin) return null;
+  // Fase 53 — MAILSERVER TIDAK diblokir di sini, dan pembedaan ini penting.
+  //
+  // Di mode OIDC memang tidak ada form password sama sekali; pengguna dilempar
+  // ke penyedia identitas, jadi mengetik password di CRM pasti keliru.
+  //
+  // Di mode MAILSERVER form-nya justru tetap dipakai — yang pindah cuma tempat
+  // pemeriksaannya, dari hash lokal ke mailserver. Memblokirnya di sini akan
+  // mematikan satu-satunya jalan masuk yang tersedia.
+  if (provider === "MAILSERVER") return null;
   return "Masuk memakai password lokal sudah dinonaktifkan. Gunakan tombol masuk lewat penyedia identitas.";
 }
 

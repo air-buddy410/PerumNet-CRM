@@ -1016,6 +1016,54 @@ kalau suatu nilai belum punya label, yang tampil kodenya — jelek, tapi jujur.
 
 ---
 
+## 22. Halaman login — Authentik turun jadi pilihan kedua (Fase 53)
+
+**Keputusan PO:** PerumNet fokus ke mailcow dulu. Authentik **tidak dibongkar**,
+hanya disimpan — jadi jangan hapus jalurnya, cukup kecilkan.
+
+`AUTH_PROVIDER` sekarang bernilai `MAILSERVER`. Orang login dengan **alamat
+email dan password email**-nya; CRM menanyakannya ke mailserver.
+
+### Yang berubah di `src/app/login/page.tsx`
+
+Sekarang blok OIDC tampil sebagai **tombol utama selebar penuh** dengan form
+password di bawahnya dan tulisan *"Password di bawah hanya untuk akun darurat."*
+Itu terbalik dari keadaan sekarang.
+
+Yang diminta:
+
+1. **Form email + password jadi yang utama.** Itu jalur semua orang sekarang,
+   bukan jalur darurat.
+2. **Tombol Authentik dikecilkan** — tautan teks kecil, ditaruh di pojok atau
+   di bawah form, bukan `btn-primary w-full`.
+3. **Hapus tulisan "Password di bawah hanya untuk akun darurat."** Sekarang
+   justru sebaliknya, dan kalimat itu akan membuat orang ragu memakai jalur
+   yang benar.
+4. Label "Username atau Email" sebaiknya menyebut email lebih dulu — yang
+   dipakai untuk mencocokkan ke mailserver adalah **alamat email**.
+
+### Yang JANGAN dilakukan
+
+**Jangan hapus tautan `/api/auth/oidc/start`.** Mesin Authentik masih utuh dan
+teruji; menghidupkannya kembali nanti cukup dengan mengubah satu variabel
+environment. Menghapus tombolnya berarti membangun ulang saat dibutuhkan.
+
+**Jangan sembunyikan tombol Authentik sepenuhnya**, sekalipun kecil. Ia tetap
+jalan masuk yang sah bagi akun yang sudah tertaut.
+
+**Kondisinya jangan diubah.** `oidcAvailable` sudah benar — ia menyala hanya
+bila konfigurasi OIDC lengkap. Di mode `MAILSERVER` ia akan mati sendiri kalau
+`AUTH_PROVIDER` bukan `OIDC`, jadi tidak perlu logika tambahan.
+
+### Yang tidak perlu kamu urus
+
+Pesan galat sudah dibedakan di backend: "Username atau password salah" untuk
+password yang memang salah, dan pesan tersendiri saat **mailserver-nya yang
+tidak terjawab** — supaya orang tidak mereset password email yang sebenarnya
+tidak bermasalah. Tampilkan `error` apa adanya.
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
