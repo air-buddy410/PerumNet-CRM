@@ -393,3 +393,122 @@ describe("data diri ikut tersimpan lewat impor", () => {
     assert.equal(e!.birthDate, null);
   });
 });
+
+// ── Melengkapi data diri pegawai yang SUDAH ada (Fase 60) ───────
+//
+// Kejadian yang memaksa ini ada: 23 pegawai sudah terdaftar, lalu template
+// diisikan data mereka supaya HRD tinggal melengkapi empat kolom. Sebelum
+// perubahan ini seluruh baris itu DILEWATI — HRD mengisi 23 baris, mengunggah,
+// dan tidak ada satu pun yang tersimpan, tanpa galat apa pun.
+
+describe("melengkapi data diri lewat impor ulang", () => {
+  let PETUGAS: ReturnType<typeof actor>;
+  let NIK: string;
+
+  before(async () => {
+    await ensureMasterData();
+    await db.division.upsert({ where: { code: "NOC" }, update: {}, create: { code: "NOC", name: "NOC" } });
+    PETUGAS = actor((await makeUser(tag("hrdlengkap").toLowerCase(), "HRD")).id, "hrd");
+
+    const r = await applyEmployeeImport(PETUGAS, berkas({ nama: "Ketut Sudah Ada", jabatan: "Teknisi" }));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    NIK = (await db.employee.findFirstOrThrow({ where: { fullName: "Ketut Sudah Ada" } })).employeeNo;
+  });
+
+  test("pratinjau menyebutnya LENGKAPI dan menuliskan apa yang berubah", async () => {
+    const p = await previewEmployeeImport(
+      PETUGAS,
+      berkasDiri({ nik: NIK, nama: "Ketut Sudah Ada", lahir: "Tabanan", darah: "B+" })
+    );
+    assert.equal(p.ok, true, p.ok ? "" : p.error);
+    const baris = p.ok ? p.data.rows[0] : null;
+    assert.equal(baris!.action, "LENGKAPI");
+    assert.equal(p.ok && p.data.willComplete, 1);
+    assert.equal(p.ok && p.data.willCreate, 0);
+    // Perubahan yang tidak terlihat di pratinjau sama saja dengan perubahan
+    // yang tidak diputuskan siapa pun.
+    assert.equal(baris!.notes.some((n) => /Tempat Lahir: \(kosong\) → Tabanan/.test(n)), true, baris!.notes.join(" | "));
+  });
+
+  test("nilainya benar-benar tersimpan", async () => {
+    const r = await applyEmployeeImport(
+      PETUGAS,
+      berkasDiri({ nik: NIK, nama: "Ketut Sudah Ada", lahir: "Tabanan", tglLahir: "1990-06-05", didik: "S1", darah: "B+" })
+    );
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    assert.equal(r.ok && r.data.completed.length, 1);
+    const e = await db.employee.findFirstOrThrow({ where: { employeeNo: NIK } });
+    assert.equal(e.birthPlace, "Tabanan");
+    assert.equal(e.birthDate?.toISOString().slice(0, 10), "1990-06-05");
+    assert.equal(e.education, "S1");
+    assert.equal(e.bloodType, "B_POS");
+  });
+
+  test("SEL KOSONG TIDAK MENGHAPUS yang sudah terisi", async () => {
+    // Orang mengosongkan sel karena tidak tahu, jauh lebih sering daripada
+    // karena ingin menghapus. Kalau kosong berarti hapus, satu berkas lama
+    // yang diunggah ulang akan menghapus data diri semua orang sekaligus.
+    const r = await applyEmployeeImport(PETUGAS, berkasDiri({ nik: NIK, nama: "Ketut Sudah Ada" }));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const e = await db.employee.findFirstOrThrow({ where: { employeeNo: NIK } });
+    assert.equal(e.birthPlace, "Tabanan", "data lama harus bertahan");
+    assert.equal(e.bloodType, "B_POS");
+  });
+
+  test("tanpa perubahan kembali menjadi SKIP, bukan penulisan sia-sia", async () => {
+    const p = await previewEmployeeImport(
+      PETUGAS,
+      berkasDiri({ nik: NIK, nama: "Ketut Sudah Ada", lahir: "Tabanan", darah: "B+" })
+    );
+    assert.equal(p.ok && p.data.rows[0].action, "SKIP");
+    assert.equal(p.ok && p.data.willComplete, 0);
+  });
+
+  test("KOLOM LAIN TIDAK IKUT BERUBAH meski berbeda di berkas", async () => {
+    // Inti pengamanannya. Divisi menentukan ke mana persetujuan cuti berjalan
+    // dan grup Authentik mana yang diikuti; kontrak menentukan kapan akun
+    // dibekukan. Mengubahnya sebagai efek samping mengunggah spreadsheet
+    // berarti memindahkan kewenangan orang tanpa ada yang memutuskan.
+    const sebelum = await db.employee.findFirstOrThrow({ where: { employeeNo: NIK } });
+    const r = await applyEmployeeImport(
+      PETUGAS,
+      berkasDiri({
+        nik: NIK,
+        nama: "Ketut Nama Diubah",
+        jabatan: "Manajer Baru",
+        jenjang: "Supervisor",
+        divisi: "MKT",
+        alamat: "Alamat Baru",
+        didik: "S2",
+      })
+    );
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const sesudah = await db.employee.findFirstOrThrow({ where: { employeeNo: NIK } });
+    assert.equal(sesudah.education, "S2", "hanya data diri yang berubah");
+    assert.equal(sesudah.fullName, sebelum.fullName, "nama TIDAK berubah");
+    assert.equal(sesudah.jobTitle, sebelum.jobTitle, "jabatan TIDAK berubah");
+    assert.equal(sesudah.jobLevel, sebelum.jobLevel, "jenjang TIDAK berubah");
+    assert.equal(sesudah.divisionId, sebelum.divisionId, "divisi TIDAK berubah");
+    assert.equal(sesudah.address, sebelum.address, "alamat TIDAK berubah");
+  });
+
+  test("nama yang berbeda DICATAT, supaya tidak dikira ikut terbetulkan", async () => {
+    const p = await previewEmployeeImport(
+      PETUGAS,
+      berkasDiri({ nik: NIK, nama: "Ketut Salah Ketik", darah: "O−" })
+    );
+    assert.equal(p.ok && p.data.rows[0].notes.some((n) => /TIDAK diubah/.test(n)), true);
+  });
+
+  test("perubahannya tercatat di AuditLog lengkap dengan nilainya", async () => {
+    // Golongan darah yang salah baru ketahuan saat dibutuhkan, dan saat itu
+    // yang menolong hanya jejak siapa mengubah apa.
+    const log = await db.auditLog.findFirst({
+      where: { action: "EMPLOYEE_PERSONAL_UPDATE" },
+      orderBy: { createdAt: "desc" },
+    });
+    assert.notEqual(log, null);
+    assert.equal(log!.userId, PETUGAS.id);
+    assert.match(log!.description, /Golongan Darah|Pendidikan|Tempat Lahir/);
+  });
+});

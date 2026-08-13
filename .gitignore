@@ -41,3 +41,8 @@ prisma/*.db-journal
 
 # Berkas kunci sementara Excel — muncul saat template dibuka, bukan bagian repo.
 ~$*
+
+# Template HRD yang SUDAH DIISI data pegawai sungguhan — alamat rumah, email,
+# tanggal lahir, golongan darah. Berkas kosongnya memang di-commit; yang terisi
+# tidak pernah. Sekali masuk riwayat git, ia tidak bisa benar-benar dihapus.
+docs/template/*-TERISI.xlsx
