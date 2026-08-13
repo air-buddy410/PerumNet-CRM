@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseEmployeeSheet, normalizeEmployeeNo } from "@/lib/employee-import";
+import { parseEmployeeSheet, normalizeEmployeeNo, bloodTypeFromLabel } from "@/lib/employee-import";
 import { readSheetRows, XlsxError } from "@/lib/xlsx-read";
 
 const HEADER = [
@@ -19,6 +19,10 @@ const HEADER = [
   "Email Akun CRM",
   "Aktif *",
   "Divisi *",
+  "Tempat Lahir",
+  "Tanggal Lahir",
+  "Pendidikan Terakhir",
+  "Golongan Darah",
   "Cek",
 ];
 
@@ -39,13 +43,18 @@ function row(over: Partial<Record<string, string>> = {}): string[] {
     Email: "",
     Aktif: "Ya",
     Divisi: "NOC",
+    Lahir: "",
+    TglLahir: "",
+    Didik: "",
+    Darah: "",
     Cek: "OK",
     ...over,
   };
   return [
     base.NIK, base.Nama, base.Jabatan, base.Jenjang, base.Status, base.Pola,
     base.Gabung, base.KMulai, base.KAkhir, base.Alamat, base.Atasan,
-    base.Email, base.Aktif, base.Divisi, base.Cek,
+    base.Email, base.Aktif, base.Divisi,
+    base.Lahir, base.TglLahir, base.Didik, base.Darah, base.Cek,
   ];
 }
 
@@ -404,5 +413,128 @@ describe("terhadap template asli yang kita kirim ke HRD", () => {
     // Penjaga terhadap perubahan sepihak: kalau judul kolom di template
     // digeser tanpa memperbarui COLUMNS, ini yang gagal lebih dulu.
     assert.deepEqual(rows[2], HEADER);
+  });
+});
+
+describe("data diri dari template HRD (Fase 60)", () => {
+  test("keempatnya terbaca dan diterjemahkan ke KODE, bukan label", () => {
+    const r = parseEmployeeSheet(
+      sheet(row({ Lahir: "Denpasar", TglLahir: "1995-04-17", Didik: "S1", Darah: "O+" }))
+    );
+    assert.equal(r.issues.length, 0, JSON.stringify(r.issues));
+    assert.equal(r.rows[0].birthPlace, "Denpasar");
+    assert.equal(r.rows[0].birthDate!.toISOString().slice(0, 10), "1995-04-17");
+    assert.equal(r.rows[0].education, "S1");
+    assert.equal(r.rows[0].bloodType, "O_POS");
+  });
+
+  test("kosong tetap sah — tidak ada satu pun yang wajib", () => {
+    // Empatnya bukan syarat untuk apa pun. Memaksa mengisinya hanya membuat
+    // HRD menebak, dan golongan darah yang ditebak lebih berbahaya daripada
+    // yang kosong.
+    const r = parseEmployeeSheet(sheet(row()));
+    assert.equal(r.issues.length, 0, JSON.stringify(r.issues));
+    assert.deepEqual(
+      [r.rows[0].birthPlace, r.rows[0].birthDate, r.rows[0].education, r.rows[0].bloodType],
+      [null, null, null, null]
+    );
+  });
+
+  test("BERKAS LAMA tanpa keempat kolom tetap bisa diimpor", () => {
+    // Berkas yang HRD sudah mulai isi sebelum kolom ini ada tidak boleh
+    // mendadak ditolak. Kolom dicocokkan lewat judulnya, jadi absennya kolom
+    // bukan kesalahan.
+    const lama = ["NIK", "Nama Lengkap *", "Jabatan", "Jenjang Jabatan *", "Status Kepegawaian *",
+      "Pola Kerja *", "Tanggal Bergabung *", "Kontrak Mulai", "Kontrak Berakhir", "Alamat",
+      "NIK Atasan", "Email Akun CRM", "Aktif *", "Divisi *"];
+    const r = parseEmployeeSheet([["judul"], ["petunjuk"], lama,
+      ["", "Wayan Sudira", "Teknisi", "Staff", "Karyawan Tetap", "Non-Shift", "2026-01-06",
+       "", "", "", "", "", "Ya", "NOC"]]);
+    assert.equal(r.issues.length, 0, JSON.stringify(r.issues));
+    assert.equal(r.rows.length, 1);
+    assert.equal(r.rows[0].bloodType, null);
+  });
+
+  test("pendidikan boleh label maupun kode; yang lain ditolak", () => {
+    const label = parseEmployeeSheet(sheet(row({ Didik: "SMA / SMK / sederajat" })));
+    assert.equal(label.rows[0].education, "SMA");
+    const salah = parseEmployeeSheet(sheet(row({ Didik: "Sarjana" })));
+    assert.equal(salah.rows.length, 0);
+    assert.match(salah.issues[0].message, /tidak dikenal/);
+  });
+});
+
+describe("GOLONGAN DARAH — tandanya wajib, tidak pernah ditebak", () => {
+  test("semua bentuk garis yang mungkin diketik orang diterima", () => {
+    // Label resminya memakai MINUS (U+2212) karena itu yang tampak rapi di
+    // dropdown, tapi papan ketik siapa pun menghasilkan strip biasa (U+002D).
+    // Kalau hanya satu yang diterima, HRD menyalin dari dropdown dan tetap
+    // ditolak — atau lebih buruk, mengetik sendiri dan diam-diam salah.
+    for (const tulisan of ["A-", "A−", "A –", "a -", "A_NEG", "A negatif", "A neg"]) {
+      assert.equal(bloodTypeFromLabel(tulisan), "A_NEG", `"${tulisan}" seharusnya A_NEG`);
+    }
+    for (const tulisan of ["AB+", "ab +", "AB_POS", "AB positif", "AB plus"]) {
+      assert.equal(bloodTypeFromLabel(tulisan), "AB_POS", `"${tulisan}" seharusnya AB_POS`);
+    }
+  });
+
+  test('"Tidak diketahui" adalah jawaban yang SAH', () => {
+    // Memaksa memilih golongan darah membuat orang menebak.
+    for (const t of ["Tidak diketahui", "UNKNOWN", "tidak tahu", "?"]) {
+      assert.equal(bloodTypeFromLabel(t), "UNKNOWN", `"${t}"`);
+    }
+  });
+
+  test("GOLONGAN TANPA TANDA DITOLAK, bukan dianggap negatif", () => {
+    // Inti aturan ini. Pembanding umum di berkas ini membuang tanda hubung
+    // supaya "Non-Shift" cocok dengan "NON_SHIFT" — kalau golongan darah ikut
+    // jalur itu, "A" dan "A−" menjadi teks yang sama persis dan orang yang
+    // menulis "A" tercatat A-negatif. Golongan darah yang salah dipakai justru
+    // saat tidak ada waktu memeriksanya ulang.
+    for (const t of ["A", "B", "AB", "O", "o", " ab "]) {
+      assert.equal(bloodTypeFromLabel(t), null, `"${t}" tidak boleh diterjemahkan`);
+    }
+  });
+
+  test("pesannya menuntun, bukan sekadar menolak", () => {
+    const r = parseEmployeeSheet(sheet(row({ Darah: "A" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /belum menyebut tandanya/);
+    assert.match(r.issues[0].message, /A\+/);
+  });
+
+  test("isian ngawur ditolak dengan daftar pilihannya", () => {
+    const r = parseEmployeeSheet(sheet(row({ Darah: "merah" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /tidak dikenal/);
+  });
+});
+
+describe("TANGGAL LAHIR — salah ketik tahun ditangkap di sini", () => {
+  test("terisi tapi tak terbaca ditolak, bukan dikosongkan diam-diam", () => {
+    const r = parseEmployeeSheet(sheet(row({ TglLahir: "kemarin" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /bukan tanggal yang jelas/);
+  });
+
+  test("tanggal di MASA DEPAN ditolak", () => {
+    const r = parseEmployeeSheet(sheet(row({ TglLahir: "2099-01-01" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /masa depan/);
+  });
+
+  test("tahun yang tidak masuk akal ditolak", () => {
+    const r = parseEmployeeSheet(sheet(row({ TglLahir: "1895-01-01" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /tidak masuk akal/);
+  });
+
+  test("lahir SETELAH bergabung ditolak — dua kolom tertukar", () => {
+    // Bentuk salah ketik yang paling mungkin: dua kolom tanggal tertukar.
+    // Tanpa ini, ulang tahun muncul di hari yang salah selamanya dan tidak ada
+    // yang tahu kenapa.
+    const r = parseEmployeeSheet(sheet(row({ Gabung: "2020-01-06", TglLahir: "2021-04-17" })));
+    assert.equal(r.rows.length, 0);
+    assert.match(r.issues[0].message, /setelah Tanggal Bergabung/);
   });
 });

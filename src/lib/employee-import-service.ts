@@ -319,6 +319,13 @@ export async function applyEmployeeImport(user: CurrentUser, file: File): Promis
       divisionId: r.divisionRef ? (divisionByKey.get(r.divisionRef.trim().toLowerCase()) ?? null) : null,
       contractStartAt: r.contractStartAt,
       contractEndAt: r.contractEndAt,
+      // Fase 60 — data diri. Diteruskan apa adanya; saveEmployee() yang
+      // memeriksa kodenya sekali lagi terhadap EDUCATION_LEVELS/BLOOD_TYPES,
+      // supaya jalur impor dan jalur formulir tunduk pada aturan yang sama.
+      birthPlace: r.birthPlace,
+      birthDate: r.birthDate,
+      education: r.education,
+      bloodType: r.bloodType,
     });
     if (!result.ok) {
       // Dilaporkan apa adanya, termasuk berapa yang TERLANJUR tersimpan.

@@ -10,7 +10,13 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter
 
-OUT = "/Users/air_buddy/Dev Project/PerumNet-CRM/docs/template/Template-Data-Pegawai.xlsx"
+import os
+
+# Relatif terhadap skrip ini, bukan jalur mutlak: folder proyek sudah pernah
+# dipindah sekali (ke APP-Perumnet) dan jalur lamanya diam-diam basi — skrip
+# tetap "berhasil" sambil menulis ke tempat yang tidak dibaca siapa pun.
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                   "..", "docs", "template", "Template-Data-Pegawai.xlsx")
 
 FONT = "Arial"
 HDR_FILL = PatternFill("solid", fgColor="1F4E79")
@@ -36,6 +42,10 @@ COLS = [
     ("Email Akun CRM",      26, False, "Kosongkan bila belum punya akun sistem"),
     ("Aktif",               9,  True,  "Ya atau Tidak"),
     ("Divisi",              20, True,  "Divisi tempat orang ini bekerja"),
+    ("Tempat Lahir",        18, False, "Kota kelahiran, mis. Denpasar"),
+    ("Tanggal Lahir",       15, False, "Format YYYY-MM-DD. Dipakai untuk ucapan ulang tahun."),
+    ("Pendidikan Terakhir", 20, False, "Pilih dari dropdown"),
+    ("Golongan Darah",      15, False, "WAJIB pakai tanda + atau −"),
     ("Cek",                 40, False, "Terisi otomatis - jangan diketik"),
 ]
 
@@ -93,7 +103,13 @@ ws.row_dimensions[HDR_ROW].height = 30
 EXAMPLE = [
     "", "Teguh Santoso", "Teknisi Lapangan", "Staff", "Kontrak",
     "Shift", "2026-01-06", "2026-01-06", "2026-12-31",
-    "Jl. Melati No. 7, Denpasar", "", "teguh@perumnet.id", "Ya", "Operational",
+    "Jl. Melati No. 7, Denpasar", "", "teguh@perumnet.id", "Ya",
+    # "Operational" sudah tidak ada di tabel Division sejak daftarnya disamakan
+    # dengan departemen yang sebenarnya (Fase 52). Baris contoh yang memakai
+    # nama mati membuat dropdown menyalakan galat pada baris yang justru
+    # dimaksudkan sebagai panduan.
+    "Network Operation Field",
+    "Denpasar", "1995-04-17", "SMA / SMK / sederajat", "O+",
 ]
 for i, val in enumerate(EXAMPLE, start=1):
     c = ws.cell(row=EX_ROW, column=i, value=val)
@@ -111,7 +127,7 @@ for r in range(FIRST, LAST + 1):
             c.fill = REQ_FILL
 
 # Kolom tanggal ditampilkan sebagai tanggal.
-for col in ("G", "H", "I"):
+for col in ("G", "H", "I", "P"):
     for r in range(EX_ROW, LAST + 1):
         ws[f"{col}{r}"].number_format = "yyyy-mm-dd"
 
@@ -139,13 +155,24 @@ dropdown("M", ["Ya", "Tidak"], "Isian tidak dikenal", "Pilih Ya atau Tidak.")
 dropdown("N", DIVISI, "Divisi tidak dikenal",
          "Pilih divisi dari daftar. Nama di luar daftar akan ditolak saat impor.")
 
+dropdown("Q", ["SD / sederajat", "SMP / sederajat", "SMA / SMK / sederajat",
+               "D1", "D2", "D3", "D4 / Sarjana Terapan", "S1", "S2", "S3"],
+         "Jenjang pendidikan tidak dikenal",
+         "Pilih dari daftar. Isian di luar daftar akan ditolak saat impor.")
+# Tandanya WAJIB. Golongan tanpa tanda ("A" saja) ditolak importer, bukan
+# ditebak — golongan darah yang salah dipakai justru saat tidak ada waktu
+# memeriksanya ulang. "Tidak diketahui" ada supaya orang tidak perlu menebak.
+dropdown("R", ["A+", "A−", "B+", "B−", "AB+", "AB−", "O+", "O−", "Tidak diketahui"],
+         "Golongan darah tidak dikenal",
+         "Pilih dari daftar. Tanda + atau − wajib; \"A\" saja akan ditolak saat impor.")
+
 # ── Kolom Cek ───────────────────────────────────────────────────
 # Menangkap tiga kesalahan yang paling sering terjadi dan paling menyusahkan
 # saat impor: kolom wajib kosong, Kontrak tanpa tanggal berakhir, dan tanggal
 # kontrak terisi pada jenis yang bukan Kontrak (tanggal nyasar itu yang
 # dipakai penyapu untuk membekukan akun).
 for r in range(EX_ROW, LAST + 1):
-    ws[f"O{r}"] = (
+    ws[f"S{r}"] = (
         f'=IF(B{r}="","",'
         f'IF(OR(D{r}="",E{r}="",F{r}="",G{r}="",M{r}="",N{r}=""),'
         f'"PERIKSA: ada kolom wajib yang kosong",'
@@ -157,8 +184,8 @@ for r in range(EX_ROW, LAST + 1):
         f'"PERIKSA: Kontrak Berakhir harus setelah Kontrak Mulai",'
         f'"OK")))))'
     )
-    ws[f"O{r}"].font = Font(name=FONT, size=9, color="C00000")
-    ws[f"O{r}"].border = BORDER
+    ws[f"S{r}"].font = Font(name=FONT, size=9, color="C00000")
+    ws[f"S{r}"].border = BORDER
 
 ws.freeze_panes = "A4"
 
