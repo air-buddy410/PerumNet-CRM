@@ -1092,7 +1092,29 @@ tidak bermasalah. Tampilkan `error` apa adanya.
 
 ---
 
-## 23. "Lupa password" di halaman login (Fase 55) — PERLU DIBUAT
+## 23. "Lupa password" di halaman login (Fase 55) — TINGGAL DINYALAKAN
+
+> ### Halamanmu sudah ada, formnya saja yang masih dimatikan
+>
+> Di `/login/forgot-password` sekarang tertulis:
+>
+> > *"Form belum diaktifkan karena CRM tidak boleh mengirim permintaan langsung
+> > ke Mailcow atau menyimpan kredensial mailserver di browser."*
+>
+> **Keberatanmu itu benar, dan bagus.** Peramban memang tidak boleh menyentuh
+> Mailcow maupun memegang kredensial apa pun.
+>
+> Tapi keberatan itu **sudah tidak berlaku untuk jalur ini**, dan sebenarnya
+> tidak pernah berlaku: `requestRecoveryAction` adalah **server action**.
+> Seluruhnya berjalan di server. Peramban cuma mengirim satu alamat email —
+> tidak pernah menyentuh Mailcow, tidak pernah memegang kredensial, tidak
+> pernah tahu SMTP itu ada.
+>
+> Backend-nya sudah jadi, sudah teruji, dan sudah di `main`. Kamu menulis
+> halaman itu sebelum bagian ini mendarat.
+>
+> **Jadi formnya tinggal dinyalakan** — satu kotak isian email + tombol kirim,
+> lalu tampilkan `message` apa adanya. Kontraknya di bawah.
 
 **Baca dulu bagian ini sebelum membuat apa pun — bentuknya BUKAN formulir reset
 password biasa, dan kalau dibuat begitu ia tidak akan pernah bisa bekerja.**

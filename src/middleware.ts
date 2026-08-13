@@ -10,7 +10,15 @@ const SESSION_COOKIE = "perumnet_session";
 // Fase 50 — halaman verifikasi kartu dibuka pelanggan di depan pintu, tanpa
 // akun. Isinya sudah disaring publicVerification(): hanya nama, jabatan, foto,
 // dan nomor kartu, dan hanya bila kartunya berlaku.
-const PUBLIC_PATHS = ["/login", "/verify", "/api/verify/"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/verify",
+  "/api/verify/",
+  // Fase 57 — dibaca Docker dan pengatur beban, yang tidak punya sesi.
+  // Isinya hampa dengan sengaja: jalur terbuka tidak boleh menyebut versi,
+  // nama host, atau apa pun yang menolong orang memetakan sistem dari luar.
+  "/api/health",
+];
 
 // Next.js middleware membangun URL dari hostname/port server (bukan Host header),
 // sehingga di belakang reverse proxy/tunnel redirect harus dibangun dari header.

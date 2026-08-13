@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   // terjadi dan gejalanya menyesatkan — "Cannot find module './5611.js'" yang
   // sama sekali tidak menunjuk ke penyebabnya.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Fase 57 — dibutuhkan untuk citra Docker: Next menyalin hanya berkas yang
+  // benar-benar dipakai saat berjalan ke .next/standalone, sehingga citranya
+  // tidak perlu memuat seluruh node_modules. Bedanya ratusan megabyte.
+  //
+  // Tidak berpengaruh pada `npm run dev` maupun `npm start` biasa.
+  output: "standalone",
 };
 
 export default nextConfig;

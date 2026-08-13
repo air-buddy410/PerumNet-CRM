@@ -1,0 +1,66 @@
+# ── Produksi PerumNet CRM (Fase 57) ─────────────────────────────
+#
+# JANGAN HAPUS baris `name:` di bawah.
+#
+# Tanpa itu, Docker Compose menurunkan nama proyek dari NAMA FOLDER. Ganti nama
+# foldernya — atau pindahkan seperti yang sudah pernah terjadi ke
+# APP-Perumnet/ — dan Compose membuat volume BARU yang kosong. Database naik
+# seolah-olah seluruh datanya lenyap.
+#
+# Ini bukan kekhawatiran teoretis: di mesin ini masih tersisa volume
+# `prtgperumnet_perumnet-pgdata` dari zaman foldernya bernama "PRTG PerumNet".
+name: perumnet-crm
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER belum diisi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD belum diisi}
+      POSTGRES_DB: ${POSTGRES_DB:-perumnet}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # TIDAK dipetakan ke port host. Yang perlu menghubunginya cuma app, dan itu
+    # lewat jaringan internal Compose. Membuka 5432 ke host berarti membuka
+    # database ke seluruh jaringan tempat VPS itu berada.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-perumnet}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Menunggu database SIAP, bukan sekadar kontainernya menyala. Tanpa
+        # ini app menyala lebih dulu, gagal menyambung, lalu mati berulang.
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-perumnet}
+      # Seluruh kredensial datang dari berkas .env di HOST, tidak pernah
+      # dipanggang ke dalam citra. Lihat .dockerignore.
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-MAILSERVER}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET belum diisi}
+      APP_URL: ${APP_URL:-http://localhost:3300}
+      MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      IT_SUPPORT_EMAIL: ${IT_SUPPORT_EMAIL:-}
+      MIKROTIK_POP1_CRED: ${MIKROTIK_POP1_CRED:-}
+    ports:
+      - "${APP_PORT:-3300}:3300"
+    volumes:
+      # Lampiran: foto pegawai, bukti pekerjaan, tanda tangan. Ini DATA.
+      # Tanpa volume, semuanya hilang setiap kali citranya diperbarui.
+      - uploads:/app/uploads
+
+volumes:
+  pgdata:
+  uploads:
