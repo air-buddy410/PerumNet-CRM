@@ -50,8 +50,15 @@ docker compose up -d --build
 ## 3. Siapkan skema database — SEKALI, oleh manusia
 
 ```bash
-docker compose run --rm app npx prisma db push
+docker compose run --rm tools npx prisma db push
 ```
+
+**Perhatikan `tools`, bukan `app`.** Citra runtime sengaja ramping — ia memuat
+klien Prisma tetapi bukan CLI-nya, dan tidak memuat `tsx` sama sekali karena
+keduanya devDependency. Menjalankan `npx prisma` di sana membuat npm mengunduh
+versi terbaru dari internet, yang sudah tidak mendukung bentuk skema proyek ini.
+Kegagalannya menyesatkan: ia bicara soal `url` di `schema.prisma`, seolah
+skemanya yang salah.
 
 Perintah ini **sengaja tidak dijalankan otomatis saat kontainer menyala.**
 Kalau otomatis, setiap restart — termasuk restart otomatis saat kontainer mati —
@@ -61,7 +68,7 @@ sekali, oleh orang yang tahu sedang mengubah apa.
 Lalu isi data awal, hanya pada pemasangan pertama:
 
 ```bash
-docker compose run --rm app npx tsx prisma/seed.ts
+docker compose run --rm tools npx tsx prisma/seed.ts
 ```
 
 ## 4. Periksa
