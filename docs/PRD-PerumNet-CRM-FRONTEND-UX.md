@@ -709,7 +709,7 @@ Acceptance tambahan: login/forgot-password dan perwakilan list bertabel diperiks
 
 ## 27. Handoff Opus — Divisi ke Grup Authentik
 
-Frontend menyediakan `/it/identity-groups` untuk user dengan permission `integrations.manage` setelah kontrak loader dan action Authentik tersedia. Halaman ini tetap frontend-only dan tidak mengubah API, DTO, Server Action, `src/lib/**`, database, auth, RBAC, atau business rule.
+Frontend `/it/identity-groups` sudah tersedia untuk user dengan permission `integrations.manage` dan menggunakan kontrak loader/action Authentik yang disediakan Opus. Halaman ini tetap frontend-only dan tidak mengubah API, DTO, Server Action, `src/lib/**`, database, auth, RBAC, atau business rule.
 
 - Pengaturan hanya meminta alamat Authentik dan **nama** environment variable token. Token API tidak boleh ditempelkan atau disimpan oleh UI CRM.
 - Preview bersifat read-only dan menampilkan grup yang akan dibuat, anggota yang akan ditambahkan, anggota yang akan dikeluarkan, serta peringatan data yang perlu ditinjau.
@@ -717,6 +717,7 @@ Frontend menyediakan `/it/identity-groups` untuk user dengan permission `integra
 - `UNKNOWN_MEMBER` bukan error: anggota yang tidak dikenali CRM tetap dipertahankan dan hanya dilaporkan. Arah sinkronisasi hanya CRM → Authentik.
 - Jika konfigurasi, token server, atau koneksi belum siap, UI menampilkan blocker/error yang jujur tanpa angka atau data palsu.
 - Navigasi permission-scoped menampilkan item `Grup Authentik` di group IT/DevOps; drawer tablet dan sidebar collapsed mempertahankan hierarki parent/submenu.
+- Metric sinkronisasi ditampilkan 1 kolom di mobile, 2 kolom di tablet, dan 4 kolom di desktop; identifier grup tetap membungkus berdasarkan kata/hyphen tanpa pecah satu huruf per baris.
 
 Acceptance QA tambahan mencakup preview tanpa perubahan, status konfigurasi, pengaturan tanpa token mentah, daftar add/remove/warning, konfirmasi penerapan, permission filtering, serta viewport 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800. Tidak boleh ada horizontal overflow, teks keluar card, tombol overlap, console error, atau framework overlay.
 

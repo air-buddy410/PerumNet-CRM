@@ -56,6 +56,11 @@ tabel pendukung yang masih memerlukan seluruh referensi tetap menjadi kandidat
 loader pencarian/paginasi terpisah, tanpa mengubah batas permission atau aturan
 stock.
 
+### Loader konfigurasi Grup Authentik perlu mengembalikan catatan konfigurasi
+- **Layar:** `/it/identity-groups`
+- **Butuh:** `loadAuthentikIntegration()` mengembalikan `notes` bila catatan konfigurasi memang dapat diedit dari halaman tersebut. Saat ini `saveAuthentikAction` menerima dan menyimpan field `notes`, tetapi loader hanya mengembalikan alamat, credential reference, status, dan waktu aktivitas terakhir.
+- **Kenapa tidak bisa di sisi frontend:** frontend tidak boleh menebak catatan lama atau mengisi ulang nilai yang tidak dikembalikan DTO. Tanpa field tersebut, menyimpan ulang konfigurasi dari UI dapat mengosongkan catatan sebelumnya.
+
 ---
 
 ## Selesai
