@@ -12,8 +12,18 @@ export async function login(
   identifier: string,
   password: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Pencocokan TIDAK peka huruf besar-kecil (Fase 54). Ponsel sering
+  // mengapitalkan huruf pertama sendiri, dan "Budi_prabhawa" yang ditolak
+  // terbaca seperti password salah — orang lalu mereset password email yang
+  // sebenarnya tidak bermasalah. Alamat email pun memang tidak peka huruf.
+  const identifierBersih = identifier.trim();
   const user = await db.user.findFirst({
-    where: { OR: [{ username: identifier }, { email: identifier }] },
+    where: {
+      OR: [
+        { username: { equals: identifierBersih, mode: "insensitive" } },
+        { email: { equals: identifierBersih, mode: "insensitive" } },
+      ],
+    },
   });
 
   if (!user || !user.isActive) {

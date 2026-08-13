@@ -73,7 +73,20 @@ export function authProvider(): AuthProvider {
  * salah dan memberi rasa aman palsu.
  */
 export function passwordChangeAvailable(): boolean {
-  return authProvider() === "LOCAL";
+  // Fase 54 — MAILSERVER ikut, karena CRM kini memang BISA mengubah kredensial
+  // yang sebenarnya: ia meneruskannya ke mailcow, bukan mengubah hash lokal
+  // yang tidak dipakai siapa pun. Catatan di atas tetap berlaku untuk OIDC,
+  // di mana passwordnya memang bukan milik CRM.
+  const p = authProvider();
+  return p === "LOCAL" || p === "MAILSERVER";
+}
+
+/** Yang sebenarnya diganti saat pengguna menekan tombol ganti password. */
+export function passwordChangeTarget(): "LOCAL" | "MAILSERVER" | null {
+  const p = authProvider();
+  if (p === "LOCAL") return "LOCAL";
+  if (p === "MAILSERVER") return "MAILSERVER";
+  return null;
 }
 
 export async function profileView(userId: string): Promise<ProfileView | null> {

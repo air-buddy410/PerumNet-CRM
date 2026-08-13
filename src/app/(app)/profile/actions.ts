@@ -9,7 +9,8 @@ import { createSession } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { AUDIT_ACTIONS } from "@/lib/constants";
 import { revalidatePath } from "next/cache";
-import { updateOwnContact, passwordChangeAvailable } from "@/lib/profile";
+import { updateOwnContact, passwordChangeAvailable, passwordChangeTarget } from "@/lib/profile";
+import { changeOwnMailPassword } from "@/lib/mailserver";
 
 const schema = z
   .object({
@@ -52,7 +53,44 @@ export async function changePasswordAction(formData: FormData): Promise<void> {
   }
 
   const dbUser = await db.user.findUnique({ where: { id: user.id } });
-  if (!dbUser || !(await verifyPassword(parsed.data.currentPassword, dbUser.passwordHash))) {
+  if (!dbUser) redirect("/profile?error=" + encodeURIComponent("Akun tidak ditemukan."));
+
+  // Fase 54 — di mode MAILSERVER, yang diganti adalah password EMAIL-nya di
+  // mailcow, bukan hash lokal. Mengubah hash lokal di mode ini tidak berguna:
+  // tidak ada yang memakainya untuk login, jadi orang akan mengira passwordnya
+  // sudah berganti padahal kredensial yang sebenarnya tidak berubah sama sekali.
+  if (passwordChangeTarget() === "MAILSERVER") {
+    const r = await changeOwnMailPassword(
+      { id: dbUser.id, name: dbUser.name, email: dbUser.email },
+      parsed.data.currentPassword,
+      parsed.data.newPassword,
+      parsed.data.confirmPassword
+    );
+    if (!r.ok) redirect("/profile?error=" + encodeURIComponent(r.error));
+
+    // Sesi di perangkat lain dimatikan, sama seperti ganti password lokal:
+    // begitu password email berganti, perangkat yang masih memegang sesi lama
+    // seharusnya ikut membuktikan diri lagi.
+    const naik = await db.user.update({
+      where: { id: dbUser.id },
+      data: { sessionEpoch: { increment: 1 }, mustChangePassword: false },
+    });
+    await createSession({
+      userId: naik.id,
+      username: naik.username,
+      name: naik.name,
+      epoch: naik.sessionEpoch,
+    });
+    revalidatePath("/profile");
+    redirect(
+      "/profile?ok=" +
+        encodeURIComponent(
+          "Password email berhasil diganti. Pakai password baru ini untuk masuk CRM maupun webmail."
+        )
+    );
+  }
+
+  if (!(await verifyPassword(parsed.data.currentPassword, dbUser.passwordHash))) {
     redirect("/profile?error=" + encodeURIComponent("Password saat ini salah."));
   }
 
