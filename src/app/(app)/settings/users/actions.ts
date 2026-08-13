@@ -9,6 +9,8 @@ import { hashPassword } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS, AUDIT_ACTIONS, USER_LEVELS } from "@/lib/constants";
 import { freezeAccount, unfreezeAccount } from "@/lib/employment-lifecycle";
+import { authProviderMode } from "@/lib/oidc";
+import { resetMailPasswordFor } from "@/lib/mailserver";
 
 const orgSchema = z.object({
   level: z.enum([USER_LEVELS.STAFF, USER_LEVELS.SUPERVISOR, USER_LEVELS.OWNER]),
@@ -243,11 +245,46 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
     redirect("/settings/users?error=" + encodeURIComponent("User tidak ditemukan."));
   }
 
+  // Fase 56 — ke mana reset ini sebenarnya pergi.
+  //
+  // Pembagiannya PERSIS sama dengan login(): di mode MAILSERVER yang dipakai
+  // masuk adalah password email, kecuali untuk akun darurat yang memang tetap
+  // memakai hash lokal. Kalau tidak dibedakan begini, IT menekan tombol,
+  // muncul pesan berhasil, dan orangnya tetap tidak bisa masuk — gagal
+  // diam-diam sambil melapor sukses.
+  const lewatMailserver = authProviderMode() === "MAILSERVER" && !user.allowLocalLogin;
+
+  if (lewatMailserver) {
+    const r = await resetMailPasswordFor(
+      { id: actor.id, name: actor.name },
+      { id: user.id, name: user.name, username: user.username, email: user.email },
+      password
+    );
+    if (!r.ok) {
+      redirect(`/settings/users/${userId}?error=` + encodeURIComponent(r.error));
+    }
+    // Sesi lama dimatikan: password yang dipakai masuk sudah berganti.
+    // mustChangePassword memaksa yang bersangkutan memasang password sendiri
+    // pada login pertama — password sementara dari IT tidak boleh menetap.
+    await db.user.update({
+      where: { id: userId },
+      data: { mustChangePassword: true, sessionEpoch: { increment: 1 } },
+    });
+    redirect(
+      `/settings/users/${userId}?ok=` +
+        encodeURIComponent(
+          "Password EMAIL direset di mailserver. Sampaikan lewat jalur langsung — " +
+            "yang bersangkutan wajib menggantinya sendiri saat login pertama."
+        )
+    );
+  }
+
   await db.user.update({
     where: { id: userId },
     data: {
       passwordHash: await hashPassword(password),
       mustChangePassword: true,
+      sessionEpoch: { increment: 1 },
     },
   });
   await logAudit({
