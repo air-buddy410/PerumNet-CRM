@@ -83,6 +83,23 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-perumnet}
+      # Lingkungan yang SAMA dengan app, bukan sekadar database.
+      #
+      # Perkakas di sini menjalankan pekerjaan administratif yang menyentuh
+      # sistem luar — mendorong tag ke mailcow, mereset password surel, mengirim
+      # email. Tanpa variabel ini semuanya gagal DIAM-DIAM: mailcow terbaca
+      # sebagai "nol kotak surat", lalu perintahnya melaporkan "0 didorong, 0
+      # gagal" seolah memang tidak ada yang perlu dikerjakan.
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-MAILSERVER}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET belum diisi}
+      APP_URL: ${APP_URL:-http://localhost:3300}
+      MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      IT_SUPPORT_EMAIL: ${IT_SUPPORT_EMAIL:-}
+      MIKROTIK_POP1_CRED: ${MIKROTIK_POP1_CRED:-}
     volumes:
       - uploads:/app/uploads
     entrypoint: []

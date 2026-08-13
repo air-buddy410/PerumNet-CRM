@@ -70,3 +70,29 @@ describe("Dockerfile tidak memanggang rahasia dan tidak menyentuh skema", () => 
     assert.match(baris![1], /localhost/, "harus jelas-jelas palsu");
   });
 });
+
+describe("layanan tools punya lingkungan yang sama dengan app", () => {
+  const compose = readFileSync("docker-compose.yml", "utf8");
+  const blok = (nama: string) => {
+    const i = compose.indexOf(`\n  ${nama}:`);
+    const sisa = compose.slice(i + 1);
+    const j = sisa.search(/\n  [a-z]/);
+    return j > 0 ? sisa.slice(0, j) : sisa;
+  };
+
+  test("setiap variabel yang dipakai app juga ada di tools", () => {
+    // Perkakas administratif menjalankan pekerjaan yang menyentuh sistem luar:
+    // mendorong tag ke mailcow, mereset password surel, mengirim email. Tanpa
+    // variabelnya, semuanya gagal DIAM-DIAM — mailcow terbaca sebagai "nol
+    // kotak surat", lalu perintahnya melaporkan "0 didorong, 0 gagal" seolah
+    // memang tidak ada yang perlu dikerjakan.
+    //
+    // Itu benar-benar terjadi saat mendorong tag pertama kali dari server.
+    const kunci = (s: string) => [...s.matchAll(/^\s{6}([A-Z][A-Z0-9_]+):/gm)].map((m) => m[1]);
+    const app = kunci(blok("app"));
+    const tools = new Set(kunci(blok("tools")));
+    assert.equal(app.length > 5, true, "blok app tidak terbaca");
+    const hilang = app.filter((k) => !tools.has(k));
+    assert.deepEqual(hilang, [], `variabel ini tidak diteruskan ke tools: ${hilang.join(", ")}`);
+  });
+});
