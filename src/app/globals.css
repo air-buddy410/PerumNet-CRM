@@ -769,3 +769,79 @@
   .crm-login-card { padding: 26px 24px; }
   .crm-login-footer { margin-top: 20px; }
 }
+
+/* Kartu pegawai dua sisi — rasio layar dikunci ke ISO B4 portrait (250:353). */
+.employee-card-preview { display: grid; min-width: 0; gap: 10px; }
+.employee-card-perspective { width: min(100%, 28rem); aspect-ratio: 250 / 353; perspective: 1400px; }
+.employee-card-flipper { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .52s cubic-bezier(.2, .72, .2, 1); }
+.employee-card-flipper.is-back { transform: rotateY(180deg); }
+.employee-card-face { position: absolute; inset: 0; display: block; overflow: hidden; color: #fff; background: #071817; border: 1px solid #173a38; border-radius: 18px; box-shadow: 0 18px 38px #173a3828; backface-visibility: hidden; }
+.employee-card-face-back { transform: rotateY(180deg); }
+.employee-card-front-rail { position: absolute; inset: 0 auto 0 0; z-index: 2; display: flex; width: 24%; flex-direction: column; align-items: center; justify-content: space-between; padding: 6% 4% 7%; color: #65676c; background: #fff; border-bottom-right-radius: 28% 12%; }
+.employee-card-logo { display: block; width: 84%; max-width: 86px; height: auto; object-fit: contain; }
+.employee-card-vertical-name { max-height: 55%; color: #696a70; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.1rem, 4.5vw, 2.8rem); font-weight: 900; letter-spacing: .02em; line-height: .9; writing-mode: vertical-rl; transform: rotate(180deg); }
+.employee-card-portrait-wrap { position: absolute; inset: 0 0 25% 24%; display: grid; place-items: center; overflow: hidden; background: #08aaa0; }
+.employee-card-portrait { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.employee-card-portrait-fallback { display: grid; place-items: center; width: 34%; aspect-ratio: 1; color: #087a73; background: #d9f6f2; border-radius: 24%; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.25rem, 6vw, 3rem); font-weight: 900; }
+.employee-card-front-footer { position: absolute; right: 0; bottom: 0; left: 0; z-index: 3; min-width: 0; min-height: 25%; padding: 4.5% 7% 4%; background: linear-gradient(135deg, #77898a, #9aa9a8); }
+.employee-card-front-footer::after { position: absolute; inset: 0; z-index: -1; background: repeating-linear-gradient(135deg, #ffffff0a 0 13px, transparent 13px 28px); content: ""; }
+.employee-card-name, .employee-card-job, .employee-card-division, .employee-card-front-meta { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; }
+.employee-card-name { color: #fff; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1rem, 4.8vw, 2.2rem); font-weight: 900; letter-spacing: -.035em; line-height: 1.05; }
+.employee-card-job { margin-top: 1.5%; color: #fff; font-size: clamp(.62rem, 2.3vw, 1.05rem); font-weight: 800; line-height: 1.2; }
+.employee-card-division { margin-top: 1%; color: #fff; font-size: clamp(.49rem, 1.85vw, .88rem); font-weight: 800; line-height: 1.2; }
+.employee-card-front-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 5%; color: #effffc; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(.4rem, 1.45vw, .7rem); letter-spacing: .04em; }
+.employee-card-face-back { background: #050908; }
+.employee-card-pattern { position: absolute; inset: 0; opacity: .8; background: radial-gradient(circle at 12% 4%, #05aaa0 0 13%, transparent 13.4%), radial-gradient(circle at 38% 4%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 68% 4%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 91% 4%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 5% 33%, #05aaa0 0 13%, transparent 13.4%), radial-gradient(circle at 42% 33%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 74% 33%, #05aaa0 0 13%, transparent 13.4%), radial-gradient(circle at 96% 33%, #05aaa0 0 13%, transparent 13.4%), radial-gradient(circle at 18% 62%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 50% 62%, #6d7075 0 13%, transparent 13.4%), radial-gradient(circle at 82% 62%, #05aaa0 0 13%, transparent 13.4%); }
+.employee-card-back-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 12% 10% 10%; text-align: center; background: linear-gradient(180deg, #0509080f 0 48%, #050908dd 65% 100%); }
+.employee-card-back-kicker { color: #04b4a9; font-size: clamp(.55rem, 2vw, .95rem); font-weight: 900; letter-spacing: .25em; text-transform: uppercase; }
+.employee-card-back-content h3 { margin: 2.5% 0 0; color: #fff; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.25rem, 6vw, 3rem); font-weight: 900; letter-spacing: -.04em; line-height: 1.05; }
+.employee-card-back-caption { margin: 1.5% 0 7%; color: #c3d0ce; font-size: clamp(.55rem, 2vw, .9rem); }
+.employee-card-qr-frame { display: grid; place-items: center; width: min(54%, 10rem); aspect-ratio: 1; padding: 7%; background: #fff; border-radius: 10px; }
+.employee-card-qr { display: block; width: 100%; height: 100%; }
+.employee-card-qr svg { display: block; width: 100%; height: 100%; }
+.employee-card-qr-missing { display: grid; place-items: center; gap: 5px; width: 100%; height: 100%; color: #718482; font-size: clamp(.45rem, 1.7vw, .7rem); line-height: 1.2; }
+.employee-card-qr-missing svg { width: 28%; height: 28%; color: #04a99f; }
+.employee-card-back-number { margin: 5% 0 0; color: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(.48rem, 1.65vw, .78rem); letter-spacing: .12em; }
+.employee-card-back-site { display: flex; align-items: center; gap: 5px; margin-top: 4%; color: #dce8e5; font-size: clamp(.48rem, 1.7vw, .78rem); }
+.employee-card-back-site span:first-child { color: #04b990; font-size: 1.2em; }
+.employee-card-flip-button { justify-self: start; min-height: 36px; padding: 8px 12px; font-size: 11px; }
+.employee-card-flip-button svg { width: 15px; height: 15px; }
+.employee-card-preview-hint { margin: 0; color: #8a9b98; font-size: 10px; line-height: 1.4; }
+.employee-card-print-disabled { display: inline-flex; min-height: 36px; align-items: center; padding: 0 12px; color: #8a7660; background: #fff8ec; border: 1px solid #efd9b5; border-radius: 8px; font-size: 11px; font-weight: 700; }
+.employee-card-empty { color: #8a9b98; font-size: 12px; line-height: 1.5; }
+.employee-card-print-page { min-height: 100dvh; padding: 28px; background: #f4fbfa; }
+.employee-card-print-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; max-width: 64rem; margin: 0 auto 20px; }
+.employee-card-print-heading { max-width: 64rem; margin: 0 auto 24px; }
+.employee-card-print-heading h1 { margin: 5px 0; color: #33484a; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.25rem, 3vw, 2rem); font-weight: 900; letter-spacing: -.04em; }
+.employee-card-print-heading p:last-child { margin: 0; color: #718185; font-size: 12px; }
+.employee-card-print-warning { display: grid; gap: 4px; max-width: 64rem; margin: 0 auto 20px; padding: 12px 14px; color: #795a30; background: #fff9ed; border: 1px solid #efd9b5; border-radius: 10px; font-size: 12px; line-height: 1.45; }
+.employee-card-print-faces { display: grid; width: min(100%, 250mm); gap: 24px; margin: 0 auto; }
+.employee-card-print-faces .employee-card-face { position: relative; inset: auto; width: 100%; aspect-ratio: 250 / 353; border-radius: 18px; transform: none; }
+.employee-card-print-empty { max-width: 64rem; margin: 0 auto; padding: 24px; color: #8a9b98; background: #fff; border: 1px solid #dfeae8; border-radius: 14px; }
+.employee-card-verify-page { display: grid; min-height: 100dvh; place-items: center; padding: 28px 16px; background: radial-gradient(circle at 50% 10%, #dff6f2 0, transparent 36%), #f4fbfa; }
+.employee-card-verify-wrap { width: min(100%, 34rem); }
+.employee-card-verify-content { display: grid; gap: 12px; padding: clamp(14px, 3vw, 24px); }
+.employee-card-verify-content .employee-card-preview { width: min(100%, 26rem); margin: 0 auto; }
+.employee-card-verify-note { margin: 0; color: #718185; font-size: 11px; line-height: 1.5; text-align: center; }
+
+@media (max-width: 480px) {
+  .employee-card-print-page { padding: 18px 12px 28px; }
+  .employee-card-print-toolbar { align-items: stretch; }
+  .employee-card-print-toolbar > * { justify-content: center; width: 100%; }
+  .employee-card-preview-panel .employee-card-preview { width: min(100%, 22rem); }
+  .employee-card-verify-page { padding: 20px 10px; }
+  .employee-card-verify-wrap { width: 100%; }
+}
+
+@media print {
+  .employee-card-print-page { min-height: auto; padding: 0; background: #fff; }
+  .employee-card-print-toolbar, .employee-card-print-heading, .employee-card-print-warning { display: none !important; }
+  .employee-card-print-faces { width: 250mm; gap: 0; margin: 0; }
+  .employee-card-print-faces .employee-card-face { width: 250mm; height: 353mm; border: 0; border-radius: 0; box-shadow: none; break-after: page; page-break-after: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .employee-card-print-faces .employee-card-face:last-child { break-after: auto; page-break-after: auto; }
+  .employee-card-print-page.is-print-locked .employee-card-print-faces { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-card-flipper { transition: none; }
+}

@@ -476,7 +476,7 @@ Bagian ini mencatat pekerjaan frontend yang mengikuti `docs/HANDOFF-BACKEND-KE-F
 - Notifikasi menggunakan `notificationMenuData(user.id)`, menampilkan maksimal lima item, unread count, module, waktu, `hasMore`, dan hanya membuka `href` internal yang tersedia.
 - Search menggabungkan menu yang sudah permission-scoped dengan `GET /api/search?q=...`. Entity search berjalan mulai dua karakter, memakai debounce, membatalkan request lama, dan memiliki loading, empty, serta error state.
 - Profile menggunakan `profileView(user.id)`. Nama dan telepon diedit melalui `updateContactAction`; email, username, role, divisi, NIK, dan jabatan tetap read-only.
-- Password mengikuti provider aktual: `LOCAL` dapat menampilkan form jika `passwordChangeAvailable` true; `MAILSERVER` menampilkan identity terpusat dan tidak mengirim password melalui CRM.
+- Password mengikuti `auth.passwordChangeAvailable`: `LOCAL` dan `MAILSERVER` dapat menampilkan form bila nilainya `true`; perubahan MAILSERVER dijelaskan sebagai perubahan password email yang juga dipakai CRM dan webmail. `OIDC` menampilkan identity provider dan menyembunyikan form lokal.
 
 ### Status PPPoE pada peta
 
@@ -599,7 +599,7 @@ Implementasi frontend berikut mengonsumsi kontrak Opus yang sudah tersedia. Scop
 - `profileView()` sekarang ditampilkan dengan field read-only alamat, pola kerja, jenjang jabatan, mulai kontrak, dan berakhir kontrak.
 - Nilai `SHIFT`, `NON_SHIFT`, `STAFF`, dan `LEADER` diterjemahkan ke label operasional Indonesia.
 - Nama tampilan dan telepon tetap menjadi satu-satunya field kontak yang dapat diedit dari halaman profil.
-- `LOCAL` dapat menampilkan form password bila `passwordChangeAvailable` true. `MAILSERVER` dan `OIDC` diperlakukan sebagai identity terpusat: password lokal disembunyikan dan CRM tidak menyimpan atau mengirim kredensial identity.
+- `LOCAL` dan `MAILSERVER` dapat menampilkan form password bila `passwordChangeAvailable` true. MAILSERVER mengubah password email melalui action resmi; `OIDC` tetap diperlakukan sebagai identity provider terpusat dan tidak menampilkan form lokal.
 
 ### Arsip dengan rentang tanggal
 
@@ -707,3 +707,24 @@ Semua halaman baru wajib diuji pada 1440×900, 1920×1080, 1024×768, 768×1024,
 form atau tombol bertumpuk, field file menutupi konten, atau framework overlay.
 Tabel preview menggunakan horizontal scroll terkontrol; form mailbox berubah
 menjadi susunan field yang dapat dibaca pada layar sempit.
+
+## 30. Kartu Pegawai Dua Sisi B4
+
+- Detail HRD, halaman scan `/verify/[token]`, dan print kartu menggunakan komponen visual kartu yang sama dengan mode `hrd` dan `public`.
+- Standar ukuran dikunci ke ISO B4 portrait: 250×353 mm. Preview layar mempertahankan rasio 250:353; print menghasilkan sisi depan dan belakang pada dua halaman B4 yang siap dicetak duplex sisi panjang.
+- Preview dapat dibalik manual dengan tombol yang keyboard-accessible. Animasi `rotateY` dihentikan saat `prefers-reduced-motion` aktif.
+- Sisi depan menampilkan logo, foto resmi, nama, jabatan, divisi, nomor pegawai pada mode HRD, dan nomor kartu. Sisi belakang menampilkan pola brand, Perum Network, website, nomor kartu, serta QR verifikasi resmi bila tersedia.
+- QR tidak boleh dibuat dari NIK, nama, atau data lain di browser. Bila loader belum menyediakan `qrSvg` server-side, UI menampilkan `QR belum tersedia` dan menahan print fisik.
+- Halaman scan hanya memakai `PublicVerification`: nama, jabatan, foto, dan nomor kartu. Kartu tidak berlaku tidak menampilkan identitas pegawai.
+- Foto gagal dimuat memiliki fallback initials; teks panjang dibatasi agar tidak melewati kartu. Preview dan print wajib bebas horizontal overflow pada desktop, tablet, dan mobile.
+
+### Kontrak QR untuk Opus
+
+`loadEmployeeCards()` perlu mengembalikan `qrSvg: string | null` yang dibuat server-side dari token privat, atau kontrak setara yang tidak mengirim `publicToken` ke browser. Frontend hanya menempelkan SVG terpercaya tersebut dan tidak melakukan query database atau membuat token/QR sendiri.
+
+### Acceptance kartu
+
+- Preview HRD dan scan publik memakai rasio B4 yang sama dan dapat dibalik manual.
+- Print menampilkan dua sisi B4 tanpa clipping dan tombol print nonaktif bila kartu tidak aktif atau QR resmi belum tersedia.
+- Data publik tidak membocorkan NIK, email, telepon, divisi, atau token privat.
+- QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
