@@ -381,3 +381,56 @@ export async function changeOwnMailPassword(
   });
   return { ok: true };
 }
+
+/**
+ * IT mereset password email seseorang (Fase 56).
+ *
+ * Bedanya dengan changeOwnMailPassword: DI SINI TIDAK ADA password lama.
+ * Memang begitu — yang dilayani adalah orang yang lupa passwordnya, jadi
+ * mustahil ia membuktikannya. Yang menggantikan bukti itu adalah dua hal di
+ * luar kode ini: izin `users.edit` pada pemanggil, dan kewajiban IT memastikan
+ * identitas pemohon lewat jalur yang sudah dikenal — bukan lewat jalur yang
+ * sama dengan permintaannya. Surat permintaan pemulihan menekankan itu.
+ *
+ * Karena tidak ada bukti kepemilikan, jejaknya jadi satu-satunya pengaman:
+ * setiap reset tercatat lengkap dengan siapa yang melakukannya.
+ */
+export async function resetMailPasswordFor(
+  actor: { id: string; name: string },
+  target: { id: string; name: string; username: string; email: string },
+  newPassword: string,
+  deps: { fetcher?: Fetcher } = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!target.email) {
+    return { ok: false, error: `${target.username} belum punya alamat email — tidak ada yang bisa direset.` };
+  }
+  // Aturan panjangnya SAMA dengan jalur swalayan. Password sementara yang
+  // lemah tetap password email, dan justru ia yang paling sering dibiarkan
+  // terpakai berbulan-bulan.
+  const invalid = newMailPasswordRejection("sementara-dari-it", newPassword, newPassword);
+  if (invalid) return { ok: false, error: invalid };
+
+  const cfg = await loadMailcowIntegration();
+  const blocker = mailcowBlocker(cfg);
+  if (!cfg || blocker) return { ok: false, error: blocker ?? "Integrasi mailserver belum disiapkan." };
+
+  try {
+    await setMailboxPassword(clientOptions(cfg, deps.fetcher), target.email, newPassword);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logEvent(cfg.id, "MAILCOW_PASSWORD_RESET", "ERROR", `${target.email}: ${msg}`);
+    return { ok: false, error: `Mailserver menolak perubahan: ${msg}` };
+  }
+
+  await logEvent(cfg.id, "MAILCOW_PASSWORD_RESET", "OK", target.email);
+  await logAudit({
+    userId: actor.id,
+    action: "MAIL_PASSWORD_RESET",
+    module: "users",
+    entityType: "User",
+    entityId: target.id,
+    // Nilai passwordnya tidak pernah ikut.
+    description: `${actor.name} mereset password email ${target.email} (${target.username})`,
+  });
+  return { ok: true };
+}
