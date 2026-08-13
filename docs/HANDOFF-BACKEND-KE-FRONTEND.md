@@ -1,6 +1,6 @@
 # Handoff Backend → Frontend (Luna)
 
-**Tanggal:** 2026-08-12 (diperbarui setelah Fase 45 — identitas terpusat aktif)
+**Tanggal:** 2026-08-13 (diperbarui setelah Fase 49 — kartu pegawai)
 **Untuk:** pengerjaan frontend PerumNet CRM
 **Dari:** sisi backend (Opus)
 **Sumber kontrak:** §13 `PRD-PerumNet-CRM-FRONTEND-UX.md`
@@ -37,7 +37,8 @@ ingatan.
 | 15 | **Unggah gambar tanda tangan + redirect kembali ke portal** (§20 PRD-mu) | action belum ada | ✅ siap — lihat §14 |
 | 16 | **Identitas terpusat aktif** — `provider` bisa bernilai `OIDC` | menunggu IdP | ✅ **sudah jalan** — lihat §15 |
 | 17 | **Tiga dependency dari PRD §24–25** — field HR di `profileView`, filter tanggal arsip, gambar tanda tangan IRF | kontrak belum ada | ✅ siap — lihat §16 |
-| 18 | **Sinkronisasi divisi → grup Authentik** | mesin belum ada | ⚠️ mesin siap, **halaman `/it/identity-groups` perlu dibuat** — lihat §17 |
+| 18 | **Sinkronisasi divisi → grup Authentik** | mesin belum ada | ✅ siap, halamanmu sudah ada — lihat §17 |
+| 19 | **Kartu pegawai + foto resmi + QR** | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §18 |
 
 ---
 
@@ -728,6 +729,76 @@ applyGroupSyncAction  tanpa field
 
 Arahnya satu — divisi CRM → grup Authentik. Tidak ada fungsi di backend yang
 menulis `User.divisionId` dari grup, sama seperti tag mailcow pada Fase 44.
+
+---
+
+## 18. Kartu pegawai & foto resmi (Fase 49) — PERLU HALAMAN
+
+Mesinnya jadi dan teruji. **Halamannya bagianmu.** Semua ditempelkan ke
+`/hrd/employees/[id]` yang sudah kamu buat.
+
+**Keputusan produk yang sudah diambil:** foto resmi diunggah **HRD**, jadi
+seluruh pengelolaan kartu memakai `hrd.manage`. Kartu adalah dokumen
+kepegawaian, bukan perangkat IT.
+
+### Loader
+
+```ts
+import { loadEmployeeCards, cardQrSvg } from "@/lib/employee-card-service";
+import { cardInvalidReason, CARD_STATUS_LABELS } from "@/lib/employee-card";
+
+const cards = await loadEmployeeCards(employeeId);
+const svg   = await cardQrSvg(process.env.APP_URL!, card.publicToken); // string SVG siap ditempel
+```
+
+`cardQrSvg` mengembalikan **string SVG**, bukan gambar — tempel langsung ke
+markup halaman cetak. Tidak perlu canvas, tidak perlu berkas.
+
+### Actions (semua di `hrd/actions.ts`)
+
+```
+uploadEmployeePhotoAction  employeeId, photo          (multipart/form-data)
+issueCardAction            employeeId, expiresAt?, nfcUid?
+replaceCardAction          employeeId, cardId, reason, expiresAt?, nfcUid?
+markCardLostAction         employeeId, cardId, reason
+revokeCardAction           employeeId, cardId, reason
+```
+
+Semua yang mengubah status **mewajibkan `reason`** minimal 3 karakter.
+
+### Lima hal yang tolong dipertahankan
+
+1. **Tombol "Terbitkan kartu" tidak muncul bila sudah ada kartu berlaku.**
+   Backend menolaknya, tetapi UI sebaiknya mengarahkan ke "Ganti kartu" —
+   dua kartu fisik berlaku bersamaan adalah keadaan yang tidak boleh dicapai,
+   dan yang satu ada di tangan entah siapa.
+
+2. **Kartu lama tetap tampil di riwayat** dengan statusnya. Jangan
+   disembunyikan setelah diganti — riwayat siapa memegang kartu apa itu
+   gunanya.
+
+3. **Status ditampilkan lewat `CARD_STATUS_LABELS`**, dan sebab tidak
+   berlakunya lewat `cardInvalidReason()`. Sebabnya bisa datang dari luar
+   kartu itu sendiri: **akun beku (Fase 42) dan akun diarsipkan (Fase 47)
+   otomatis mematikan kartu.** Tampilkan alasannya apa adanya — "Kartu
+   berstatus Berlaku" yang ternyata mati karena akunnya beku akan sangat
+   membingungkan.
+
+4. **QR berisi ALAMAT halaman verifikasi**, bukan data pegawai. Jangan pernah
+   membuat QR dari NIK atau nama. Kartu dipakai di tempat umum sepanjang hari;
+   anggap isinya akan dipindai orang asing.
+
+5. **`nfcUid` boleh dikosongkan.** Kartu NFC belum dibeli, dan kartu ber-QR
+   sudah berguna sendiri tanpa itu.
+
+### Yang BELUM ada — Fase 50
+
+Halaman verifikasi publik `/verify/<token>` belum dibuat. `verifyCardToken()`
+sudah siap dan sudah menyaring isinya (hanya nama, jabatan, foto, nomor kartu
+— dan **tidak ada apa pun** bila kartunya tidak berlaku). Tapi halaman itu
+harus **tanpa login**, dan foto pegawai saat ini berizin `hrd.view` — jadi
+jalur penyajian fotonya perlu dibuat sadar, bukan sekadar melonggarkan izin
+di `/api/files`. Catatannya sudah ditulis di berkas rute itu.
 
 ---
 

@@ -15,6 +15,13 @@ import {
   submitOvertime,
   syncRequestStatuses,
 } from "@/lib/hrd";
+import {
+  uploadEmployeePhoto,
+  issueCard,
+  replaceCard,
+  markCardLost,
+  revokeCard,
+} from "@/lib/employee-card-service";
 
 function num(v: FormDataEntryValue | null): number {
   return Number(String(v ?? "").trim());
@@ -176,4 +183,85 @@ export async function submitOvertimeAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/hrd/my-attendance");
   backSelf(result, result.ok ? `Pengajuan lembur ${result.data?.minutes} menit dikirim.` : "");
+}
+
+// ── Kartu pegawai & foto resmi (Fase 49) ────────────────────────
+// Foto diunggah HRD (keputusan K5), jadi seluruh pengelolaan kartu memakai
+// izin yang sama: hrd.manage. Kartu adalah dokumen kepegawaian, bukan
+// perangkat IT.
+
+function backToEmployee(employeeId: string, result: { ok: true } | { ok: false; error: string }, okMsg: string): never {
+  redirect(
+    `/hrd/employees/${employeeId}?` +
+      (result.ok ? "ok=" + encodeURIComponent(okMsg) : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+/** field: employeeId, photo — form encType="multipart/form-data" */
+export async function uploadEmployeePhotoAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    backToEmployee(employeeId, { ok: false, error: "Pilih berkas foto terlebih dahulu." }, "");
+  }
+  const result = await uploadEmployeePhoto(user, employeeId, file as File);
+  revalidatePath(`/hrd/employees/${employeeId}`);
+  backToEmployee(employeeId, result, "Foto resmi tersimpan.");
+}
+
+/** field: employeeId, expiresAt?, nfcUid? */
+export async function issueCardAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const result = await issueCard(user, {
+    employeeId,
+    expiresAt: optionalDate(formData.get("expiresAt")),
+    nfcUid: String(formData.get("nfcUid") ?? "") || null,
+  });
+  revalidatePath(`/hrd/employees/${employeeId}`);
+  backToEmployee(employeeId, result, "Kartu diterbitkan.");
+}
+
+/** field: employeeId, cardId, reason, expiresAt?, nfcUid? */
+export async function replaceCardAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const result = await replaceCard(
+    user,
+    String(formData.get("cardId") ?? ""),
+    String(formData.get("reason") ?? ""),
+    {
+      expiresAt: optionalDate(formData.get("expiresAt")),
+      nfcUid: String(formData.get("nfcUid") ?? "") || null,
+    }
+  );
+  revalidatePath(`/hrd/employees/${employeeId}`);
+  backToEmployee(employeeId, result, "Kartu pengganti diterbitkan; kartu lama dimatikan.");
+}
+
+/** field: employeeId, cardId, reason */
+export async function markCardLostAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const result = await markCardLost(
+    user,
+    String(formData.get("cardId") ?? ""),
+    String(formData.get("reason") ?? "")
+  );
+  revalidatePath(`/hrd/employees/${employeeId}`);
+  backToEmployee(employeeId, result, "Kartu dinyatakan hilang dan berhenti berlaku.");
+}
+
+/** field: employeeId, cardId, reason */
+export async function revokeCardAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
+  const employeeId = String(formData.get("employeeId") ?? "");
+  const result = await revokeCard(
+    user,
+    String(formData.get("cardId") ?? ""),
+    String(formData.get("reason") ?? "")
+  );
+  revalidatePath(`/hrd/employees/${employeeId}`);
+  backToEmployee(employeeId, result, "Kartu dicabut.");
 }

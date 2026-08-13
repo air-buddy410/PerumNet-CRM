@@ -33,6 +33,13 @@ const ENTITY_PERMISSION: Record<string, string> = {
   // Izin melihatnya sama dengan izin melihat dokumennya: siapa pun yang boleh
   // membuka IRF-nya boleh melihat tanda tangan di atasnya.
   DocumentSignatureImage: PERMISSIONS.INVENTORY_VIEW,
+  // Fase 49 — foto resmi pegawai. Diunggah HRD, dilihat oleh siapa pun yang
+  // boleh melihat data kepegawaian.
+  //
+  // CATATAN untuk Fase 50: halaman verifikasi publik butuh foto ini TANPA
+  // login. Itu jalur terpisah yang harus dibuat sadar — jangan cukup dengan
+  // melonggarkan izin di sini, karena daftar ini menjaga SEMUA lampiran.
+  EmployeePhoto: PERMISSIONS.HRD_VIEW,
 };
 
 export async function GET(

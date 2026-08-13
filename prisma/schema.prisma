@@ -163,6 +163,8 @@ model User {
   deviceInspections   DeviceInspection[] @relation("DeviceInspector")
   recordsArchived     ArchivedRecord[]   @relation("ArchiveArchiver")
   recordsRestored     ArchivedRecord[]   @relation("ArchiveRestorer")
+  cardsIssued         EmployeeCard[]     @relation("CardIssuer")
+  cardsRevoked        EmployeeCard[]     @relation("CardRevoker")
 }
 
 model Division {
@@ -2268,8 +2270,15 @@ model Employee {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// Fase 49 — foto resmi pegawai, diunggah HRD. Menunjuk Attachment dengan
+  /// entityType "EmployeePhoto". Disimpan sebagai penunjuk, bukan berkas,
+  /// supaya melewati mesin lampiran yang sudah dikeraskan (MIME, ukuran,
+  /// magic byte) dan penyajiannya tetap berizin.
+  photoAttachmentId String?
+
   user        User?              @relation("EmployeeUser", fields: [userId], references: [id])
   supervisor  Employee?          @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
+  cards       EmployeeCard[]
   subordinates Employee[]        @relation("EmployeeSupervisor")
   schedules   ShiftSchedule[]
   attendances Attendance[]
@@ -3082,4 +3091,46 @@ model FiberRoute {
   site NetworkSite? @relation(fields: [siteId], references: [id])
 
   @@index([routeType])
+}
+
+// ── Kartu Pegawai (Fase 49) ─────────────────────────────────────
+// Kartu identitas fisik dengan kode pindai. Aturan yang menentukan bentuknya:
+//
+//  - `publicToken` ACAK DAN BURAM, bukan NIK dan bukan nama. Kartu dipakai di
+//    tempat umum sepanjang hari; anggap isinya akan terlihat orang asing.
+//    Kode yang bermakna di luar sistem membuat siapa pun yang sempat memotret
+//    kartu bisa menyusun data pegawai dari situ.
+//
+//  - Kartu lama TIDAK DIHAPUS saat diganti. Statusnya berubah dan penggantinya
+//    menunjuk yang digantikan, sehingga riwayat siapa memegang kartu apa bisa
+//    ditelusuri — prinsip yang sama dengan arsip Fase 47.
+//
+//  - `nfcUid` disimpan untuk pencocokan, TETAPI tidak pernah menjadi
+//    satu-satunya bukti untuk hal berkonsekuensi fisik. UID kartu murah bisa
+//    disalin dengan aplikasi ponsel gratis.
+model EmployeeCard {
+  id           String    @id @default(cuid())
+  employeeId   String
+  cardNumber   String    @unique // nomor tercetak, boleh dibaca manusia
+  publicToken  String    @unique // isi QR — acak, tidak bermakna di luar sistem
+  nfcUid       String?   @unique
+  status       String    @default("ACTIVE") // ACTIVE|LOST|REVOKED|REPLACED
+  issuedAt     DateTime  @default(now())
+  issuedById   String
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  revokedById  String?
+  revokeReason String?
+  /// Kartu yang digantikan kartu ini. Satu arah dan unik: satu kartu hanya
+  /// bisa digantikan sekali.
+  replacesId   String?   @unique
+
+  employee  Employee      @relation(fields: [employeeId], references: [id])
+  issuedBy  User          @relation("CardIssuer", fields: [issuedById], references: [id])
+  revokedBy User?         @relation("CardRevoker", fields: [revokedById], references: [id])
+  replaces  EmployeeCard? @relation("CardReplacement", fields: [replacesId], references: [id])
+  replacedBy EmployeeCard? @relation("CardReplacement")
+
+  @@index([employeeId, status])
+  @@index([status])
 }
