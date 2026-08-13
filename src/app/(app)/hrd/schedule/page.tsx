@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, DAY_TYPES } from "@/lib/constants";
 import { PageHeader, Flash, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveScheduleAction } from "../actions";
 
 export const metadata = { title: "Jadwal Shift" };
@@ -9,7 +10,7 @@ export const metadata = { title: "Jadwal Shift" };
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; period?: string }>;
+  searchParams: Promise<TableSearchParams & { ok?: string; error?: string; period?: string }>;
 }) {
   const user = await requirePermission(PERMISSIONS.HRD_VIEW);
   const sp = await searchParams;
@@ -21,17 +22,32 @@ export default async function SchedulePage({
   const from = new Date(y, m - 1, 1);
   const to = new Date(y, m, 0);
   const daysInMonth = to.getDate();
+  const sortOptions: readonly TableSortOption[] = [
+    { value: "employeeNo", label: "NIK" },
+    { value: "fullName", label: "Nama" },
+  ];
+  const table = parseTableQuery(sp, { defaultSort: "employeeNo", defaultDirection: "asc", sortOptions });
+  const orderBy = table.sort === "fullName" ? [{ fullName: table.direction }, { id: "asc" as const }] : [{ employeeNo: table.direction }, { id: "asc" as const }];
 
-  const [employees, shifts, schedules] = await Promise.all([
-    db.employee.findMany({ where: { isActive: true }, orderBy: { employeeNo: "asc" } }),
+  const employeeWhere = { isActive: true };
+  const [employees, employeeCount, employeesForForm, shifts] = await Promise.all([
+    db.employee.findMany({ where: employeeWhere, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.employee.count({ where: employeeWhere }),
+    canManage ? db.employee.findMany({ where: employeeWhere, orderBy: { employeeNo: "asc" } }) : Promise.resolve([]),
     db.shift.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    db.shiftSchedule.findMany({
-      where: { date: { gte: from, lte: new Date(y, m - 1, daysInMonth, 23, 59, 59) } },
-      include: { shift: true },
-    }),
   ]);
-  const cell = (empId: string, day: number) =>
-    schedules.find((s) => s.employeeId === empId && s.date.getDate() === day && s.date.getMonth() === m - 1);
+  const schedules = await db.shiftSchedule.findMany({
+    where: {
+      employeeId: { in: employees.map((employee) => employee.id) },
+      date: { gte: from, lte: new Date(y, m - 1, daysInMonth, 23, 59, 59) },
+    },
+    include: { shift: true },
+  });
+  const scheduleByCell = new Map(schedules.map((schedule) => [
+    `${schedule.employeeId}:${schedule.date.getDate()}`,
+    schedule,
+  ]));
+  const cell = (empId: string, day: number) => scheduleByCell.get(`${empId}:${day}`);
 
   return (
     <div>
@@ -56,7 +72,9 @@ export default async function SchedulePage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th sticky left-0 bg-slate-50">Karyawan</th>
+                <th className="th sticky left-0 bg-slate-50">
+                  <SortableTableHeader basePath="/hrd/schedule" currentDirection={table.direction} currentSort={table.sort} label="Karyawan" query={{ ...table.query, period }} sortKey="employeeNo" />
+                </th>
                 {Array.from({ length: daysInMonth }, (_, i) => (
                   <th key={i} className="th text-center">{i + 1}</th>
                 ))}
@@ -88,6 +106,16 @@ export default async function SchedulePage({
           </table>
         )}
       </div>
+      <TableControls
+        basePath="/hrd/schedule"
+        direction={table.direction}
+        page={table.page}
+        pageSize={table.pageSize}
+        query={{ ...table.query, period }}
+        sort={table.sort}
+        sortOptions={sortOptions}
+        total={employeeCount}
+      />
       <p className="mt-2 text-xs text-slate-500">
         Keterangan: dua huruf pertama nama shift = hari kerja · &ldquo;—&rdquo; libur · &ldquo;L&rdquo; hari besar.
       </p>
@@ -100,7 +128,7 @@ export default async function SchedulePage({
               <label className="label" htmlFor="employeeId">Karyawan</label>
               <select id="employeeId" name="employeeId" className="input w-56" required defaultValue="">
                 <option value="" disabled>— pilih —</option>
-                {employees.map((e) => (
+                {employeesForForm.map((e) => (
                   <option key={e.id} value={e.id}>{e.employeeNo} · {e.fullName}</option>
                 ))}
               </select>

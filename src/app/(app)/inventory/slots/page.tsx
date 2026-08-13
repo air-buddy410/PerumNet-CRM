@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { createSlotAction, moveAllocationAction, deactivateSlotAction } from "./actions";
 
 export const metadata = { title: "Slot Peruntukan" };
@@ -11,12 +12,24 @@ export const metadata = { title: "Slot Peruntukan" };
 export default async function SlotsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams & { ok?: string; error?: string }>;
 }) {
   await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
+  const sortOptions: readonly TableSortOption[] = [
+    { value: "warehouse", label: "Gudang" },
+    { value: "item", label: "Material" },
+    { value: "onHand", label: "Fisik" },
+  ];
+  const table = parseTableQuery(sp, { defaultSort: "warehouse", defaultDirection: "asc", sortOptions });
+  const levelWhere = { onHand: { gt: 0 } };
+  const levelOrderBy = table.sort === "onHand"
+    ? [{ onHand: table.direction }, { id: "asc" as const }]
+    : table.sort === "item"
+      ? [{ itemId: table.direction }, { warehouseId: "asc" as const }, { id: "asc" as const }]
+      : [{ warehouseId: table.direction }, { itemId: "asc" as const }, { id: "asc" as const }];
 
-  const [warehouses, slotTypes, slots, items, levels, allocations, policy] = await Promise.all([
+  const [warehouses, slotTypes, slotOptions, items, levels, levelCount, policy] = await Promise.all([
     db.warehouse.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
     db.stockSlotType.findMany({ where: { isActive: true, isSystem: false }, orderBy: { code: "asc" } }),
     db.stockSlot.findMany({
@@ -25,9 +38,35 @@ export default async function SlotsPage({
       orderBy: [{ warehouseId: "asc" }, { code: "asc" }],
     }),
     db.item.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    db.stockLevel.findMany(),
-    db.slotAllocation.findMany({ include: { slot: true, item: true } }),
+    db.stockLevel.findMany({
+      where: levelWhere,
+      orderBy: levelOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.stockLevel.count({ where: levelWhere }),
     db.slotTransferPolicy.findFirst({ where: { isActive: true } }),
+  ]);
+
+  const levelItemIds = [...new Set(levels.map((level) => level.itemId))];
+  const levelWarehouseIds = [...new Set(levels.map((level) => level.warehouseId))];
+  const [allocations, slotTotals] = await Promise.all([
+    levelItemIds.length === 0 || levelWarehouseIds.length === 0
+      ? Promise.resolve([])
+      : db.slotAllocation.findMany({
+        where: {
+          itemId: { in: levelItemIds },
+          slot: { warehouseId: { in: levelWarehouseIds } },
+        },
+        select: { itemId: true, qty: true, slot: { select: { warehouseId: true } } },
+      }),
+    slotOptions.length === 0
+      ? Promise.resolve([])
+      : db.slotAllocation.groupBy({
+        by: ["slotId"],
+        where: { slotId: { in: slotOptions.map((slot) => slot.id) } },
+        _sum: { qty: true },
+      }),
   ]);
 
   const allocatedByWarehouseItem = new Map<string, number>();
@@ -35,6 +74,7 @@ export default async function SlotsPage({
     const key = `${a.slot.warehouseId}::${a.itemId}`;
     allocatedByWarehouseItem.set(key, (allocatedByWarehouseItem.get(key) ?? 0) + a.qty);
   }
+  const totalBySlot = new Map(slotTotals.map((row) => [row.slotId, row._sum.qty ?? 0]));
 
   const unallocatedRows = levels
     .map((l) => {
@@ -72,13 +112,13 @@ export default async function SlotsPage({
             <div className="grid gap-2 sm:grid-cols-2">
               <select name="fromSlotId" className="input" aria-label="Dari slot">
                 <option value="">— dari sisa belum dialokasikan —</option>
-                {slots.map((s) => (
+                {slotOptions.map((s) => (
                   <option key={s.id} value={s.id}>{s.warehouse.code}/{s.code}</option>
                 ))}
               </select>
               <select name="toSlotId" className="input" aria-label="Ke slot">
                 <option value="">— kembalikan ke sisa —</option>
-                {slots.map((s) => (
+                {slotOptions.map((s) => (
                   <option key={s.id} value={s.id}>{s.warehouse.code}/{s.code}</option>
                 ))}
               </select>
@@ -117,8 +157,8 @@ export default async function SlotsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Gudang</th>
-                <th className="th">Material</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/slots" currentDirection={table.direction} currentSort={table.sort} label="Gudang" query={table.query} sortKey="warehouse" /></th>
+                <th className="th"><SortableTableHeader basePath="/inventory/slots" currentDirection={table.direction} currentSort={table.sort} label="Material" query={table.query} sortKey="item" /></th>
                 <th className="th text-right">Fisik</th>
                 <th className="th text-right">Teralokasi</th>
                 <th className="th text-right">Belum dialokasikan</th>
@@ -140,10 +180,20 @@ export default async function SlotsPage({
           </table>
         )}
       </div>
+      <TableControls
+        basePath="/inventory/slots"
+        direction={table.direction}
+        page={table.page}
+        pageSize={table.pageSize}
+        query={table.query}
+        sort={table.sort}
+        sortOptions={sortOptions}
+        total={levelCount}
+      />
 
       <h2 className="mb-3 mt-6 text-sm font-medium">Slot Aktif</h2>
       <div className="card overflow-x-auto">
-        {slots.length === 0 ? (
+        {slotOptions.length === 0 ? (
           <EmptyState message="Belum ada slot." />
         ) : (
           <table className="w-full">
@@ -157,10 +207,8 @@ export default async function SlotsPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {slots.map((s) => {
-                const total = allocations
-                  .filter((a) => a.slotId === s.id)
-                  .reduce((sum, a) => sum + a.qty, 0);
+              {slotOptions.map((s) => {
+                const total = totalBySlot.get(s.id) ?? 0;
                 return (
                   <tr key={s.id} className="hover:bg-slate-50">
                     <td className="td font-mono text-xs">{s.warehouse.code}</td>

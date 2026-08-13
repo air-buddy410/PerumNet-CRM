@@ -1,8 +1,10 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, SUSPENSION_REASONS, formatRupiah, formatDateTime, statusLabel } from "@/lib/constants";
 import { reminderList } from "@/lib/dunning";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import {
   saveDunningPolicyAction,
   evaluateDunningAction,
@@ -15,13 +17,23 @@ export const metadata = { title: "Isolir & Dunning" };
 export default async function IsolirPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.DUNNING_MANAGE);
+  const tableOptions = [
+    { value: "suspendedAt", label: "Diisolir" },
+    { value: "restoredAt", label: "Dipulihkan" },
+    { value: "reason", label: "Alasan" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "suspendedAt", sortOptions: tableOptions });
+  const orderBy: Prisma.ServiceSuspensionOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [policy, suspensions, activeSubs, reminders] = await Promise.all([
+  const [policy, suspensions, totalCount, activeCount, activeSubs, reminders] = await Promise.all([
     db.dunningPolicy.findFirst({ orderBy: { name: "asc" } }),
     db.serviceSuspension.findMany({
       include: {
@@ -29,9 +41,12 @@ export default async function IsolirPage({
         policy: true,
         createdBy: true,
       },
-      orderBy: { suspendedAt: "desc" },
-      take: 60,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.serviceSuspension.count(),
+    db.serviceSuspension.count({ where: { restoredAt: null } }),
     db.subscription.findMany({
       where: { status: "ACTIVE" },
       include: { customer: true },
@@ -40,7 +55,6 @@ export default async function IsolirPage({
     reminderList(),
   ]);
   const reasonLabel = (r: string) => SUSPENSION_REASONS.find(([v]) => v === r)?.[1] ?? r;
-  const active = suspensions.filter((s) => !s.restoredAt);
 
   return (
     <div>
@@ -55,13 +69,13 @@ export default async function IsolirPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-6">
           <div className="card overflow-x-auto">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-medium">
-              Isolir Aktif ({active.length}) & Riwayat
+              Isolir Aktif ({activeCount}) & Riwayat
             </h2>
             {suspensions.length === 0 ? (
               <EmptyState message="Belum ada isolir. 🎉" />
@@ -73,7 +87,7 @@ export default async function IsolirPage({
                     <th className="th">Pelanggan</th>
                     <th className="th">Alasan</th>
                     <th className="th">Tunggakan</th>
-                    <th className="th">Diisolir</th>
+                    <th className="th"><SortableTableHeader basePath="/billing/isolir" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="suspendedAt" label="Diisolir" /></th>
                     <th className="th">Status</th>
                     {canManage && <th className="th"></th>}
                   </tr>
@@ -117,6 +131,16 @@ export default async function IsolirPage({
                 </tbody>
               </table>
             )}
+            <TableControls
+              basePath="/billing/isolir"
+              query={table.query}
+              page={table.page}
+              pageSize={table.pageSize}
+              sort={table.sort}
+              direction={table.direction}
+              sortOptions={tableOptions}
+              total={totalCount}
+            />
           </div>
 
           <div className="card overflow-x-auto">

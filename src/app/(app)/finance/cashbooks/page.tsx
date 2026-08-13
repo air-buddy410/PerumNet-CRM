@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveCashbookAction, toggleCashbookAction } from "./actions";
 
 export const metadata = { title: "Cashbooks" };
@@ -10,20 +12,37 @@ export const metadata = { title: "Cashbooks" };
 export default async function CashbooksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.FINANCE_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.CASH_MANAGE);
-
-  const cashbooks = await db.cashbook.findMany({
-    include: { _count: { select: { transactions: true } } },
-    orderBy: { code: "asc" },
+  const tableOptions = [
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Nama" },
+  ] as const;
+  const table = parseTableQuery(sp, {
+    defaultSort: "code",
+    defaultDirection: "asc",
+    sortOptions: tableOptions,
   });
-  const editRow = sp.edit ? (cashbooks.find((c) => c.id === sp.edit) ?? null) : null;
-  const total = cashbooks
-    .filter((c) => c.isActive)
-    .reduce((s, c) => s + c.balance, BigInt(0));
+  const orderBy: Prisma.CashbookOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+
+  const [cashbooks, totalCount, editRow, totalBalance] = await Promise.all([
+    db.cashbook.findMany({
+      include: { _count: { select: { transactions: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.cashbook.count(),
+    table.query.edit ? db.cashbook.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+    db.cashbook.aggregate({ where: { isActive: true }, _sum: { balance: true } }),
+  ]);
+  const total = totalBalance._sum.balance ?? BigInt(0);
 
   return (
     <div>
@@ -31,7 +50,7 @@ export default async function CashbooksPage({
         title="Cashbooks"
         subtitle={`Saldo hanya berubah melalui transaksi yang diposting. Total kas aktif: ${formatRupiah(total)}.`}
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -41,8 +60,8 @@ export default async function CashbooksPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/finance/cashbooks" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="code" label="Kode" /></th>
+                  <th className="th"><SortableTableHeader basePath="/finance/cashbooks" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
                   <th className="th text-right">Saldo</th>
                   <th className="th">Terkunci s.d.</th>
                   <th className="th">Transaksi</th>
@@ -79,6 +98,16 @@ export default async function CashbooksPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/finance/cashbooks"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

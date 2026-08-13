@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -9,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import {
   createAlarmAction,
   ackAlarmAction,
@@ -17,6 +19,11 @@ import {
 } from "./actions";
 
 export const metadata = { title: "Alarms" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "occurredAt", label: "Waktu" },
+  { value: "alarmNumber", label: "Nomor" },
+  { value: "severity", label: "Severity" },
+];
 
 const SEV_BADGE: Record<string, string> = {
   INFORMATIONAL: "CANCELLED",
@@ -29,19 +36,27 @@ const SEV_BADGE: Record<string, string> = {
 export default async function AlarmsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "occurredAt", defaultDirection: "desc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.ALARMS_MANAGE);
   const canEscalate = user.permissions.has(PERMISSIONS.INCIDENTS_CREATE);
+  const orderBy: Prisma.NetworkAlarmOrderByWithRelationInput[] = table.sort === "alarmNumber"
+    ? [{ alarmNumber: table.direction }, { id: "asc" }]
+    : table.sort === "severity"
+      ? [{ severity: table.direction }, { id: "asc" }]
+      : [{ occurredAt: table.direction }, { id: "asc" }];
 
-  const [alarms, devices, sites] = await Promise.all([
+  const [alarms, total, devices, sites] = await Promise.all([
     db.networkAlarm.findMany({
       include: { device: true, site: true, acknowledgedBy: true, incident: true },
-      orderBy: { occurredAt: "desc" },
-      take: 100,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.networkAlarm.count(),
     db.networkDevice.findMany({ orderBy: { hostname: "asc" } }),
     db.networkSite.findMany({ orderBy: { siteCode: "asc" } }),
   ]);
@@ -53,7 +68,7 @@ export default async function AlarmsPage({
         title="Alarms"
         subtitle={`Alarm manual dan monitoring. ${openCount} alarm belum ditangani. Alarm dapat dieskalasikan menjadi incident.`}
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -63,11 +78,11 @@ export default async function AlarmsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
-                  <th className="th">Severity</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/alarms" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="alarmNumber" /></th>
+                  <th className="th"><SortableTableHeader basePath="/noc/alarms" currentDirection={table.direction} currentSort={table.sort} label="Severity" query={table.query} sortKey="severity" /></th>
                   <th className="th">Pesan</th>
                   <th className="th">Sumber</th>
-                  <th className="th">Waktu</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/alarms" currentDirection={table.direction} currentSort={table.sort} label="Waktu" query={table.query} sortKey="occurredAt" /></th>
                   <th className="th">Status</th>
                   <th className="th"></th>
                 </tr>
@@ -147,6 +162,7 @@ export default async function AlarmsPage({
             </table>
           )}
         </div>
+        <TableControls basePath="/noc/alarms" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

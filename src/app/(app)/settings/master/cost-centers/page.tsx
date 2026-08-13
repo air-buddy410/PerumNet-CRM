@@ -1,20 +1,28 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { MasterCrud } from "../master-crud";
+import { parseTableQuery, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Cost Centers" };
 
 export default async function CostCentersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.MASTER_DATA_VIEW);
   const sp = await searchParams;
+  const tableOptions = [{ value: "code", label: "Kode" }, { value: "name", label: "Nama" }] as const;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.CostCenterOrderByWithRelationInput[] = [{ [table.sort]: table.direction }, { id: "asc" }];
 
-  const rows = await db.costCenter.findMany({ orderBy: { code: "asc" } });
-  const editRow = sp.edit ? (rows.find((r) => r.id === sp.edit) ?? null) : null;
+  const [rows, total, editRow] = await Promise.all([
+    db.costCenter.findMany({ orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.costCenter.count(),
+    table.query.edit ? db.costCenter.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
 
   return (
     <MasterCrud
@@ -24,7 +32,8 @@ export default async function CostCentersPage({
       rows={rows}
       editRow={editRow}
       canManage={user.permissions.has(PERMISSIONS.MASTER_DATA_MANAGE)}
-      flash={sp}
+      flash={table.query}
+      table={{ ...table, sortOptions: tableOptions, total }}
     />
   );
 }

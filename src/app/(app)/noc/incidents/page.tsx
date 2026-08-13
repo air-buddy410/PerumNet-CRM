@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -10,8 +11,15 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Incidents" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "detectedAt", label: "Terdeteksi" },
+  { value: "incidentNumber", label: "Nomor" },
+  { value: "severity", label: "Severity" },
+  { value: "status", label: "Status" },
+];
 
 function durationText(start: Date, end: Date | null): string {
   const ms = (end ? end.getTime() : Date.now()) - start.getTime();
@@ -24,25 +32,35 @@ function durationText(start: Date, end: Date | null): string {
 export default async function IncidentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string; severity?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "detectedAt", defaultDirection: "desc", sortOptions });
+  const where = {
+    ...(table.query.status ? { status: table.query.status } : {}),
+    ...(table.query.severity ? { severity: table.query.severity } : {}),
+  };
+  const orderBy: Prisma.IncidentOrderByWithRelationInput[] = table.sort === "incidentNumber"
+    ? [{ incidentNumber: table.direction }, { id: "asc" }]
+    : table.sort === "severity"
+      ? [{ severity: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ detectedAt: table.direction }, { id: "asc" }];
 
-  const incidents = await db.incident.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.severity ? { severity: sp.severity } : {}),
-    },
+  const [incidents, total] = await Promise.all([db.incident.findMany({
+    where,
     include: {
       pic: true,
       site: true,
       device: true,
       _count: { select: { impacted: true } },
     },
-    orderBy: { detectedAt: "desc" },
-    take: 100,
-  });
+    orderBy,
+    skip: (table.page - 1) * table.pageSize,
+    take: table.pageSize,
+  }), db.incident.count({ where })]);
   const typeLabel = (v: string) => INCIDENT_TYPES.find(([t]) => t === v)?.[1] ?? v;
 
   return (
@@ -56,12 +74,12 @@ export default async function IncidentsPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="label" htmlFor="severity">Severity</label>
-          <select id="severity" name="severity" className="input w-44" defaultValue={sp.severity ?? ""}>
+          <select id="severity" name="severity" className="input w-44" defaultValue={table.query.severity ?? ""}>
             <option value="">Semua</option>
             {INCIDENT_SEVERITIES.map((s) => (
               <option key={s} value={s}>{statusLabel(s)}</option>
@@ -87,14 +105,14 @@ export default async function IncidentsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
-                <th className="th">Severity</th>
+                <th className="th"><SortableTableHeader basePath="/noc/incidents" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="incidentNumber" /></th>
+                <th className="th"><SortableTableHeader basePath="/noc/incidents" currentDirection={table.direction} currentSort={table.sort} label="Severity" query={table.query} sortKey="severity" /></th>
                 <th className="th">Judul</th>
                 <th className="th">Lokasi</th>
                 <th className="th">PIC</th>
                 <th className="th">Durasi</th>
                 <th className="th">Terdampak</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/noc/incidents" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -129,6 +147,7 @@ export default async function IncidentsPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/noc/incidents" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
       <p className="mt-2 text-xs text-slate-400">
         Terdeteksi: {incidents.length > 0 ? formatDateTime(incidents[incidents.length - 1].detectedAt) : "-"} — sekarang
       </p>

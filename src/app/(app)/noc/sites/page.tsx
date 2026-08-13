@@ -1,34 +1,53 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, SITE_TYPES, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveSiteAction } from "../actions";
 
 export const metadata = { title: "Network Sites" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "siteCode", label: "Kode" },
+  { value: "name", label: "Nama" },
+  { value: "type", label: "Jenis" },
+  { value: "status", label: "Status" },
+];
 
 export default async function SitesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "siteCode", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const orderBy: Prisma.NetworkSiteOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "type"
+      ? [{ type: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ siteCode: table.direction }, { id: "asc" }];
 
-  const [sites, areas, users] = await Promise.all([
+  const [sites, total, areas, users, editRow] = await Promise.all([
     db.networkSite.findMany({
       include: {
         area: true,
         pic: true,
         _count: { select: { devices: true, subnets: true } },
       },
-      orderBy: { siteCode: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.networkSite.count(),
     db.area.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    table.query.edit ? db.networkSite.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (sites.find((s) => s.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -36,7 +55,7 @@ export default async function SitesPage({
         title="Network Sites"
         subtitle="Kelola POP, ODP, ODC, tower, dan lokasi infrastruktur jaringan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -46,13 +65,13 @@ export default async function SitesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
-                  <th className="th">Jenis</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/sites" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="siteCode" /></th>
+                  <th className="th"><SortableTableHeader basePath="/noc/sites" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
+                  <th className="th"><SortableTableHeader basePath="/noc/sites" currentDirection={table.direction} currentSort={table.sort} label="Jenis" query={table.query} sortKey="type" /></th>
                   <th className="th">Area</th>
                   <th className="th">PIC</th>
                   <th className="th">Perangkat</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/sites" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -79,6 +98,7 @@ export default async function SitesPage({
             </table>
           )}
         </div>
+        <TableControls basePath="/noc/sites" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

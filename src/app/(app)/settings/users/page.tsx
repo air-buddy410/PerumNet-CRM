@@ -1,23 +1,39 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, ActiveBadge, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Users" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Dibuat" },
+  { value: "name", label: "Nama" },
+  { value: "username", label: "Username" },
+  { value: "email", label: "Email" },
+];
 
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const actor = await requirePermission(PERMISSIONS.USERS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "asc", sortOptions });
+  const orderBy: Prisma.UserOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "username"
+      ? [{ username: table.direction }, { id: "asc" }]
+      : table.sort === "email"
+        ? [{ email: table.direction }, { id: "asc" }]
+        : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const users = await db.user.findMany({
-    include: { roles: { include: { role: true } }, division: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const [users, total] = await Promise.all([
+    db.user.findMany({ include: { roles: { include: { role: true } }, division: true }, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.user.count(),
+  ]);
 
   return (
     <div>
@@ -32,15 +48,15 @@ export default async function UsersPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         <table className="w-full">
           <thead className="border-b border-slate-100 bg-slate-50/60">
             <tr>
-              <th className="th">Nama</th>
-              <th className="th">Username</th>
-              <th className="th">Email</th>
+              <th className="th"><SortableTableHeader basePath="/settings/users" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
+              <th className="th"><SortableTableHeader basePath="/settings/users" currentDirection={table.direction} currentSort={table.sort} label="Username" query={table.query} sortKey="username" /></th>
+              <th className="th"><SortableTableHeader basePath="/settings/users" currentDirection={table.direction} currentSort={table.sort} label="Email" query={table.query} sortKey="email" /></th>
               <th className="th">Divisi</th>
               <th className="th">Level</th>
               <th className="th">Role</th>
@@ -90,6 +106,7 @@ export default async function UsersPage({
           </tbody>
         </table>
       </div>
+      <TableControls basePath="/settings/users" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

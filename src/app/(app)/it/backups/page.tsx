@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, BACKUP_TYPES, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { createBackupAction } from "./actions";
 
 export const metadata = { title: "Backup & DR" };
@@ -10,18 +12,30 @@ export const metadata = { title: "Backup & DR" };
 export default async function BackupsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.IT_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.BACKUPS_MANAGE);
+  const tableOptions = [
+    { value: "executedAt", label: "Waktu" },
+    { value: "backupNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "executedAt", sortOptions: tableOptions });
+  const orderBy: Prisma.BackupRecordOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [backups, servers, apps] = await Promise.all([
+  const [backups, totalCount, servers, apps] = await Promise.all([
     db.backupRecord.findMany({
       include: { server: true, application: true, verifiedBy: true },
-      orderBy: { executedAt: "desc" },
-      take: 200,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.backupRecord.count(),
     db.server.findMany({ where: { status: "ACTIVE" }, orderBy: { hostname: "asc" } }),
     db.application.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
   ]);
@@ -33,7 +47,7 @@ export default async function BackupsPage({
         title="Backup & Disaster Recovery"
         subtitle="Catat masa simpan dan lokasi backup. Backup production wajib terenkripsi dan backup kritikal wajib diverifikasi."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className={`grid gap-6 ${canManage ? "lg:grid-cols-[1fr_22rem]" : ""}`}>
         <div className="card overflow-x-auto">
@@ -43,14 +57,14 @@ export default async function BackupsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
+                  <th className="th"><SortableTableHeader basePath="/it/backups" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="backupNumber" label="Nomor" /></th>
                   <th className="th">Target</th>
                   <th className="th">Jenis</th>
-                  <th className="th">Waktu</th>
+                  <th className="th"><SortableTableHeader basePath="/it/backups" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="executedAt" label="Waktu" /></th>
                   <th className="th">Enkripsi</th>
                   <th className="th">Kritikal</th>
                   <th className="th">Verifikasi</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/it/backups" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -83,6 +97,16 @@ export default async function BackupsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/it/backups"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

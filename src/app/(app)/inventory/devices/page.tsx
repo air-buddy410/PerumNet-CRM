@@ -1,42 +1,41 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, DEVICE_STATUSES, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Perangkat" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "updatedAt", label: "Terakhir diperbarui" },
+  { value: "serialNumber", label: "Serial number" },
+  { value: "status", label: "Status" },
+];
 
 export default async function DevicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    ok?: string;
-    error?: string;
-    status?: string;
-    q?: string;
-    ownership?: string;
-  }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "updatedAt", defaultDirection: "desc", sortOptions });
+  const where: Prisma.SerializedDeviceWhereInput = {
+    ...(table.query.status ? { status: table.query.status } : {}),
+    ...(table.query.ownership ? { ownership: table.query.ownership } : {}),
+    ...(table.query.q ? { OR: [{ serialNumber: { contains: table.query.q } }, { macAddress: { contains: table.query.q } }] } : {}),
+  };
+  const orderBy: Prisma.SerializedDeviceOrderByWithRelationInput[] = table.sort === "serialNumber"
+    ? [{ serialNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ updatedAt: table.direction }, { id: "asc" }];
 
-  const devices = await db.serializedDevice.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.ownership ? { ownership: sp.ownership } : {}),
-      ...(sp.q
-        ? {
-            OR: [
-              { serialNumber: { contains: sp.q } },
-              { macAddress: { contains: sp.q } },
-            ],
-          }
-        : {}),
-    },
-    include: { item: true, warehouse: true, custodian: true, customer: true, subscription: true },
-    orderBy: { updatedAt: "desc" },
-    take: 100,
-  });
+  const [devices, total] = await Promise.all([
+    db.serializedDevice.findMany({ where, include: { item: true, warehouse: true, custodian: true, customer: true, subscription: true }, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.serializedDevice.count({ where }),
+  ]);
 
   return (
     <div>
@@ -44,16 +43,16 @@ export default async function DevicesPage({
         title="Perangkat Serialized"
         subtitle="Setiap perangkat memiliki satu lokasi dan satu penanggung jawab aktif."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div className="w-64">
           <label className="label" htmlFor="q">Cari SN / MAC</label>
-          <input id="q" name="q" className="input" defaultValue={sp.q ?? ""} />
+          <input id="q" name="q" className="input" defaultValue={table.query.q ?? ""} />
         </div>
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-52" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input w-52" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             {DEVICE_STATUSES.map((s) => (
               <option key={s} value={s}>{statusLabel(s)}</option>
@@ -62,7 +61,7 @@ export default async function DevicesPage({
         </div>
         <div>
           <label className="label" htmlFor="ownership">Kepemilikan</label>
-          <select id="ownership" name="ownership" className="input w-52" defaultValue={sp.ownership ?? ""}>
+          <select id="ownership" name="ownership" className="input w-52" defaultValue={table.query.ownership ?? ""}>
             <option value="">Semua kepemilikan</option>
             <option value="COMPANY">Milik PERUMNET</option>
             <option value="CUSTOMER">Milik Pelanggan</option>
@@ -78,11 +77,11 @@ export default async function DevicesPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Serial Number</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/devices" currentDirection={table.direction} currentSort={table.sort} label="Serial Number" query={table.query} sortKey="serialNumber" /></th>
                 <th className="th">Item</th>
                 <th className="th">Lokasi / Penanggung Jawab</th>
                 <th className="th">Kepemilikan</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/devices" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -115,6 +114,7 @@ export default async function DevicesPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/inventory/devices" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

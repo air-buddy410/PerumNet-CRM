@@ -1,19 +1,32 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah } from "@/lib/constants";
 import { MasterCrud, type MasterRow } from "../master-crud";
+import { parseTableQuery, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Paket Internet" };
 
 export default async function PackagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.MASTER_DATA_VIEW);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "monthlyPrice", label: "Harga/bulan" },
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Nama" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "monthlyPrice", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.PackageOrderByWithRelationInput[] = [{ [table.sort]: table.direction }, { id: "asc" }];
 
-  const packages = await db.package.findMany({ orderBy: { monthlyPrice: "asc" } });
+  const [packages, total, editPackage] = await Promise.all([
+    db.package.findMany({ orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.package.count(),
+    table.query.edit ? db.package.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
   const rows: MasterRow[] = packages.map((p) => ({
     id: p.id,
     code: p.code,
@@ -32,7 +45,24 @@ export default async function PackagesPage({
       installationFee: Number(p.installationFee),
     },
   }));
-  const editRow = sp.edit ? (rows.find((r) => r.id === sp.edit) ?? null) : null;
+  const editRow: MasterRow | null = editPackage ? {
+    id: editPackage.id,
+    code: editPackage.code,
+    name: editPackage.name,
+    description: editPackage.description,
+    isActive: editPackage.isActive,
+    extraCols: [
+      `${editPackage.downloadMbps}/${editPackage.uploadMbps} Mbps`,
+      formatRupiah(editPackage.monthlyPrice),
+      formatRupiah(editPackage.installationFee),
+    ],
+    extraFields: {
+      downloadMbps: editPackage.downloadMbps,
+      uploadMbps: editPackage.uploadMbps,
+      monthlyPrice: Number(editPackage.monthlyPrice),
+      installationFee: Number(editPackage.installationFee),
+    },
+  } : null;
 
   return (
     <MasterCrud
@@ -44,7 +74,8 @@ export default async function PackagesPage({
       editRow={editRow}
       canManage={user.permissions.has(PERMISSIONS.MASTER_DATA_MANAGE)}
       isPackage
-      flash={sp}
+      flash={table.query}
+      table={{ ...table, sortOptions: tableOptions, total }}
     />
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -9,23 +10,51 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import {
+  parseTableQuery,
+  SortableTableHeader,
+  TableControls,
+  type TableSearchParams,
+  type TableSortOption,
+} from "@/components/table-controls";
 
 export const metadata = { title: "Subscriptions" };
+
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Tanggal dibuat" },
+  { value: "serviceNumber", label: "Service ID" },
+  { value: "status", label: "Status" },
+];
 
 export default async function SubscriptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW);
   const sp = await searchParams;
-
-  const subscriptions = await db.subscription.findMany({
-    where: sp.status ? { status: sp.status } : undefined,
-    include: { customer: true, package: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
+  const table = parseTableQuery(sp, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    sortOptions,
   });
+  const where = table.query.status ? { status: table.query.status } : undefined;
+  const orderBy: Prisma.SubscriptionOrderByWithRelationInput[] = table.sort === "serviceNumber"
+    ? [{ serviceNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
+
+  const [subscriptions, total] = await Promise.all([
+    db.subscription.findMany({
+      where,
+      include: { customer: true, package: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.subscription.count({ where }),
+  ]);
 
   return (
     <div>
@@ -33,12 +62,12 @@ export default async function SubscriptionsPage({
         title="Subscriptions"
         subtitle="Aktivasi layanan dilakukan oleh petugas yang memiliki izin aktivasi."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex items-end gap-3">
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-56" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input w-56" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             {SUBSCRIPTION_STATUSES.map((s) => (
               <option key={s} value={s}>{statusLabel(s)}</option>
@@ -55,13 +84,13 @@ export default async function SubscriptionsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Service ID</th>
+                <th className="th"><SortableTableHeader basePath="/crm/subscriptions" currentDirection={table.direction} currentSort={table.sort} label="Service ID" query={table.query} sortKey="serviceNumber" /></th>
                 <th className="th">Customer</th>
                 <th className="th">Paket</th>
                 <th className="th">Harga/bln</th>
                 <th className="th">PPPoE</th>
                 <th className="th">Aktivasi</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/crm/subscriptions" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -93,6 +122,16 @@ export default async function SubscriptionsPage({
           </table>
         )}
       </div>
+      <TableControls
+        basePath="/crm/subscriptions"
+        direction={table.direction}
+        page={table.page}
+        pageSize={table.pageSize}
+        query={table.query}
+        sort={table.sort}
+        sortOptions={sortOptions}
+        total={total}
+      />
     </div>
   );
 }

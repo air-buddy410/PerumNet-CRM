@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { queueMessageAction, broadcastAction, runQueueAction, retryMessageAction } from "../actions";
 
 export const metadata = { title: "Antrian Pesan" };
@@ -9,19 +11,34 @@ export const metadata = { title: "Antrian Pesan" };
 export default async function OutboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CHANNELS_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.CHANNELS_MANAGE);
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "status", label: "Status" },
+    { value: "sentAt", label: "Terkirim" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const where: Prisma.OutboundMessageWhereInput = table.query.status ? { status: table.query.status } : {};
+  const orderBy: Prisma.OutboundMessageOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [messages, templates, customers, integrations] = await Promise.all([
+  const [messages, totalCount, queued, failed, templates, customers, integrations] = await Promise.all([
     db.outboundMessage.findMany({
-      where: sp.status ? { status: sp.status } : {},
+      where,
       include: { customer: true, template: true },
-      orderBy: { createdAt: "desc" },
-      take: 120,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.outboundMessage.count({ where }),
+    db.outboundMessage.count({ where: { status: "QUEUED" } }),
+    db.outboundMessage.count({ where: { status: "FAILED" } }),
     db.messageTemplate.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
     canManage
       ? db.customer.findMany({
@@ -32,8 +49,6 @@ export default async function OutboxPage({
       : Promise.resolve([]),
     db.integration.findMany({ where: { category: "CRM_CUSTOMER" }, orderBy: { code: "asc" } }),
   ]);
-  const queued = messages.filter((m) => m.status === "QUEUED").length;
-  const failed = messages.filter((m) => m.status === "FAILED").length;
 
   return (
     <div>
@@ -41,7 +56,7 @@ export default async function OutboxPage({
         title="Antrian Pesan Keluar"
         subtitle={`${queued} antri · ${failed} gagal. Adapter WA/SMTP menunggu kredensial gateway — pengiriman akan gagal dengan pesan jelas dan bisa diulang setelah adapter aktif.`}
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       {canManage && (
         <div className="mb-4 grid gap-4 lg:grid-cols-3">
@@ -104,7 +119,7 @@ export default async function OutboxPage({
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-40" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input w-40" defaultValue={table.query.status ?? ""}>
             <option value="">Semua</option>
             <option value="QUEUED">Antri</option>
             <option value="SENT">Terkirim</option>
@@ -128,7 +143,7 @@ export default async function OutboxPage({
                 <th className="th">Isi</th>
                 <th className="th">Percobaan</th>
                 <th className="th">Error / Terkirim</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/channels/outbox" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                 {canManage && <th className="th"></th>}
               </tr>
             </thead>
@@ -165,8 +180,18 @@ export default async function OutboxPage({
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/channels/outbox"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
     </div>
   );
 }

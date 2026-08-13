@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, OLT_VENDORS, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { FtthCoordinatePicker } from "@/components/ftth-coordinate-picker";
 import { saveOltAction, savePonPortAction, saveOdpAction, reconcilePortsAction } from "./actions";
 
@@ -11,13 +12,24 @@ export const metadata = { title: "FTTH — OLT, PON & ODP" };
 export default async function FtthPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams & { ok?: string; error?: string; edit?: string }>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.FTTH_MANAGE);
+  const sortOptions: readonly TableSortOption[] = [
+    { value: "code", label: "Kode ODP" },
+    { value: "status", label: "Status" },
+    { value: "portUsed", label: "Port terpakai" },
+  ];
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions });
+  const odpOrderBy = table.sort === "status"
+    ? [{ status: table.direction }, { code: "asc" as const }, { id: "asc" as const }]
+    : table.sort === "portUsed"
+      ? [{ portUsed: table.direction }, { code: "asc" as const }, { id: "asc" as const }]
+      : [{ code: table.direction }, { id: "asc" as const }];
 
-  const [olts, oltCandidates, ponPorts, odps, sites] = await Promise.all([
+  const [olts, oltCandidates, ponPorts, odps, odpCount, odpOptions, sites, odpAggregate] = await Promise.all([
     db.oltDevice.findMany({
       include: { networkDevice: true, _count: { select: { ponPorts: true } } },
       orderBy: { managementIp: "asc" },
@@ -29,14 +41,21 @@ export default async function FtthPage({
     }),
     db.odp.findMany({
       include: { site: true, ponPort: true, parent: true },
-      orderBy: { code: "asc" },
+      orderBy: odpOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.odp.count(),
+    db.odp.findMany({ select: { id: true, code: true }, orderBy: { code: "asc" } }),
     db.networkSite.findMany({ orderBy: { siteCode: "asc" } }),
+    db.odp.aggregate({ _sum: { portCapacity: true, portUsed: true } }),
   ]);
-  const editRow = sp.edit ? (odps.find((o) => o.id === sp.edit) ?? null) : null;
+  const editRow = sp.edit
+    ? await db.odp.findUnique({ where: { id: sp.edit }, include: { site: true, ponPort: true, parent: true } })
+    : null;
   const vendorLabel = (v: string) => OLT_VENDORS.find(([c]) => c === v)?.[1] ?? v;
-  const totalCapacity = odps.reduce((a, o) => a + o.portCapacity, 0);
-  const totalUsed = odps.reduce((a, o) => a + o.portUsed, 0);
+  const totalCapacity = odpAggregate._sum.portCapacity ?? 0;
+  const totalUsed = odpAggregate._sum.portUsed ?? 0;
 
   return (
     <div>
@@ -65,13 +84,13 @@ export default async function FtthPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Kode</th>
+                <th className="th"><SortableTableHeader basePath="/noc/ftth" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
                     <th className="th">Site</th>
                     <th className="th">PON</th>
                     <th className="th">Induk</th>
                     <th className="th">Kapasitas</th>
                     <th className="th">Optic</th>
-                    <th className="th">Status</th>
+                    <th className="th"><SortableTableHeader basePath="/noc/ftth" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -103,6 +122,16 @@ export default async function FtthPage({
                 </tbody>
               </table>
             )}
+            <TableControls
+              basePath="/noc/ftth"
+              direction={table.direction}
+              page={table.page}
+              pageSize={table.pageSize}
+              query={table.query}
+              sort={table.sort}
+              sortOptions={sortOptions}
+              total={odpCount}
+            />
           </div>
 
           <div className="card overflow-x-auto">
@@ -188,7 +217,7 @@ export default async function FtthPage({
                     <label className="label" htmlFor="parentId">ODP Induk (kaskade)</label>
                     <select id="parentId" name="parentId" className="input" defaultValue={editRow?.parentId ?? ""}>
                       <option value="">— tanpa induk —</option>
-                      {odps.filter((o) => o.id !== editRow?.id).map((o) => (
+                      {odpOptions.filter((o) => o.id !== editRow?.id).map((o) => (
                         <option key={o.id} value={o.id}>{o.code}</option>
                       ))}
                     </select>

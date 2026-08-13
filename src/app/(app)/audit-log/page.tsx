@@ -1,47 +1,59 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, EmptyState } from "@/components/ui";
+import {
+  parseTableQuery,
+  SortableTableHeader,
+  TableControls,
+  type TableSearchParams,
+  type TableSortOption,
+} from "@/components/table-controls";
 
 export const metadata = { title: "Audit Log" };
 
-const PAGE_SIZE = 50;
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Waktu" },
+  { value: "action", label: "Aksi" },
+  { value: "module", label: "Modul" },
+];
 
 export default async function AuditLogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ module?: string; action?: string; page?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.AUDIT_LOG_VIEW);
   const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const table = parseTableQuery(sp, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    sortOptions,
+  });
 
   const where = {
-    ...(sp.module ? { module: sp.module } : {}),
-    ...(sp.action ? { action: sp.action } : {}),
+    ...(table.query.module ? { module: table.query.module } : {}),
+    ...(table.query.action ? { action: table.query.action } : {}),
   };
+  const orderBy: Prisma.AuditLogOrderByWithRelationInput[] = table.sort === "action"
+    ? [{ action: table.direction }, { id: "asc" }]
+    : table.sort === "module"
+      ? [{ module: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
 
   const [logs, total, modules, actions] = await Promise.all([
     db.auditLog.findMany({
       where,
       include: { user: true },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
     db.auditLog.count({ where }),
     db.auditLog.findMany({ distinct: ["module"], select: { module: true } }),
     db.auditLog.findMany({ distinct: ["action"], select: { action: true } }),
   ]);
-
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const qs = (p: number) => {
-    const q = new URLSearchParams();
-    if (sp.module) q.set("module", sp.module);
-    if (sp.action) q.set("action", sp.action);
-    q.set("page", String(p));
-    return `/audit-log?${q.toString()}`;
-  };
 
   return (
     <div>
@@ -79,10 +91,10 @@ export default async function AuditLogPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Waktu</th>
+                <th className="th"><SortableTableHeader basePath="/audit-log" currentDirection={table.direction} currentSort={table.sort} label="Waktu" query={table.query} sortKey="createdAt" /></th>
                 <th className="th">User</th>
-                <th className="th">Aksi</th>
-                <th className="th">Modul</th>
+                <th className="th"><SortableTableHeader basePath="/audit-log" currentDirection={table.direction} currentSort={table.sort} label="Aksi" query={table.query} sortKey="action" /></th>
+                <th className="th"><SortableTableHeader basePath="/audit-log" currentDirection={table.direction} currentSort={table.sort} label="Modul" query={table.query} sortKey="module" /></th>
                 <th className="th">Deskripsi</th>
                 <th className="th">IP</th>
               </tr>
@@ -110,22 +122,16 @@ export default async function AuditLogPage({
           </table>
         )}
       </div>
-
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <span className="text-slate-500">
-            Halaman {page} dari {totalPages}
-          </span>
-          <div className="flex gap-2">
-            {page > 1 && (
-              <a href={qs(page - 1)} className="btn-secondary">Sebelumnya</a>
-            )}
-            {page < totalPages && (
-              <a href={qs(page + 1)} className="btn-secondary">Berikutnya</a>
-            )}
-          </div>
-        </div>
-      )}
+      <TableControls
+        basePath="/audit-log"
+        direction={table.direction}
+        page={table.page}
+        pageSize={table.pageSize}
+        query={table.query}
+        sort={table.sort}
+        sortOptions={sortOptions}
+        total={total}
+      />
     </div>
   );
 }

@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatRupiah, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { createClosingAction } from "./actions";
 
 export const metadata = { title: "Closing Kas" };
@@ -9,21 +11,35 @@ export const metadata = { title: "Closing Kas" };
 export default async function ClosingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.FINANCE_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.CLOSINGS_MANAGE);
+  const tableOptions = [
+    { value: "createdAt", label: "Tanggal" },
+    { value: "closingNumber", label: "Nomor" },
+  ] as const;
+  const table = parseTableQuery(sp, {
+    defaultSort: "createdAt",
+    sortOptions: tableOptions,
+  });
+  const orderBy: Prisma.CashClosingOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [closings, cashbooks] = await Promise.all([
+  const [closings, totalCount, varianceCount, cashbooks] = await Promise.all([
     db.cashClosing.findMany({
       include: { cashbook: true, createdBy: true },
-      orderBy: { createdAt: "desc" },
-      take: 100,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.cashClosing.count(),
+    db.cashClosing.count({ where: { variance: { not: BigInt(0) } } }),
     db.cashbook.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
   ]);
-  const varianceCount = closings.filter((c) => c.variance !== BigInt(0)).length;
 
   return (
     <div>
@@ -31,7 +47,7 @@ export default async function ClosingsPage({
         title="Closing Kas"
         subtitle={`Harian: bandingkan kas fisik dengan sistem dan beri alasan untuk setiap selisih. Bulanan: kunci periode. ${varianceCount} closing dengan selisih.`}
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -41,7 +57,7 @@ export default async function ClosingsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
+                  <th className="th"><SortableTableHeader basePath="/finance/closings" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="closingNumber" label="Nomor" /></th>
                   <th className="th">Cashbook</th>
                   <th className="th">Jenis</th>
                   <th className="th text-right">Sistem</th>
@@ -77,6 +93,16 @@ export default async function ClosingsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/finance/closings"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

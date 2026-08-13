@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -9,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveIntegrationAction } from "./actions";
 
 export const metadata = { title: "Integrasi" };
@@ -16,16 +18,35 @@ export const metadata = { title: "Integrasi" };
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.INTEGRATIONS_MANAGE);
   const sp = await searchParams;
-
-  const integrations = await db.integration.findMany({
-    include: { _count: { select: { events: true } } },
-    orderBy: [{ category: "asc" }, { code: "asc" }],
+  const tableOptions = [
+    { value: "category", label: "Kategori" },
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Nama" },
+  ] as const;
+  const table = parseTableQuery(sp, {
+    defaultSort: "category",
+    defaultDirection: "asc",
+    sortOptions: tableOptions,
   });
-  const editRow = sp.edit ? (integrations.find((i) => i.id === sp.edit) ?? null) : null;
+  const orderBy: Prisma.IntegrationOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+
+  const [integrations, totalCount, editRow] = await Promise.all([
+    db.integration.findMany({
+      include: { _count: { select: { events: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.integration.count(),
+    table.query.edit ? db.integration.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
   const catLabel = (c: string) => INTEGRATION_CATEGORIES.find(([v]) => v === c)?.[1] ?? c;
   const provLabel = (p: string) => INTEGRATION_PROVIDERS.find(([v]) => v === p)?.[1] ?? p;
 
@@ -35,7 +56,7 @@ export default async function IntegrationsPage({
         title="Integrasi Eksternal"
         subtitle="Kelola konektor monitoring, billing, WhatsApp, dan layanan lain. Secret tetap dikelola melalui environment, bukan di halaman ini."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -45,9 +66,9 @@ export default async function IntegrationsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
-                  <th className="th">Kategori</th>
+                  <th className="th"><SortableTableHeader basePath="/settings/integrations" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="code" label="Kode" /></th>
+                  <th className="th"><SortableTableHeader basePath="/settings/integrations" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
+                  <th className="th"><SortableTableHeader basePath="/settings/integrations" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="category" label="Kategori" /></th>
                   <th className="th">Provider</th>
                   <th className="th">Event</th>
                   <th className="th">Event Terakhir</th>
@@ -81,6 +102,16 @@ export default async function IntegrationsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/settings/integrations"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         <div className="card h-fit p-5">

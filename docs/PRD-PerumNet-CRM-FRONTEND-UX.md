@@ -589,3 +589,121 @@ Audit silang terhadap `HANDOFF-BACKEND-KE-FRONTEND.md`, `PLAN-IDENTITAS-DAN-DATA
 - Kartu pegawai, QR publik, NFC, absensi kartu, dan akses pintu tetap backlog tertunda sesuai K5/K6. Tidak ada UI atau dependency baru sebelum keputusan keamanan, permission, attachment, dan token lifecycle tersedia.
 
 Perbaikan frontend pada audit ini terbatas pada hirarki sidebar/accessibility dan validasi telepon yang sudah dicatat pada bagian 24. Tidak ada perubahan backend, API, DTO, auth/session, RBAC, database, Prisma, Server Action, middleware, atau business rule.
+
+## 26. Handoff Opus — Profile, Arsip, dan Gambar Tanda Tangan Dokumen
+
+Implementasi frontend berikut mengonsumsi kontrak Opus yang sudah tersedia. Scope tetap frontend-only: tidak ada perubahan API, DTO, Server Action, `src/lib/**`, auth/session, RBAC, database, Prisma, middleware, atau business rule.
+
+### Profile dan identity terpusat
+
+- `profileView()` sekarang ditampilkan dengan field read-only alamat, pola kerja, jenjang jabatan, mulai kontrak, dan berakhir kontrak.
+- Nilai `SHIFT`, `NON_SHIFT`, `STAFF`, dan `LEADER` diterjemahkan ke label operasional Indonesia.
+- Nama tampilan dan telepon tetap menjadi satu-satunya field kontak yang dapat diedit dari halaman profil.
+- `LOCAL` dapat menampilkan form password bila `passwordChangeAvailable` true. `MAILSERVER` dan `OIDC` diperlakukan sebagai identity terpusat: password lokal disembunyikan dan CRM tidak menyimpan atau mengirim kredensial identity.
+
+### Arsip dengan rentang tanggal
+
+- `/settings/trash` menyediakan filter `Dari tanggal` dan `Sampai tanggal` di samping filter jenis entitas dan `Belum dipulihkan`.
+- Tombol `Terapkan` mengirim parameter tanggal ke `listArchive({ from, to })`; `Reset tanggal` menghapus rentang tanggal tanpa menghilangkan filter jenis/status yang sedang dipilih.
+- Tanggal akhir bersifat inklusif sesuai kontrak loader. Parameter kosong atau tidak valid diabaikan dengan aman dan tidak boleh merusak query.
+
+### Gambar tanda tangan dokumen gudang
+
+- Detail transaksi dan print IRF membaca tanda tangan melalui loader resmi `documentSignatures`.
+- Setiap baris tanda tangan menampilkan peran, nama, waktu, status gambar, preview, dan tautan privat `/api/files/<attachmentId>` bila attachment tersedia.
+- Upload hanya ditampilkan untuk baris tanda tangan yang sudah ada; frontend tidak membuat baris tanda tangan atau tanda tangan baru.
+- Upload memakai `attachSignatureImageAction`, multipart `image/png` atau `image/jpeg`, dan `capture="environment"` untuk kamera mobile. IRF mengikuti permission stock create; DO mengikuti stock create; RECEIPT mengikuti stock receive.
+- Jika baris tanda tangan atau gambar belum tersedia, UI menyampaikan status tersebut secara jujur. Preview yang gagal tetap menyediakan tautan privat untuk membuka file.
+- Layout print A4 membatasi gambar agar tidak melewati tabel, kartu tanda tangan, atau batas halaman; nama penanda tangan tetap menjadi sumber identitas dokumen saat gambar tidak tersedia.
+
+### Responsive dan print acceptance
+
+- Panel tanda tangan memakai grid yang turun menjadi satu kolom pada mobile, dengan target tombol tetap dapat disentuh dan nama panjang tetap membungkus di dalam card.
+- Detail transaksi, tabel arsip, preview signature, dan print IRF wajib diperiksa pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+- QA wajib memastikan tidak ada horizontal overflow, teks keluar card, tombol upload menabrak preview, file invalid merusak halaman, atau framework overlay.
+- Mode print harus menyembunyikan app shell, mempertahankan rincian item/serial dan metadata transaksi, menampilkan gambar signature bila tersedia, serta tetap menyediakan tautan privat bila preview gagal.
+
+Handoff notification, profile, identity, search, maps, recovery, dan portal lainnya tidak berubah; tambahan ini hanya memakai kontrak profile, archive, dan document-signature yang telah disediakan Opus.
+
+## 28. Login, Reset Password, dan Kontrak Tabel
+
+### Login dan permintaan reset password
+
+- Field password login memiliki toggle mata yang hanya mengubah visibilitas nilai di input. Nilai password tidak disimpan ke `localStorage`, URL, log, atau state global.
+- Link `Lupa password?` mengarah ke `/login/forgot-password`. Sampai action/backend resmi tersedia, halaman menampilkan status tertunda yang jujur dan tidak mengirim request palsu ke Mailcow.
+- Kontrak yang dibutuhkan frontend adalah `{ email: string }` → `{ accepted: true, requestId?: string }`. Recipient tim IT harus berasal dari environment server, bukan hard-code frontend.
+- Backend wajib memberikan response generik, rate limit, audit log, dan error aman tanpa mengungkap keberadaan akun, password, token reset, kredensial Mailcow, atau API key ke browser.
+
+### Pagination dan sorting server-side
+
+- List bertabel memakai query standar `page`, `pageSize`, `sort`, dan `direction`; ukuran halaman yang tersedia `10`, `20`, `50`, dan `100`, dengan default `20`.
+- Filter, pencarian, sort, dan ukuran halaman harus dipertahankan saat berpindah halaman. Perubahan filter/sort/ukuran halaman mengembalikan halaman ke 1.
+- Sort field memakai whitelist per halaman dan tie-breaker stabil. Loader memakai `count` + `skip` + `take`; frontend tidak melakukan slicing dataset besar.
+- Kontrol tabel harus wrap pada mobile, header tetap dapat digeser secara horizontal, dan teks tidak boleh pecah satu karakter per baris.
+- Tabel detail dokumen, line-item transaksi, dan halaman print tetap memakai layout khusus dan bukan target pagination list.
+- Loader khusus seperti arsip harus menyediakan dukungan offset/page, limit, sort, dan `totalCount` sebelum kontrol server-side diterapkan penuh.
+
+Status implementasi: halaman list model langsung yang sudah dimigrasikan memakai
+`count` + `skip` + `take`, whitelist sorting, dan tie-breaker stabil. Detail/
+print, report agregasi, snapshot Mailcow, arsip, serta tabel turunan multi-
+sumber menunggu kontrak loader backend tersebut; frontend tidak mengambil
+seluruh dataset lalu memotongnya di browser.
+
+Migrasi direct-loader pada audit ini juga mencakup grid jadwal HRD, tabel sisa
+stock/slot aktif, dan tabel ODP FTTH. Tabel utama memakai batas server-side;
+daftar opsi pada form dan tabel pendukung tetap dipertahankan sebagai data
+referensi operasional sampai Opus menyediakan loader pencarian/paginasi khusus.
+
+Acceptance tambahan: login/forgot-password dan perwakilan list bertabel diperiksa pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800 tanpa overflow horizontal, teks keluar card, overlap kontrol, atau request Mailcow dari browser.
+
+## 27. Handoff Opus — Divisi ke Grup Authentik
+
+Frontend menyediakan `/it/identity-groups` untuk user dengan permission `integrations.manage` setelah kontrak loader dan action Authentik tersedia. Halaman ini tetap frontend-only dan tidak mengubah API, DTO, Server Action, `src/lib/**`, database, auth, RBAC, atau business rule.
+
+- Pengaturan hanya meminta alamat Authentik dan **nama** environment variable token. Token API tidak boleh ditempelkan atau disimpan oleh UI CRM.
+- Preview bersifat read-only dan menampilkan grup yang akan dibuat, anggota yang akan ditambahkan, anggota yang akan dikeluarkan, serta peringatan data yang perlu ditinjau.
+- Daftar `Keluarkan` diberi penekanan visual terpisah karena dapat mencabut akses aplikasi lain. Tombol penerapan tidak mengirim plan dari browser; action server menghitung ulang keadaan terbaru.
+- `UNKNOWN_MEMBER` bukan error: anggota yang tidak dikenali CRM tetap dipertahankan dan hanya dilaporkan. Arah sinkronisasi hanya CRM → Authentik.
+- Jika konfigurasi, token server, atau koneksi belum siap, UI menampilkan blocker/error yang jujur tanpa angka atau data palsu.
+- Navigasi permission-scoped menampilkan item `Grup Authentik` di group IT/DevOps; drawer tablet dan sidebar collapsed mempertahankan hierarki parent/submenu.
+
+Acceptance QA tambahan mencakup preview tanpa perubahan, status konfigurasi, pengaturan tanpa token mentah, daftar add/remove/warning, konfirmasi penerapan, permission filtering, serta viewport 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800. Tidak boleh ada horizontal overflow, teks keluar card, tombol overlap, console error, atau framework overlay.
+
+## 29. Handoff Opus — UI HRD, Mailserver, dan Reset
+
+### Permintaan lupa password
+
+- `/login/forgot-password` menggunakan `requestRecoveryAction` melalui server action resmi.
+- Form hanya meminta satu alamat email dan menampilkan `message` generik dari server.
+- Tidak ada token reset, form password baru, countdown, password, kredensial Mailcow, atau request Mailcow langsung dari browser.
+- Loading, success, error aman, focus state, dan link kembali ke login harus tetap responsif pada desktop, tablet, dan mobile.
+
+### Kartu pegawai dan foto resmi
+
+- `/hrd/employees/[id]` menampilkan foto resmi, nomor kartu, status, tanggal terbit, masa berlaku, NFC UID, penerbit, dan riwayat kartu.
+- Pengelolaan kartu memakai `hrd.manage` dan action resmi `uploadEmployeePhotoAction`, `issueCardAction`, `replaceCardAction`, `markCardLostAction`, serta `revokeCardAction`.
+- Status memakai `CARD_STATUS_LABELS`; alasan kartu tidak berlaku memakai `cardInvalidReason`, termasuk akun beku, akun diarsipkan, pegawai nonaktif, dan tanggal kedaluwarsa.
+- Kartu aktif tidak dapat diterbitkan ganda dari UI. Penggantian kartu selalu meminta alasan; kartu lama tetap terlihat dalam riwayat.
+- QR dan print kartu ditahan sampai loader backend menyediakan `qrSvg` atau `verificationUrl` server-side. Frontend tidak mengambil `publicToken` langsung dan tidak membuat QR dari NIK/nama.
+
+### Impor karyawan Excel
+
+- `/hrd/employees/import` hanya tersedia bagi `hrd.manage`.
+- File `.xlsx` yang sama ditahan di state client untuk `previewEmployeeImportAction` dan `applyEmployeeImportAction`.
+- Preview memisahkan `CREATE`, `SKIP`, `issues`, `notes`, jumlah baris kosong, dan hasil nomor pegawai yang diterbitkan.
+- Tombol Terapkan hanya aktif ketika `ImportPlan.ok === true`; penerapan tetap membaca ulang file dan bersifat all-or-nothing.
+
+### Akun CRM dari mailbox
+
+- `/it/mailserver/accounts` hanya tersedia bagi `users.create`.
+- Kandidat personal maupun shared/function selalu ditampilkan; `likelyShared` hanya memengaruhi centang awal dan `sharedReason` harus terlihat.
+- IT wajib memilih level dan minimal satu role. Divisi yang diusulkan dari HRD dapat ditinjau; pegawai yang tidak cocok persis tetap dapat dibiarkan tanpa tautan.
+- Pembuatan memakai `createAccountsAction` secara all-or-nothing. Password tidak pernah ditampilkan atau dikirim ke browser.
+
+### Responsive acceptance
+
+Semua halaman baru wajib diuji pada 1440×900, 1920×1080, 1024×768, 768×1024,
+390×844, dan 360×800. Tidak boleh ada horizontal overflow, teks keluar card,
+form atau tombol bertumpuk, field file menutupi konten, atau framework overlay.
+Tabel preview menggunakan horizontal scroll terkontrol; form mailbox berubah
+menjadi susunan field yang dapat dibaca pada layar sempit.

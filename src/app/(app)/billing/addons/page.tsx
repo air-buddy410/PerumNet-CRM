@@ -1,26 +1,52 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import {
+  parseTableQuery,
+  SortableTableHeader,
+  TableControls,
+  type TableSearchParams,
+  type TableSortOption,
+} from "@/components/table-controls";
 import { saveAddonAction } from "../actions";
 
 export const metadata = { title: "Addon Services" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "code", label: "Kode" },
+  { value: "name", label: "Nama" },
+  { value: "monthlyPrice", label: "Harga" },
+];
 
 export default async function AddonsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.BILLING_MANAGE);
+  const orderBy: Prisma.AddonServiceOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "monthlyPrice"
+      ? [{ monthlyPrice: table.direction }, { id: "asc" }]
+      : [{ code: table.direction }, { id: "asc" }];
 
-  const addons = await db.addonService.findMany({
-    include: { _count: { select: { subscriptions: { where: { endedAt: null } } } } },
-    orderBy: { code: "asc" },
-  });
-  const editRow = sp.edit ? (addons.find((a) => a.id === sp.edit) ?? null) : null;
+  const [addons, total, editRow] = await Promise.all([
+    db.addonService.findMany({
+      include: { _count: { select: { subscriptions: { where: { endedAt: null } } } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.addonService.count(),
+    table.query.edit
+      ? db.addonService.findUnique({ where: { id: table.query.edit } })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div>
@@ -28,7 +54,7 @@ export default async function AddonsPage({
         title="Addon Services"
         subtitle="Layanan tambahan di luar paket yang ditagihkan otomatis bersama tagihan bulanan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -38,8 +64,8 @@ export default async function AddonsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/billing/addons" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
+                  <th className="th"><SortableTableHeader basePath="/billing/addons" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Harga / Bulan</th>
                   <th className="th">Dipakai</th>
                   <th className="th">Status</th>
@@ -69,6 +95,8 @@ export default async function AddonsPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/billing/addons" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

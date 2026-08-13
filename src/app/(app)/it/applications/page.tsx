@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, ENVIRONMENTS, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveApplicationAction } from "../actions";
 
 export const metadata = { title: "Application Inventory" };
@@ -10,21 +12,34 @@ export const metadata = { title: "Application Inventory" };
 export default async function ApplicationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.IT_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.IT_INVENTORY_MANAGE);
+  const tableOptions = [
+    { value: "name", label: "Nama" },
+    { value: "environment", label: "Environment" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "name", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ApplicationOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [apps, servers, users] = await Promise.all([
+  const [apps, totalCount, editRow, servers, users] = await Promise.all([
     db.application.findMany({
       include: { owner: true, server: true, _count: { select: { deployments: true } } },
-      orderBy: { name: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.application.count(),
+    table.query.edit ? db.application.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
     db.server.findMany({ where: { status: "ACTIVE" }, orderBy: { hostname: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
-  const editRow = sp.edit ? (apps.find((a) => a.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -32,7 +47,7 @@ export default async function ApplicationsPage({
         title="Application Inventory"
         subtitle="Kelola aplikasi beserta repository, owner, environment, dan metode deployment."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -42,13 +57,13 @@ export default async function ApplicationsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nama</th>
-                  <th className="th">Environment</th>
+                  <th className="th"><SortableTableHeader basePath="/it/applications" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
+                  <th className="th"><SortableTableHeader basePath="/it/applications" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="environment" label="Environment" /></th>
                   <th className="th">Domain</th>
                   <th className="th">Server</th>
                   <th className="th">Owner</th>
                   <th className="th">Deploy</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/it/applications" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -74,6 +89,16 @@ export default async function ApplicationsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/it/applications"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

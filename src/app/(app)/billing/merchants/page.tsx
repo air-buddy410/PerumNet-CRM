@@ -1,28 +1,42 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah } from "@/lib/constants";
 import { merchantFeeSummary } from "@/lib/payments";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveMerchantAction } from "../actions";
 
 export const metadata = { title: "Merchant & Kolektor" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "code", label: "Kode" },
+  { value: "name", label: "Nama" },
+  { value: "feePercent", label: "Fee" },
+];
 
 export default async function MerchantsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.MERCHANTS_MANAGE);
+  const orderBy: Prisma.MerchantOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "feePercent"
+      ? [{ feePercent: table.direction }, { id: "asc" }]
+      : [{ code: table.direction }, { id: "asc" }];
 
-  const [merchants, cashbooks, fees] = await Promise.all([
-    db.merchant.findMany({ orderBy: { code: "asc" } }),
+  const [merchants, total, cashbooks, fees, editRow] = await Promise.all([
+    db.merchant.findMany({ orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.merchant.count(),
     db.cashbook.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
     merchantFeeSummary(),
+    table.query.edit ? db.merchant.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (merchants.find((m) => m.id === sp.edit) ?? null) : null;
   const feeOf = (id: string) => fees.find((f) => f.merchantId === id);
 
   return (
@@ -31,7 +45,7 @@ export default async function MerchantsPage({
         title="Merchant & Kolektor"
         subtitle="Kelola unit penagih dan mitra BUMDES; fee komisi direkap sebagai hutang fee."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -41,8 +55,8 @@ export default async function MerchantsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/billing/merchants" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
+                  <th className="th"><SortableTableHeader basePath="/billing/merchants" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Fee %</th>
                   <th className="th">Payment Point</th>
                   <th className="th">Tertagih (posted)</th>
@@ -83,6 +97,8 @@ export default async function MerchantsPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/billing/merchants" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

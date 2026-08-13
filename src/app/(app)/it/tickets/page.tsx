@@ -1,28 +1,47 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, IT_TICKET_TYPES, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "IT Tickets" };
 
 export default async function TicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.IT_TICKETS_CREATE);
   const sp = await searchParams;
   const seesAll =
     user.permissions.has(PERMISSIONS.IT_TICKETS_MANAGE) ||
     user.permissions.has(PERMISSIONS.IT_VIEW);
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "ticketNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const where: Prisma.ItTicketWhereInput = seesAll
+    ? {}
+    : { OR: [{ requesterId: user.id }, { createdById: user.id }] };
+  const orderBy: Prisma.ItTicketOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const tickets = await db.itTicket.findMany({
-    where: seesAll ? {} : { OR: [{ requesterId: user.id }, { createdById: user.id }] },
-    include: { requester: true, assignee: true },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+  const [tickets, totalCount] = await Promise.all([
+    db.itTicket.findMany({
+      where,
+      include: { requester: true, assignee: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.itTicket.count({ where }),
+  ]);
   const typeLabel = (t: string) => IT_TICKET_TYPES.find(([v]) => v === t)?.[1] ?? t;
 
   return (
@@ -36,7 +55,7 @@ export default async function TicketsPage({
           </Link>
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         {tickets.length === 0 ? (
@@ -45,14 +64,14 @@ export default async function TicketsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/it/tickets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="ticketNumber" label="Nomor" /></th>
                 <th className="th">Judul</th>
                 <th className="th">Jenis</th>
                 <th className="th">Prioritas</th>
                 <th className="th">Pelapor</th>
                 <th className="th">Petugas</th>
-                <th className="th">Dibuat</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/it/tickets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="createdAt" label="Dibuat" /></th>
+                <th className="th"><SortableTableHeader basePath="/it/tickets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -74,8 +93,18 @@ export default async function TicketsPage({
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/it/tickets"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
     </div>
   );
 }

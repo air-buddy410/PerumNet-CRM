@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -8,25 +9,39 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { createMaintenanceAction } from "./actions";
 
 export const metadata = { title: "Network Maintenance" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "scheduledStart", label: "Jadwal" },
+  { value: "maintNumber", label: "Nomor" },
+  { value: "status", label: "Status" },
+];
 
 export default async function MaintenancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "scheduledStart", defaultDirection: "desc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.MAINTENANCE_MANAGE);
+  const orderBy: Prisma.NetworkMaintenanceOrderByWithRelationInput[] = table.sort === "maintNumber"
+    ? [{ maintNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ scheduledStart: table.direction }, { id: "asc" }];
 
-  const [items, sites, devices, users] = await Promise.all([
+  const [items, total, sites, devices, users] = await Promise.all([
     db.networkMaintenance.findMany({
       include: { site: true, device: true, pic: true },
-      orderBy: { scheduledStart: "desc" },
-      take: 100,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.networkMaintenance.count(),
     db.networkSite.findMany({ orderBy: { siteCode: "asc" } }),
     db.networkDevice.findMany({ orderBy: { hostname: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -39,7 +54,7 @@ export default async function MaintenancePage({
         title="Network Maintenance"
         subtitle="Catat tujuan, risiko, jadwal, PIC, dan persetujuan untuk setiap maintenance."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -49,11 +64,11 @@ export default async function MaintenancePage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/maintenance" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="maintNumber" /></th>
                   <th className="th">Judul</th>
                   <th className="th">Jenis</th>
                   <th className="th">Target</th>
-                  <th className="th">Jadwal</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/maintenance" currentDirection={table.direction} currentSort={table.sort} label="Jadwal" query={table.query} sortKey="scheduledStart" /></th>
                   <th className="th">PIC</th>
                   <th className="th">Status</th>
                 </tr>
@@ -80,6 +95,7 @@ export default async function MaintenancePage({
             </table>
           )}
         </div>
+        <TableControls basePath="/noc/maintenance" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

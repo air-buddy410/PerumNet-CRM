@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, ACCOUNT_CATEGORIES, POSTING_EVENTS, formatRupiah } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveAccountAction, savePostingRuleAction } from "../actions";
 
 export const metadata = { title: "Chart of Accounts" };
@@ -10,19 +12,36 @@ export const metadata = { title: "Chart of Accounts" };
 export default async function AccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.GL_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.GL_MANAGE);
+  const tableOptions = [
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Nama" },
+    { value: "category", label: "Kategori" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.AccountOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [accounts, cashbooks, rules, balances] = await Promise.all([
-    db.account.findMany({ include: { parent: true }, orderBy: { code: "asc" } }),
+  const [accounts, totalCount, editRow, accountOptions, cashbooks, rules, balances] = await Promise.all([
+    db.account.findMany({
+      include: { parent: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.account.count(),
+    table.query.edit ? db.account.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+    db.account.findMany({ orderBy: { code: "asc" } }),
     db.cashbook.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
     db.postingRule.findMany({ include: { debitAccount: true, creditAccount: true } }),
     db.journalLine.groupBy({ by: ["accountId"], _sum: { debit: true, credit: true } }),
   ]);
-  const editRow = sp.edit ? (accounts.find((a) => a.id === sp.edit) ?? null) : null;
   const catLabel = (c: string) => ACCOUNT_CATEGORIES.find(([v]) => v === c)?.[1] ?? c;
   const balanceOf = (a: (typeof accounts)[number]) => {
     const b = balances.find((x) => x.accountId === a.id);
@@ -37,7 +56,7 @@ export default async function AccountsPage({
         title="Chart of Accounts"
         subtitle="Akun berjenjang dengan saldo yang diturunkan dari jurnal. Cashbook terhubung melalui pemetaan akun."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="space-y-6">
@@ -48,9 +67,9 @@ export default async function AccountsPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Kode</th>
-                    <th className="th">Nama</th>
-                    <th className="th">Kategori</th>
+                    <th className="th"><SortableTableHeader basePath="/finance/gl/accounts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="code" label="Kode" /></th>
+                    <th className="th"><SortableTableHeader basePath="/finance/gl/accounts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
+                    <th className="th"><SortableTableHeader basePath="/finance/gl/accounts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="category" label="Kategori" /></th>
                     <th className="th">Normal</th>
                     <th className="th">Cashbook</th>
                     <th className="th">Saldo</th>
@@ -86,6 +105,16 @@ export default async function AccountsPage({
                 </tbody>
               </table>
             )}
+            <TableControls
+              basePath="/finance/gl/accounts"
+              query={table.query}
+              page={table.page}
+              pageSize={table.pageSize}
+              sort={table.sort}
+              direction={table.direction}
+              sortOptions={tableOptions}
+              total={totalCount}
+            />
           </div>
 
           <div className="card overflow-x-auto">
@@ -123,13 +152,13 @@ export default async function AccountsPage({
                             <input type="hidden" name="isActive" value="on" />
                             <select name="debitAccountId" className="input w-40 px-1 py-0.5 text-xs" defaultValue={rule?.debitAccountId ?? ""}>
                               <option value="">— debit —</option>
-                              {accounts.filter((a) => a.isActive).map((a) => (
+                              {accountOptions.filter((a) => a.isActive).map((a) => (
                                 <option key={a.id} value={a.id}>{a.code} {a.name}</option>
                               ))}
                             </select>
                             <select name="creditAccountId" className="input w-40 px-1 py-0.5 text-xs" defaultValue={rule?.creditAccountId ?? ""}>
                               <option value="">— kredit —</option>
-                              {accounts.filter((a) => a.isActive).map((a) => (
+                              {accountOptions.filter((a) => a.isActive).map((a) => (
                                 <option key={a.id} value={a.id}>{a.code} {a.name}</option>
                               ))}
                             </select>
@@ -173,7 +202,7 @@ export default async function AccountsPage({
                   <label className="label" htmlFor="parentId">Akun Induk</label>
                   <select id="parentId" name="parentId" className="input" defaultValue={editRow?.parentId ?? ""}>
                     <option value="">— tanpa induk —</option>
-                    {accounts.filter((a) => a.id !== editRow?.id).map((a) => (
+                    {accountOptions.filter((a) => a.id !== editRow?.id).map((a) => (
                       <option key={a.id} value={a.id}>{a.code} {a.name}</option>
                     ))}
                   </select>

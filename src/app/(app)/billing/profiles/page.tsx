@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import {
   saveBillingProfileAction,
   attachAddonAction,
@@ -14,26 +16,43 @@ export const metadata = { title: "Billing Profiles" };
 export default async function BillingProfilesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.BILLING_MANAGE);
+  const tableOptions = [
+    { value: "serviceNumber", label: "Layanan" },
+    { value: "monthlyPrice", label: "Harga" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "serviceNumber", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.SubscriptionOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const listWhere: Prisma.SubscriptionWhereInput = { status: { notIn: ["DRAFT", "TERMINATED"] } };
+  const subscriptionInclude = {
+    customer: true,
+    package: true,
+    billingProfile: true,
+    addons: { where: { endedAt: null }, include: { addon: true } },
+  } as const;
 
-  const [subs, addonMaster] = await Promise.all([
+  const [subs, totalCount, editRow, addonMaster] = await Promise.all([
     db.subscription.findMany({
-      where: { status: { notIn: ["DRAFT", "TERMINATED"] } },
-      include: {
-        customer: true,
-        package: true,
-        billingProfile: true,
-        addons: { where: { endedAt: null }, include: { addon: true } },
-      },
-      orderBy: { serviceNumber: "asc" },
+      where: listWhere,
+      include: subscriptionInclude,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.subscription.count({ where: listWhere }),
+    table.query.edit
+      ? db.subscription.findUnique({ where: { id: table.query.edit }, include: subscriptionInclude })
+      : Promise.resolve(null),
     db.addonService.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
-  const editRow = sp.edit ? (subs.find((s) => s.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -41,7 +60,7 @@ export default async function BillingProfilesPage({
         title="Billing Profiles"
         subtitle="Atur awal penagihan, tanggal terbit, jatuh tempo, PPN, dan layanan tambahan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="card overflow-x-auto">
@@ -51,13 +70,13 @@ export default async function BillingProfilesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Layanan</th>
+                  <th className="th"><SortableTableHeader basePath="/billing/profiles" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="serviceNumber" label="Layanan" /></th>
                   <th className="th">Pelanggan</th>
                   <th className="th">Paket</th>
-                  <th className="th">Harga + Addon</th>
+                  <th className="th"><SortableTableHeader basePath="/billing/profiles" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="monthlyPrice" label="Harga + Addon" /></th>
                   <th className="th">Terbit / Tempo</th>
                   <th className="th">PPN</th>
-                  <th className="th">Profil</th>
+                  <th className="th"><SortableTableHeader basePath="/billing/profiles" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Profil" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -105,6 +124,16 @@ export default async function BillingProfilesPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/billing/profiles"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && editRow && (

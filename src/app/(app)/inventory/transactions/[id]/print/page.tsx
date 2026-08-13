@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, TX_TYPE_LABELS, formatDateTime, statusLabel } from "@/lib/constants";
+import { documentSignatures } from "@/lib/document-signature";
 
 export const metadata = { title: "Cetak IRF" };
 
@@ -31,8 +32,19 @@ const PRINT_CSS = `
   .irf-signatures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12mm; margin-top: 18mm; }
   .irf-signature { text-align: center; }
   .irf-signature-line { margin-top: 20mm; border-top: 1px solid #222; padding-top: 4px; }
+  .irf-signature-image-link { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; color: #111; text-decoration: none; }
+  .irf-signature-image { display: block; width: auto; max-width: 42mm; max-height: 24mm; object-fit: contain; }
+  .irf-signature-link-label { font-size: 8px; text-decoration: underline; }
+  .irf-signature-line.has-image { margin-top: 5mm; }
   @media print { .irf-noprint { display: none !important; } }
 `;
+
+const SIGNATURE_ROLE_LABELS: Record<string, string> = {
+  REQUESTOR: "Penerima barang",
+  WAREHOUSE_ADMIN: "Admin gudang",
+  RECEIVED_BY: "Penerima",
+  RELEASED_BY: "Penyerah",
+};
 
 export default async function InventoryRequestFormPrintPage({
   params,
@@ -56,10 +68,7 @@ export default async function InventoryRequestFormPrintPage({
   });
   if (!tx || !tx.irf) notFound();
 
-  const signatures = await db.documentSignature.findMany({
-    where: { docType: "IRF", docId: tx.irf.id },
-    orderBy: { role: "asc" },
-  });
+  const signatures = await documentSignatures("IRF", tx.irf.id);
 
   return (
     <>
@@ -121,16 +130,31 @@ export default async function InventoryRequestFormPrintPage({
 
         <h2>Tanda tangan</h2>
         <table>
-          <thead><tr><th>Peran</th><th>Nama penanda tangan</th><th>Waktu</th></tr></thead>
+          <thead><tr><th>Peran</th><th>Nama penanda tangan</th><th>Waktu</th><th>Gambar</th></tr></thead>
           <tbody>
             {signatures.length > 0 ? signatures.map((signature) => (
               <tr key={signature.id}>
-                <td>{signature.role === "REQUESTOR" ? "Penerima barang" : "Admin gudang"}</td>
+                <td>{SIGNATURE_ROLE_LABELS[signature.role] ?? signature.role}</td>
                 <td>{signature.signerName}</td>
                 <td>{formatDateTime(signature.signedAt)}</td>
+                <td>
+                  {signature.attachmentId ? (
+                    <a
+                      href={`/api/files/${encodeURIComponent(signature.attachmentId)}`}
+                      className="irf-signature-image-link"
+                    >
+                      <img
+                        src={`/api/files/${encodeURIComponent(signature.attachmentId)}`}
+                        alt={`Gambar tanda tangan ${signature.signerName}`}
+                        className="irf-signature-image"
+                      />
+                      <span className="irf-signature-link-label">Buka gambar privat</span>
+                    </a>
+                  ) : "Belum diunggah"}
+                </td>
               </tr>
             )) : (
-              <tr><td colSpan={3}>Tanda tangan belum tersedia.</td></tr>
+              <tr><td colSpan={4}>Tanda tangan belum tersedia.</td></tr>
             )}
           </tbody>
         </table>
@@ -138,8 +162,23 @@ export default async function InventoryRequestFormPrintPage({
         <div className="irf-signatures">
           {signatures.slice(0, 2).map((signature) => (
             <div key={signature.id} className="irf-signature">
-              {signature.role === "REQUESTOR" ? "Penerima barang" : "Admin gudang"}
-              <div className="irf-signature-line">{signature.signerName}</div>
+              <div>{SIGNATURE_ROLE_LABELS[signature.role] ?? signature.role}</div>
+              {signature.attachmentId && (
+                <a
+                  href={`/api/files/${encodeURIComponent(signature.attachmentId)}`}
+                  className="irf-signature-image-link"
+                >
+                  <img
+                    src={`/api/files/${encodeURIComponent(signature.attachmentId)}`}
+                    alt={`Gambar tanda tangan ${signature.signerName}`}
+                    className="irf-signature-image"
+                  />
+                  <span className="irf-signature-link-label">Buka gambar privat</span>
+                </a>
+              )}
+              <div className={`irf-signature-line${signature.attachmentId ? " has-image" : ""}`}>
+                {signature.signerName}
+              </div>
             </div>
           ))}
         </div>

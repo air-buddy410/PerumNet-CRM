@@ -1,19 +1,40 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Stock" };
 
-export default async function StockPage() {
+export default async function StockPage({
+  searchParams,
+}: {
+  searchParams: Promise<TableSearchParams>;
+}) {
   await requirePermission(PERMISSIONS.INVENTORY_VIEW);
+  const sp = await searchParams;
+  const tableOptions = [
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Nama" },
+    { value: "minStock", label: "Minimum" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ItemOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [items, warehouses] = await Promise.all([
+  const [items, totalCount, summaryItems, warehouses] = await Promise.all([
     db.item.findMany({
       where: { isActive: true },
       include: { stockLevels: true },
-      orderBy: { code: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.item.count({ where: { isActive: true } }),
+    db.item.findMany({ where: { isActive: true }, select: { minStock: true, stockLevels: true } }),
     db.warehouse.findMany({ where: { isActive: true }, orderBy: { code: "asc" } }),
   ]);
 
@@ -22,12 +43,12 @@ export default async function StockPage() {
   const availableOf = (levels: { onHand: number; reserved: number }[]) =>
     levels.reduce((s, l) => s + l.onHand - l.reserved, 0);
 
-  const lowCount = items.filter((i) => availableOf(i.stockLevels) < i.minStock).length;
-  const reservedTotal = items.reduce(
+  const lowCount = summaryItems.filter((i) => availableOf(i.stockLevels) < i.minStock).length;
+  const reservedTotal = summaryItems.reduce(
     (s, i) => s + i.stockLevels.reduce((a, l) => a + l.reserved, 0),
     0
   );
-  const transitTotal = items.reduce(
+  const transitTotal = summaryItems.reduce(
     (s, i) => s + i.stockLevels.reduce((a, l) => a + l.inTransit, 0),
     0
   );
@@ -51,7 +72,7 @@ export default async function StockPage() {
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Item</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/stock" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="code" label="Item" /></th>
                 {warehouses.map((w) => (
                   <th key={w.id} className="th text-right">{w.code}</th>
                 ))}
@@ -105,8 +126,18 @@ export default async function StockPage() {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/inventory/stock"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
     </div>
   );
 }

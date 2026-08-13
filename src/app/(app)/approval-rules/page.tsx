@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -6,6 +7,7 @@ import {
   formatRupiah,
 } from "@/lib/constants";
 import { PageHeader, ActiveBadge, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { stepApproverLabel } from "@/lib/approval";
 import { toggleRuleAction } from "./actions";
 
@@ -14,17 +16,32 @@ export const metadata = { title: "Approval Matrix" };
 export default async function ApprovalRulesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.APPROVALS_CONFIGURE);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "module", label: "Modul" },
+    { value: "minAmount", label: "Nilai minimum" },
+    { value: "name", label: "Nama rule" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "module", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ApprovalRuleOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const rules = await db.approvalRule.findMany({
-    include: {
-      steps: { include: { role: true }, orderBy: { stepOrder: "asc" } },
-    },
-    orderBy: [{ module: "asc" }, { minAmount: "asc" }],
-  });
+  const [rules, totalCount] = await Promise.all([
+    db.approvalRule.findMany({
+      include: {
+        steps: { include: { role: true }, orderBy: { stepOrder: "asc" } },
+      },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.approvalRule.count(),
+  ]);
 
   const grouped = APPROVAL_MODULES.map((m) => ({
     ...m,
@@ -37,7 +54,7 @@ export default async function ApprovalRulesPage({
         title="Approval Matrix"
         subtitle="Atur jalur persetujuan berdasarkan modul, subtipe, dan rentang nilai. Struktur aturan dikelola melalui konfigurasi terkontrol."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="space-y-6">
         {grouped.map((group) => (
@@ -49,9 +66,9 @@ export default async function ApprovalRulesPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Rule</th>
+                    <th className="th"><SortableTableHeader basePath="/approval-rules" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Rule" /></th>
                     <th className="th">Subtipe</th>
-                    <th className="th">Rentang Nilai</th>
+                    <th className="th"><SortableTableHeader basePath="/approval-rules" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="minAmount" label="Rentang Nilai" /></th>
                     <th className="th">Jalur Approval</th>
                     <th className="th">Status</th>
                     <th className="th"></th>
@@ -98,6 +115,16 @@ export default async function ApprovalRulesPage({
           </section>
         ))}
       </div>
+      <TableControls
+        basePath="/approval-rules"
+        query={table.query}
+        page={table.page}
+        pageSize={table.pageSize}
+        sort={table.sort}
+        direction={table.direction}
+        sortOptions={tableOptions}
+        total={totalCount}
+      />
     </div>
   );
 }

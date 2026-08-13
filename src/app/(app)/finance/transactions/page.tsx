@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/rbac";
 import {
@@ -10,30 +11,46 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Transaksi Kas" };
 
 export default async function CashTransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; type?: string; status?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requireUser();
   const sp = await searchParams;
   const isFinance = user.permissions.has(PERMISSIONS.FINANCE_VIEW);
   const canManage = user.permissions.has(PERMISSIONS.CASH_MANAGE);
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "txNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const where: Prisma.CashTransactionWhereInput = {
+    ...(table.query.type ? { type: table.query.type } : {}),
+    ...(table.query.status ? { status: table.query.status } : {}),
+    // Non-finance hanya melihat pengajuannya sendiri.
+    ...(isFinance ? {} : { createdById: user.id }),
+  };
+  const orderBy: Prisma.CashTransactionOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const transactions = await db.cashTransaction.findMany({
-    where: {
-      ...(sp.type ? { type: sp.type } : {}),
-      ...(sp.status ? { status: sp.status } : {}),
-      // Non-finance hanya melihat pengajuannya sendiri.
-      ...(isFinance ? {} : { createdById: user.id }),
-    },
-    include: { cashbook: true, createdBy: true, category: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [transactions, totalCount] = await Promise.all([
+    db.cashTransaction.findMany({
+      where,
+      include: { cashbook: true, createdBy: true, category: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.cashTransaction.count({ where }),
+  ]);
 
   const createTypes = [
     CASH_TX_TYPES.EXPENSE,
@@ -63,12 +80,12 @@ export default async function CashTransactionsPage({
           </Link>
         ))}
       </div>
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="label" htmlFor="type">Tipe</label>
-          <select id="type" name="type" className="input w-56" defaultValue={sp.type ?? ""}>
+          <select id="type" name="type" className="input w-56" defaultValue={table.query.type ?? ""}>
             <option value="">Semua tipe</option>
             {Object.values(CASH_TX_TYPES).map((t) => (
               <option key={t} value={t}>{CASH_TX_LABELS[t]}</option>
@@ -77,7 +94,7 @@ export default async function CashTransactionsPage({
         </div>
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-52" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input w-52" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             <option value="DRAFT">Draft</option>
             <option value="WAITING_APPROVAL">Menunggu Approval</option>
@@ -95,13 +112,13 @@ export default async function CashTransactionsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/finance/transactions" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="txNumber" label="Nomor" /></th>
                 <th className="th">Tipe</th>
                 <th className="th">Cashbook</th>
                 <th className="th text-right">Nominal</th>
                 <th className="th">Tujuan</th>
-                <th className="th">Status</th>
-                <th className="th">Dibuat</th>
+                <th className="th"><SortableTableHeader basePath="/finance/transactions" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
+                <th className="th"><SortableTableHeader basePath="/finance/transactions" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="createdAt" label="Dibuat" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -140,8 +157,18 @@ export default async function CashTransactionsPage({
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/finance/transactions"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
     </div>
   );
 }

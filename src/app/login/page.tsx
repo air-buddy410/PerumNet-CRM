@@ -1,5 +1,7 @@
 import { Logo } from "@/components/logo";
+import { PasswordVisibilityInput } from "@/components/password-visibility-input";
 import { LogIn } from "lucide-react";
+import Link from "next/link";
 import { loginAction } from "./actions";
 import { oidcBlocker } from "@/lib/oidc";
 
@@ -69,11 +71,9 @@ export default async function LoginPage({
               <label className="label" htmlFor="password">
                 Password
               </label>
-              <input
+              <PasswordVisibilityInput
                 id="password"
                 name="password"
-                type="password"
-                className="input"
                 autoComplete="current-password"
                 placeholder="Masukkan password"
                 required
@@ -83,6 +83,9 @@ export default async function LoginPage({
               Masuk
             </button>
           </form>
+          <Link href="/login/forgot-password" className="crm-login-reset-link">
+            Lupa password?
+          </Link>
         </div>
         <p className="crm-login-footer">
           © 2026 PerumNet. All Rights Reserved.

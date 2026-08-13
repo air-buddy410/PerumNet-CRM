@@ -1,23 +1,41 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatRupiah, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Quotations" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Dibuat" },
+  { value: "quotationNumber", label: "Nomor" },
+  { value: "status", label: "Status" },
+];
 
 export default async function QuotationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.QUOTATIONS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const orderBy: Prisma.QuotationOrderByWithRelationInput[] = table.sort === "quotationNumber"
+    ? [{ quotationNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const quotations = await db.quotation.findMany({
-    include: { lead: true, package: true },
-    orderBy: [{ createdAt: "desc" }],
-  });
+  const [quotations, total] = await Promise.all([
+    db.quotation.findMany({
+      include: { lead: true, package: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.quotation.count(),
+  ]);
 
   return (
     <div>
@@ -30,7 +48,7 @@ export default async function QuotationsPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         {quotations.length === 0 ? (
@@ -39,13 +57,13 @@ export default async function QuotationsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/sales/quotations" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="quotationNumber" /></th>
                 <th className="th">Lead</th>
                 <th className="th">Paket</th>
                 <th className="th">Bulanan</th>
                 <th className="th">Diskon</th>
                 <th className="th">Berlaku s.d.</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/sales/quotations" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                 <th className="th">Dibuat</th>
               </tr>
             </thead>
@@ -81,6 +99,7 @@ export default async function QuotationsPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/sales/quotations" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

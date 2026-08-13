@@ -1,29 +1,45 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, LINK_MEDIA, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveLinkAction } from "../actions";
 
 export const metadata = { title: "Links & Circuits" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "linkCode", label: "Kode" },
+  { value: "media", label: "Media" },
+  { value: "status", label: "Status" },
+];
 
 export default async function LinksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "linkCode", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const orderBy: Prisma.NetworkLinkOrderByWithRelationInput[] = table.sort === "media"
+    ? [{ media: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ linkCode: table.direction }, { id: "asc" }];
 
-  const [links, sites] = await Promise.all([
+  const [links, total, sites, editRow] = await Promise.all([
     db.networkLink.findMany({
       include: { siteA: true, siteB: true },
-      orderBy: { linkCode: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.networkLink.count(),
     db.networkSite.findMany({ orderBy: { siteCode: "asc" } }),
+    table.query.edit ? db.networkLink.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (links.find((l) => l.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -31,7 +47,7 @@ export default async function LinksPage({
         title="Links & Circuits"
         subtitle="Kelola jalur antar-site seperti backbone fiber, wireless, dan leased line."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -41,12 +57,12 @@ export default async function LinksPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/links" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="linkCode" /></th>
                   <th className="th">Jalur</th>
-                  <th className="th">Media</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/links" currentDirection={table.direction} currentSort={table.sort} label="Media" query={table.query} sortKey="media" /></th>
                   <th className="th">Kapasitas</th>
                   <th className="th">Peran</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/links" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -74,6 +90,7 @@ export default async function LinksPage({
             </table>
           )}
         </div>
+        <TableControls basePath="/noc/links" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

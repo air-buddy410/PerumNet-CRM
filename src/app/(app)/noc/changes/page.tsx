@@ -1,25 +1,37 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, CHANGE_TYPES, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Network Changes" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Terbaru" },
+  { value: "changeNumber", label: "Nomor" },
+  { value: "status", label: "Status" },
+];
 
 export default async function ChangesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; type?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const where = table.query.type ? { changeType: table.query.type } : undefined;
+  const orderBy: Prisma.ChangeRequestOrderByWithRelationInput[] = table.sort === "changeNumber"
+    ? [{ changeNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const changes = await db.changeRequest.findMany({
-    where: sp.type ? { changeType: sp.type } : undefined,
-    include: { pic: true, createdBy: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [changes, total] = await Promise.all([
+    db.changeRequest.findMany({ where, include: { pic: true, createdBy: true }, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.changeRequest.count({ where }),
+  ]);
 
   return (
     <div>
@@ -32,12 +44,12 @@ export default async function ChangesPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex items-end gap-3">
         <div>
           <label className="label" htmlFor="type">Jenis</label>
-          <select id="type" name="type" className="input w-44" defaultValue={sp.type ?? ""}>
+          <select id="type" name="type" className="input w-44" defaultValue={table.query.type ?? ""}>
             <option value="">Semua jenis</option>
             {CHANGE_TYPES.map((t) => (
               <option key={t} value={t}>{statusLabel(t)}</option>
@@ -54,12 +66,12 @@ export default async function ChangesPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/noc/changes" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="changeNumber" /></th>
                 <th className="th">Judul</th>
                 <th className="th">Jenis</th>
                 <th className="th">PIC</th>
                 <th className="th">Window</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/noc/changes" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -88,6 +100,7 @@ export default async function ChangesPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/noc/changes" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }
