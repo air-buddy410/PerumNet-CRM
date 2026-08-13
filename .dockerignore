@@ -1,0 +1,31 @@
+# Yang TIDAK boleh ikut masuk citra.
+#
+# Baris pertama yang paling penting: .env memuat password mailserver, API key
+# mailcow, dan kredensial database. Citra Docker berpindah tangan — ke registry,
+# ke VPS, ke laptop orang lain — dan apa pun yang ikut di dalamnya ikut
+# berpindah. Kredensial disuntikkan saat menjalankan, tidak pernah dipanggang.
+.env
+.env.*
+!.env.example
+
+node_modules
+.next
+.next-*
+npm-debug.log*
+
+# Berkas unggahan pengguna: foto pegawai, bukti pekerjaan, tanda tangan.
+# Ini data, bukan aplikasi — tempatnya volume, bukan citra.
+uploads
+
+.git
+.gitignore
+.claude
+docs
+tests
+coverage
+README.md
+
+# Berkas kerja sementara
+*.log
+.DS_Store
+~$*
