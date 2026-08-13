@@ -92,6 +92,17 @@ export function listKmzEntries(buf: Buffer): KmzEntry[] {
   return entries;
 }
 
+/**
+ * Membuka satu entri arsip.
+ *
+ * Diekspor sejak Fase 51 karena xlsx juga arsip ZIP — pembaca template
+ * pegawai memakai fungsi ini beserta ketiga pagarnya, alih-alih menambah
+ * dependensi baru hanya untuk membuka zip yang sama.
+ */
+export function readZipEntry(buf: Buffer, entry: KmzEntry): Buffer {
+  return readEntry(buf, entry);
+}
+
 function readEntry(buf: Buffer, entry: KmzEntry): Buffer {
   const off = entry.localHeaderOffset;
   if (off + 30 > buf.length || buf.readUInt32LE(off) !== SIG_LOCAL) {

@@ -39,6 +39,7 @@ ingatan.
 | 17 | **Tiga dependency dari PRD §24–25** — field HR di `profileView`, filter tanggal arsip, gambar tanda tangan IRF | kontrak belum ada | ✅ siap — lihat §16 |
 | 18 | **Sinkronisasi divisi → grup Authentik** | mesin belum ada | ✅ siap, halamanmu sudah ada — lihat §17 |
 | 19 | **Kartu pegawai + foto resmi + QR** | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §18 |
+| 20 | **Impor pegawai dari Excel** (pratinjau + terapkan) | mesin belum ada | ⚠️ mesin siap, **halaman perlu dibuat** — lihat §19 |
 
 ---
 
@@ -799,6 +800,87 @@ sudah siap dan sudah menyaring isinya (hanya nama, jabatan, foto, nomor kartu
 harus **tanpa login**, dan foto pegawai saat ini berizin `hrd.view` — jadi
 jalur penyajian fotonya perlu dibuat sadar, bukan sekadar melonggarkan izin
 di `/api/files`. Catatannya sudah ditulis di berkas rute itu.
+
+---
+
+## 19. Impor pegawai dari Excel (Fase 51) — PERLU HALAMAN
+
+Mesinnya siap dan teruji ujung ke ujung. Yang belum ada halamannya.
+
+```ts
+import {
+  previewEmployeeImportAction,
+  applyEmployeeImportAction,
+} from "@/app/(app)/hrd/actions";
+// Tipe diimpor dari lib-nya, BUKAN dari actions.ts — modul "use server"
+// hanya boleh mengekspor fungsi async.
+import type { ImportPlan, PlanRow } from "@/lib/employee-import-service";
+import type { RowIssue } from "@/lib/employee-import";
+```
+
+Keduanya menerima `FormData` berisi satu field `file`, dan **mengembalikan
+nilai** (bukan redirect):
+
+```ts
+{ ok: true; data: ImportPlan }        // pratinjau
+{ ok: true; data: ImportOutcome }     // penerapan
+{ ok: false; error: string }
+```
+
+```ts
+interface ImportPlan {
+  ok: boolean;          // false = ADA masalah, tombol "Terapkan" harus mati
+  rows: PlanRow[];      // { rowNumber, fullName, employeeNo, action, reason, notes }
+  issues: RowIssue[];   // { rowNumber, column, message } — `column` = judul kolom di Excel
+  blankRows: number;    // baris kosong template, aman diabaikan
+  willCreate: number;
+  willSkip: number;
+}
+interface ImportOutcome {
+  created: { rowNumber: number; employeeNo: string; fullName: string }[];
+  skipped: number;
+}
+```
+
+**Alur halamannya:**
+
+1. Satu `<input type="file" accept=".xlsx">`, ditahan di state klien.
+2. Kirim ke `previewEmployeeImportAction` → tampilkan tabel `rows`
+   (`CREATE` / `SKIP` + `reason`) dan daftar `issues`.
+3. Tombol **Terapkan** hanya hidup bila `plan.ok === true`.
+4. Kirim **berkas yang sama** ke `applyEmployeeImportAction`.
+
+### Lima hal yang menentukan bentuk halamannya
+
+1. **Penerapan menerima BERKAS, bukan hasil pratinjau.** Ia membaca ulang dan
+   memvalidasi ulang dari nol. Jadi berkasnya harus tetap dipegang di state
+   klien sampai HRD menekan Terapkan — jangan kirimkan `plan` kembali ke
+   server, tidak ada jalur yang menerimanya (dan itu disengaja: kalau ada,
+   siapa pun yang bisa memanggil server action bisa melewati seluruh
+   pemeriksaan).
+
+2. **Semua atau tidak sama sekali.** Satu baris bermasalah menahan seluruh
+   berkas. Tampilkan `issues` dengan `rowNumber` dan `column` apa adanya —
+   keduanya menunjuk sel yang persis di Excel, jadi HRD bisa langsung
+   memperbaikinya di sana.
+
+3. **`notes` bukan penghalang.** Isinya hal seperti "akun CRM belum ada".
+   Tampilkan beda dari `issues` — kalau disamakan, HRD akan mengira impornya
+   gagal padahal tidak.
+
+4. **`action: "SKIP"` bukan kegagalan.** Itu orang yang sudah terdaftar.
+   Impor ini **hanya membuat, tidak pernah mengubah** data yang sudah ada.
+
+5. **`employeeNo` kosong di pratinjau adalah normal** — NIK diterbitkan saat
+   penerapan. Nomor yang benar-benar terbit ada di `ImportOutcome.created`;
+   itu layak ditampilkan sesudahnya karena HRD memang membutuhkannya untuk
+   mengisi kolom "NIK Atasan" pada impor berikutnya.
+
+### Yang sengaja TIDAK dilakukan
+
+Berkasnya **tidak disimpan** sebagai lampiran. Mesin lampiran hanya menerima
+gambar dan PDF; melonggarkannya demi impor ini akan melonggarkannya untuk
+seluruh lampiran di aplikasi. Jejaknya ada di AuditLog (`EMPLOYEE_IMPORT`).
 
 ---
 
