@@ -1,23 +1,44 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, statusLabel } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Campaigns" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Terbaru" },
+  { value: "campaignNumber", label: "Nomor" },
+  { value: "name", label: "Nama" },
+  { value: "status", label: "Status" },
+];
 
 export default async function CampaignsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CAMPAIGNS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const orderBy: Prisma.CampaignOrderByWithRelationInput[] = table.sort === "campaignNumber"
+    ? [{ campaignNumber: table.direction }, { id: "asc" }]
+    : table.sort === "name"
+      ? [{ name: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const campaigns = await db.campaign.findMany({
-    include: { pic: true, area: true, _count: { select: { leads: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const [campaigns, total] = await Promise.all([
+    db.campaign.findMany({
+      include: { pic: true, area: true, _count: { select: { leads: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.campaign.count(),
+  ]);
 
   return (
     <div>
@@ -30,7 +51,7 @@ export default async function CampaignsPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
       <div className="card overflow-x-auto">
         {campaigns.length === 0 ? (
           <EmptyState message="Belum ada campaign." />
@@ -38,15 +59,15 @@ export default async function CampaignsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
-                <th className="th">Nama</th>
+                <th className="th"><SortableTableHeader basePath="/marketing/campaigns" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="campaignNumber" /></th>
+                <th className="th"><SortableTableHeader basePath="/marketing/campaigns" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                 <th className="th">Channel</th>
                 <th className="th">Periode</th>
                 <th className="th">Budget</th>
                 <th className="th">Lead (aktual/target)</th>
                 <th className="th">Cost/Lead</th>
                 <th className="th">PIC</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/marketing/campaigns" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -75,6 +96,7 @@ export default async function CampaignsPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/marketing/campaigns" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

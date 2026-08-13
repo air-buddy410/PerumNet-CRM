@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -8,38 +9,47 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Terminasi Pelanggan" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Terbaru" },
+  { value: "terminationNumber", label: "Nomor" },
+  { value: "status", label: "Status" },
+];
 
 export default async function TerminationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string; q?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.TERMINATION_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const where: Prisma.CustomerTerminationWhereInput = {
+    ...(table.query.status ? { status: table.query.status } : {}),
+    ...(table.query.q ? { OR: [
+      { terminationNumber: { contains: table.query.q } },
+      { customer: { name: { contains: table.query.q } } },
+      { subscription: { serviceNumber: { contains: table.query.q } } },
+    ] } : {}),
+  };
+  const orderBy: Prisma.CustomerTerminationOrderByWithRelationInput[] = table.sort === "terminationNumber"
+    ? [{ terminationNumber: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const terminations = await db.customerTermination.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.q
-        ? {
-            OR: [
-              { terminationNumber: { contains: sp.q } },
-              { customer: { name: { contains: sp.q } } },
-              { subscription: { serviceNumber: { contains: sp.q } } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      customer: { select: { name: true } },
-      subscription: { select: { serviceNumber: true } },
-      recovery: { select: { id: true, recoveryNumber: true, status: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [terminations, total] = await Promise.all([
+    db.customerTermination.findMany({
+      where,
+      include: { customer: { select: { name: true } }, subscription: { select: { serviceNumber: true } }, recovery: { select: { id: true, recoveryNumber: true, status: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.customerTermination.count({ where }),
+  ]);
 
   const canCreate = user.permissions.has(PERMISSIONS.TERMINATION_CREATE);
 
@@ -61,16 +71,16 @@ export default async function TerminationsPage({
           )
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div className="w-64">
           <label className="label" htmlFor="q">Cari nomor / pelanggan</label>
-          <input id="q" name="q" className="input" defaultValue={sp.q ?? ""} />
+          <input id="q" name="q" className="input" defaultValue={table.query.q ?? ""} />
         </div>
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-52" defaultValue={sp.status ?? ""}>
+        <select id="status" name="status" className="input w-52" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             {TERMINATION_STATUSES.map((s) => (
               <option key={s} value={s}>{statusLabel(s)}</option>
@@ -87,12 +97,12 @@ export default async function TerminationsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/crm/terminations" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="terminationNumber" /></th>
                 <th className="th">Pelanggan</th>
                 <th className="th">Layanan</th>
                 <th className="th">Berlaku</th>
                 <th className="th">Penarikan</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/crm/terminations" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -130,6 +140,7 @@ export default async function TerminationsPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/crm/terminations" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

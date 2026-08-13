@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -8,10 +9,15 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Technician Custody" };
 
-export default async function CustodyPage() {
+export default async function CustodyPage({
+  searchParams,
+}: {
+  searchParams: Promise<TableSearchParams>;
+}) {
   const user = await requirePermission(PERMISSIONS.CUSTODY_VIEW);
 
   // Teknisi hanya melihat custody miliknya; role lain melihat semua.
@@ -19,27 +25,48 @@ export default async function CustodyPage() {
     user.permissions.has(PERMISSIONS.STOCK_POST) ||
     user.permissions.has(PERMISSIONS.WORK_ORDERS_CLOSE) ||
     user.roles.some((r) => ["super_admin", "management", "warehouse"].includes(r.code));
+  const sp = await searchParams;
+  const tableOptions = [
+    { value: "updatedAt", label: "Sejak" },
+    { value: "serialNumber", label: "Serial number" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "updatedAt", sortOptions: tableOptions });
+  const deviceWhere: Prisma.SerializedDeviceWhereInput = {
+    status: "IN_CUSTODY",
+    ...(seeAll ? {} : { custodianId: user.id }),
+  };
+  const bulkWhere: Prisma.CustodyLevelWhereInput = {
+    qty: { gt: 0 },
+    ...(seeAll ? {} : { custodianId: user.id }),
+  };
+  const deviceOrderBy: Prisma.SerializedDeviceOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const cutoff = new Date(Date.now() - CUSTODY_OVERDUE_DAYS * 24 * 60 * 60 * 1000);
 
-  const [devices, bulkLevels] = await Promise.all([
+  const [devices, deviceTotal, bulkLevels, bulkTotal, overdueCount] = await Promise.all([
     db.serializedDevice.findMany({
-      where: {
-        status: "IN_CUSTODY",
-        ...(seeAll ? {} : { custodianId: user.id }),
-      },
+      where: deviceWhere,
       include: { item: true, custodian: true },
-      orderBy: { updatedAt: "asc" },
+      orderBy: deviceOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.serializedDevice.count({ where: deviceWhere }),
     db.custodyLevel.findMany({
-      where: { qty: { gt: 0 }, ...(seeAll ? {} : { custodianId: user.id }) },
+      where: bulkWhere,
       include: { item: true, custodian: true },
-      orderBy: [{ custodianId: "asc" }],
+      orderBy: [{ qty: "desc" }, { id: "asc" }],
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.custodyLevel.count({ where: bulkWhere }),
+    db.serializedDevice.count({ where: { ...deviceWhere, updatedAt: { lt: cutoff } } }),
   ]);
 
   const now = Date.now();
   const overdueMs = CUSTODY_OVERDUE_DAYS * 24 * 60 * 60 * 1000;
-  const overdueCount = devices.filter((d) => now - d.updatedAt.getTime() > overdueMs).length;
-
   return (
     <div>
       <PageHeader
@@ -65,10 +92,10 @@ export default async function CustodyPage() {
               <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">SN</th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/custody" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="serialNumber" label="SN" /></th>
                   <th className="th">Item</th>
                   <th className="th">Teknisi</th>
-                  <th className="th">Sejak</th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/custody" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="updatedAt" label="Sejak" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -98,6 +125,16 @@ export default async function CustodyPage() {
               </table>
             </div>
           )}
+          <TableControls
+            basePath="/inventory/custody"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={deviceTotal}
+          />
         </div>
 
         <div className="card">
@@ -130,6 +167,16 @@ export default async function CustodyPage() {
               </table>
             </div>
           )}
+          <TableControls
+            basePath="/inventory/custody"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={[]}
+            total={bulkTotal}
+          />
         </div>
       </div>
       <p className="mt-3 text-xs text-slate-400">

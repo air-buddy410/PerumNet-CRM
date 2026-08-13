@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import {
   saveTicketCategoryAction,
   saveWorkflowTemplateAction,
@@ -14,23 +16,36 @@ export const metadata = { title: "Kategori & Workflow Tiket" };
 export default async function TicketCategoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CTICKETS_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.CTICKETS_MANAGE);
+  const tableOptions = [
+    { value: "name", label: "Kategori" },
+    { value: "slaHours", label: "SLA" },
+    { value: "isActive", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "name", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.TicketCategoryOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [categories, workflows] = await Promise.all([
+  const [categories, totalCount, editRow, workflows] = await Promise.all([
     db.ticketCategory.findMany({
       include: { workflow: true, _count: { select: { tickets: true } } },
-      orderBy: { name: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.ticketCategory.count(),
+    table.query.edit ? db.ticketCategory.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
     db.workflowTemplate.findMany({
       include: { steps: { orderBy: { order: "asc" } } },
       orderBy: { name: "asc" },
     }),
   ]);
-  const editRow = sp.edit ? (categories.find((c) => c.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -38,7 +53,7 @@ export default async function TicketCategoriesPage({
         title="Kategori & Workflow Tiket"
         subtitle="Atur SLA dan workflow per kategori; seluruh langkah wajib selesai sebelum tiket diselesaikan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-6">
@@ -49,11 +64,11 @@ export default async function TicketCategoriesPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Kategori</th>
-                    <th className="th">SLA</th>
+                    <th className="th"><SortableTableHeader basePath="/helpdesk/categories" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Kategori" /></th>
+                    <th className="th"><SortableTableHeader basePath="/helpdesk/categories" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="slaHours" label="SLA" /></th>
                     <th className="th">Workflow</th>
                     <th className="th">Tiket</th>
-                    <th className="th">Status</th>
+                    <th className="th"><SortableTableHeader basePath="/helpdesk/categories" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="isActive" label="Status" /></th>
                     {canManage && <th className="th"></th>}
                   </tr>
                 </thead>
@@ -78,6 +93,17 @@ export default async function TicketCategoriesPage({
               </table>
             )}
           </div>
+
+          <TableControls
+            basePath="/helpdesk/categories"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
 
           <div className="card p-6">
             <h2 className="mb-3 text-sm font-medium">Workflow Templates</h2>

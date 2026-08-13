@@ -17,7 +17,10 @@ import {
   contractPhase,
   contractRemainingDays,
 } from "@/lib/employment";
+import { cardInvalidReason } from "@/lib/employee-card";
+import { loadEmployeeCards } from "@/lib/employee-card-service";
 import { ActiveBadge, BackLink, Flash, PageHeader } from "@/components/ui";
+import { EmployeeCardPanel, type EmployeeCardView } from "@/components/employee-card-panel";
 import { EmployeeForm, type EmployeeFormRow } from "../employee-form";
 
 export const metadata = { title: "Detail Karyawan" };
@@ -83,6 +86,29 @@ export default async function EmployeeDetailPage({
   const canManage = actor.permissions.has(PERMISSIONS.HRD_MANAGE);
   const canViewUser = actor.permissions.has(PERMISSIONS.USERS_VIEW);
   const now = new Date();
+  const cards = await loadEmployeeCards(employee.id);
+  const employeeCards: EmployeeCardView[] = cards.map((card) => ({
+    id: card.id,
+    cardNumber: card.cardNumber,
+    status: card.status,
+    issuedAt: card.issuedAt,
+    expiresAt: card.expiresAt,
+    nfcUid: card.nfcUid,
+    revokedAt: card.revokedAt,
+    revokeReason: card.revokeReason,
+    issuedByName: card.issuedBy?.name ?? null,
+    revokedByName: card.revokedBy?.name ?? null,
+    invalidReason: cardInvalidReason(
+      {
+        status: card.status,
+        expiresAt: card.expiresAt,
+        employeeActive: employee.isActive,
+        userFrozenAt: employee.user?.frozenAt ?? null,
+        userArchived: employee.user ? !employee.user.isActive : false,
+      },
+      now,
+    ),
+  }));
   const phase = contractPhase(employee, now);
   const account = employee.user ? accountState(employee.user) : null;
   const formRow: EmployeeFormRow = {
@@ -187,6 +213,14 @@ export default async function EmployeeDetailPage({
               <DetailField label="Jumlah anggota tim" value={String(employee.subordinates.length)} />
             </dl>
           </section>
+
+          <EmployeeCardPanel
+            employeeId={employee.id}
+            employeeName={employee.fullName}
+            photoAttachmentId={employee.photoAttachmentId}
+            cards={employeeCards}
+            canManage={canManage}
+          />
 
           {employee.subordinates.length > 0 && (
             <section className="card overflow-hidden" aria-labelledby="team-title">

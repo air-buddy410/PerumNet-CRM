@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveShiftAction, saveLocationAction } from "../actions";
 
 export const metadata = { title: "Shift & Lokasi Absen" };
@@ -10,21 +12,43 @@ export const metadata = { title: "Shift & Lokasi Absen" };
 export default async function ShiftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; editShift?: string; editLoc?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.HRD_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.HRD_MANAGE);
+  const tableOptions = [
+    { value: "name", label: "Nama" },
+    { value: "isActive", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "name", defaultDirection: "asc", sortOptions: tableOptions });
+  const shiftOrderBy: Prisma.ShiftOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const locationOrderBy: Prisma.AttendanceLocationOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [shifts, locations] = await Promise.all([
-    db.shift.findMany({ include: { _count: { select: { schedules: true } } }, orderBy: { name: "asc" } }),
+  const [shifts, shiftTotal, editShift, locations, locationTotal, editLoc] = await Promise.all([
+    db.shift.findMany({
+      include: { _count: { select: { schedules: true } } },
+      orderBy: shiftOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.shift.count(),
+    table.query.editShift ? db.shift.findUnique({ where: { id: table.query.editShift } }) : Promise.resolve(null),
     db.attendanceLocation.findMany({
       include: { _count: { select: { attendances: true } } },
-      orderBy: { name: "asc" },
+      orderBy: locationOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.attendanceLocation.count(),
+    table.query.editLoc ? db.attendanceLocation.findUnique({ where: { id: table.query.editLoc } }) : Promise.resolve(null),
   ]);
-  const editShift = sp.editShift ? (shifts.find((s) => s.id === sp.editShift) ?? null) : null;
-  const editLoc = sp.editLoc ? (locations.find((l) => l.id === sp.editLoc) ?? null) : null;
 
   return (
     <div>
@@ -32,7 +56,7 @@ export default async function ShiftsPage({
         title="Shift & Lokasi Absen"
         subtitle="Jam kerja + toleransi terlambat, dan titik geofence absensi (radius meter)."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
@@ -44,11 +68,11 @@ export default async function ShiftsPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Nama</th>
+                    <th className="th"><SortableTableHeader basePath="/hrd/shifts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
                     <th className="th">Jam</th>
                     <th className="th">Toleransi</th>
                     <th className="th">Jadwal</th>
-                    <th className="th">Status</th>
+                    <th className="th"><SortableTableHeader basePath="/hrd/shifts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="isActive" label="Status" /></th>
                     {canManage && <th className="th"></th>}
                   </tr>
                 </thead>
@@ -68,9 +92,19 @@ export default async function ShiftsPage({
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            )}
-          </div>
+            </table>
+          )}
+          <TableControls
+            basePath="/hrd/shifts"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={shiftTotal}
+          />
+        </div>
           {canManage && (
             <div className="card p-5">
               <h2 className="mb-3 font-medium">{editShift ? `Ubah Shift: ${editShift.name}` : "Shift Baru"}</h2>
@@ -104,11 +138,11 @@ export default async function ShiftsPage({
               <table className="w-full">
                 <thead className="border-b border-slate-100 bg-slate-50/60">
                   <tr>
-                    <th className="th">Nama</th>
+                    <th className="th"><SortableTableHeader basePath="/hrd/shifts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
                     <th className="th">Koordinat</th>
                     <th className="th">Radius</th>
                     <th className="th">Absen</th>
-                    <th className="th">Status</th>
+                    <th className="th"><SortableTableHeader basePath="/hrd/shifts" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="isActive" label="Status" /></th>
                     {canManage && <th className="th"></th>}
                   </tr>
                 </thead>
@@ -130,9 +164,19 @@ export default async function ShiftsPage({
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            )}
-          </div>
+            </table>
+          )}
+          <TableControls
+            basePath="/hrd/shifts"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={locationTotal}
+          />
+        </div>
           {canManage && (
             <div className="card p-5">
               <h2 className="mb-3 font-medium">{editLoc ? `Ubah Lokasi: ${editLoc.name}` : "Lokasi Absen Baru"}</h2>

@@ -1,37 +1,54 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Customers" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Terbaru" },
+  { value: "customerNumber", label: "Nomor" },
+  { value: "name", label: "Nama" },
+  { value: "status", label: "Status" },
+];
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; q?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.CUSTOMERS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const where: Prisma.CustomerWhereInput | undefined = table.query.q
+    ? {
+        OR: [
+          { name: { contains: table.query.q } },
+          { customerNumber: { contains: table.query.q } },
+          { phone: { contains: table.query.q } },
+        ],
+      }
+    : undefined;
+  const orderBy: Prisma.CustomerOrderByWithRelationInput[] = table.sort === "customerNumber"
+    ? [{ customerNumber: table.direction }, { id: "asc" }]
+    : table.sort === "name"
+      ? [{ name: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const customers = await db.customer.findMany({
-    where: sp.q
-      ? {
-          OR: [
-            { name: { contains: sp.q } },
-            { customerNumber: { contains: sp.q } },
-            { phone: { contains: sp.q } },
-          ],
-        }
-      : undefined,
-    include: {
-      area: true,
-      salesOwner: true,
-      _count: { select: { subscriptions: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [customers, total] = await Promise.all([
+    db.customer.findMany({
+      where,
+      include: { area: true, salesOwner: true, _count: { select: { subscriptions: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.customer.count({ where }),
+  ]);
 
   return (
     <div>
@@ -44,7 +61,7 @@ export default async function CustomersPage({
           </a>
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex items-end gap-3">
         <div className="w-72">
@@ -54,7 +71,7 @@ export default async function CustomersPage({
             name="q"
             className="input"
             placeholder="Nama / nomor / telepon"
-            defaultValue={sp.q ?? ""}
+            defaultValue={table.query.q ?? ""}
           />
         </div>
         <button type="submit" className="btn-secondary">Cari</button>
@@ -67,14 +84,14 @@ export default async function CustomersPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
-                <th className="th">Nama</th>
+                <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="customerNumber" /></th>
+                <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                 <th className="th">Jenis</th>
                 <th className="th">Telepon</th>
                 <th className="th">Area</th>
                 <th className="th">Sales Owner</th>
                 <th className="th">Subscription</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -106,6 +123,7 @@ export default async function CustomersPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/crm/customers" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

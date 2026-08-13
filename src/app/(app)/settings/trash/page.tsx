@@ -16,24 +16,39 @@ const ENTITY_LABELS: Record<string, string> = {
 
 const entityLabel = (t: string) => ENTITY_LABELS[t] ?? t;
 
+function parseDateParam(value: string | undefined) {
+  if (!value) return undefined;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 export default async function TrashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; type?: string; pending?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    error?: string;
+    type?: string;
+    pending?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const user = await requirePermission(PERMISSIONS.ARCHIVE_VIEW);
   const sp = await searchParams;
   const canRestore = user.permissions.has(PERMISSIONS.ARCHIVE_RESTORE);
   const onlyPending = sp.pending === "1";
+  const from = parseDateParam(sp.from);
+  const to = parseDateParam(sp.to);
 
   const [rows, types] = await Promise.all([
-    listArchive({ entityType: sp.type || undefined, onlyPending }),
+    listArchive({ entityType: sp.type || undefined, onlyPending, from, to }),
     archivedEntityTypes(),
   ]);
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { type: sp.type, pending: sp.pending, ...patch };
+    const merged = { type: sp.type, pending: sp.pending, from: sp.from, to: sp.to, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/settings/trash?${s}` : "/settings/trash";
@@ -46,6 +61,37 @@ export default async function TrashPage({
         subtitle="Segala yang dikeluarkan dari peredaran tercatat di sini beserta alasannya. Tidak ada penghapusan permanen."
       />
       <Flash ok={sp.ok} error={sp.error} />
+
+      <div className="card mb-4 p-4">
+        <form method="get" className="grid min-w-0 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+          {sp.type && <input type="hidden" name="type" value={sp.type} />}
+          {sp.pending && <input type="hidden" name="pending" value={sp.pending} />}
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
+            Dari tanggal
+            <input
+              type="date"
+              name="from"
+              defaultValue={sp.from ?? ""}
+              className="input w-full"
+              aria-label="Dari tanggal"
+            />
+          </label>
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
+            Sampai tanggal
+            <input
+              type="date"
+              name="to"
+              defaultValue={sp.to ?? ""}
+              className="input w-full"
+              aria-label="Sampai tanggal"
+            />
+          </label>
+          <button type="submit" className="btn-primary justify-center">Terapkan</button>
+          <Link href={qs({ from: undefined, to: undefined })} className="btn-secondary justify-center">
+            Reset tanggal
+          </Link>
+        </form>
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
         <Link

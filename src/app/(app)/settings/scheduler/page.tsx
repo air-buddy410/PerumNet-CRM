@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { LEASE_TIMEOUT_MS } from "@/lib/scheduler";
 import { toggleTaskAction, setIntervalAction } from "./actions";
 
@@ -14,13 +16,31 @@ export const revalidate = 15;
 export default async function SchedulerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.MASTER_DATA_MANAGE);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "code", label: "Kode" },
+    { value: "name", label: "Tugas" },
+    { value: "lastStatus", label: "Hasil" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ScheduledTaskOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [tasks, recentRuns] = await Promise.all([
-    db.scheduledTask.findMany({ orderBy: { code: "asc" } }),
+  const [tasks, taskTotal, enabledCount, failingCount, stuckCount, recentRuns] = await Promise.all([
+    db.scheduledTask.findMany({
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.scheduledTask.count(),
+    db.scheduledTask.count({ where: { isEnabled: true } }),
+    db.scheduledTask.count({ where: { lastStatus: "FAILED" } }),
+    db.scheduledTask.count({ where: { lockedAt: { not: null } } }),
     db.scheduledTaskRun.findMany({
       orderBy: { startedAt: "desc" },
       take: 20,
@@ -47,10 +67,10 @@ export default async function SchedulerPage({
     <div>
       <PageHeader
         title="Pekerjaan Berkala"
-        subtitle={`${enabled.length} dari ${tasks.length} tugas aktif. Eksekusi dilakukan worker terpisah — halaman ini hanya memantau.`}
+        subtitle={`${enabledCount} dari ${taskTotal} tugas aktif. Eksekusi dilakukan worker terpisah — halaman ini hanya memantau.`}
       />
 
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       {workerLooksDead && (
         <div className="card mb-4 border-l-4 border-red-500 p-4">
@@ -69,7 +89,7 @@ export default async function SchedulerPage({
       {stuck.length > 0 && (
         <div className="card mb-4 border-l-4 border-amber-500 p-4">
           <p className="text-sm font-medium text-amber-700">
-            {stuck.length} tugas terkunci melewati batas sewa
+            {stuckCount} tugas terkunci melewati batas sewa
           </p>
           <p className="mt-1 text-xs text-slate-600">
             Worker yang memegangnya diduga mati. Kuncinya akan direbut worker
@@ -81,7 +101,7 @@ export default async function SchedulerPage({
       {failing.length > 0 && (
         <div className="card mb-4 border-l-4 border-red-400 p-4">
           <p className="mb-1 text-sm font-medium text-red-700">
-            {failing.length} tugas gagal pada eksekusi terakhir
+            {failingCount} tugas gagal pada eksekusi terakhir
           </p>
           <ul className="space-y-0.5 text-xs text-slate-600">
             {failing.slice(0, 3).map((t) => (
@@ -100,10 +120,10 @@ export default async function SchedulerPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Tugas</th>
+                <th className="th"><SortableTableHeader basePath="/settings/scheduler" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Tugas" /></th>
                 <th className="th text-right">Interval</th>
                 <th className="th">Terakhir</th>
-                <th className="th">Hasil</th>
+                <th className="th"><SortableTableHeader basePath="/settings/scheduler" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="lastStatus" label="Hasil" /></th>
                 <th className="th text-right">Jalan / Gagal</th>
                 <th className="th">Aktif</th>
               </tr>
@@ -159,8 +179,18 @@ export default async function SchedulerPage({
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/settings/scheduler"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={taskTotal}
+          />
+        </div>
 
       <h2 className="mb-3 text-sm font-medium">Riwayat Eksekusi</h2>
       <div className="card overflow-x-auto">

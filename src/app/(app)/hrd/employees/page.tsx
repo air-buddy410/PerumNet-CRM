@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
+import { JOB_LEVELS, PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import {
   contractPhase,
   contractRemainingDays,
@@ -13,8 +15,15 @@ import {
 import { EmployeeForm, type EmployeeFormRow } from "./employee-form";
 
 export const metadata = { title: "Karyawan" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "employeeNo", label: "NIK" },
+  { value: "fullName", label: "Nama" },
+  { value: "joinedAt", label: "Bergabung" },
+  { value: "jobLevel", label: "Jenjang" },
+];
 
 const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+const jobLevelLabels = Object.fromEntries(JOB_LEVELS) as Record<string, string>;
 
 /** Ringkasan masa kontrak untuk satu baris tabel. */
 function ContractCell({
@@ -55,25 +64,41 @@ function ContractCell({
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.HRD_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "employeeNo", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.HRD_MANAGE);
   const now = new Date();
+  const orderBy: Prisma.EmployeeOrderByWithRelationInput[] = table.sort === "fullName"
+    ? [{ fullName: table.direction }, { id: "asc" }]
+    : table.sort === "joinedAt"
+      ? [{ joinedAt: table.direction }, { id: "asc" }]
+      : table.sort === "jobLevel"
+        ? [{ jobLevel: table.direction }, { id: "asc" }]
+        : [{ employeeNo: table.direction }, { id: "asc" }];
 
-  const [employees, users] = await Promise.all([
+  const [employees, total, users, editRow] = await Promise.all([
     db.employee.findMany({
       include: {
         user: { select: { id: true, username: true, isActive: true, frozenAt: true, freezeReason: true } },
         supervisor: true,
         _count: { select: { subordinates: true } },
       },
-      orderBy: { employeeNo: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.employee.count(),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    table.query.edit
+      ? db.employee.findUnique({
+          where: { id: table.query.edit },
+          include: { user: { select: { id: true, username: true, isActive: true, frozenAt: true, freezeReason: true } }, supervisor: true, _count: { select: { subordinates: true } } },
+        })
+      : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (employees.find((e) => e.id === sp.edit) ?? null) : null;
 
   const formRow: EmployeeFormRow | null = editRow
     ? {
@@ -100,7 +125,7 @@ export default async function EmployeesPage({
         title="Karyawan"
         subtitle="Kelola data karyawan dan struktur atasan untuk pengajuan izin serta lembur."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       {/* Akun beku muncul di daftar dengan penanda, TIDAK disembunyikan —
           menyembunyikannya membuat HRD mengira orangnya sudah hilang. */}
@@ -132,8 +157,8 @@ export default async function EmployeesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">NIK</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/employees" currentDirection={table.direction} currentSort={table.sort} label="NIK" query={table.query} sortKey="employeeNo" /></th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/employees" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="fullName" /></th>
                   <th className="th">Jabatan</th>
                   <th className="th">Status</th>
                   <th className="th">Pola</th>
@@ -163,7 +188,7 @@ export default async function EmployeesPage({
                       <td className="td whitespace-nowrap text-xs">
                         {e.jobTitle ?? "-"}
                         <span className="block text-[10px] text-slate-400">
-                          {e.jobLevel === "LEADER" ? "Leader" : "Staff"}
+                          {jobLevelLabels[e.jobLevel] ?? e.jobLevel}
                         </span>
                       </td>
                       <td className="td whitespace-nowrap text-xs">{statusLabel(e.employeeType)}</td>
@@ -207,6 +232,8 @@ export default async function EmployeesPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/hrd/employees" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

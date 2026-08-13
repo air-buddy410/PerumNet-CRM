@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -8,31 +9,64 @@ import {
   statusLabel,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, ActiveBadge, EmptyState } from "@/components/ui";
+import {
+  parseTableQuery,
+  SortableTableHeader,
+  TableControls,
+  type TableSearchParams,
+  type TableSortOption,
+} from "@/components/table-controls";
 import { saveItemAction, toggleItemAction } from "../actions";
 
 export const metadata = { title: "Item Master" };
 
+const sortOptions: readonly TableSortOption[] = [
+  { value: "code", label: "Kode" },
+  { value: "name", label: "Nama" },
+  { value: "minStock", label: "Minimum stock" },
+];
+
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, {
+    defaultSort: "code",
+    defaultDirection: "asc",
+    sortOptions,
+  });
   const canManage = user.permissions.has(PERMISSIONS.ITEMS_MANAGE);
+  const where = {};
+  const orderBy: Prisma.ItemOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "minStock"
+      ? [{ minStock: table.direction }, { id: "asc" }]
+      : [{ code: table.direction }, { id: "asc" }];
 
-  const [items, categories] = await Promise.all([
+  const [items, total, categories, editRow] = await Promise.all([
     db.item.findMany({
+      where,
       include: {
         category: true,
         stockLevels: true,
         _count: { select: { devices: true } },
       },
-      orderBy: { code: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.item.count({ where }),
     db.category.findMany({ where: { type: "ITEM", isActive: true }, orderBy: { name: "asc" } }),
+    table.query.edit
+      ? db.item.findUnique({
+          where: { id: table.query.edit },
+          include: { category: true, stockLevels: true, _count: { select: { devices: true } } },
+        })
+      : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (items.find((i) => i.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -40,7 +74,7 @@ export default async function ItemsPage({
         title="Item Master"
         subtitle="Stok hanya berubah melalui transaksi resmi; jumlah tidak dapat diedit langsung."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -50,8 +84,8 @@ export default async function ItemsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/items" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/items" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Tracking</th>
                   <th className="th">Total Stock</th>
                   <th className="th">Min</th>
@@ -109,6 +143,17 @@ export default async function ItemsPage({
             </table>
           )}
         </div>
+
+        <TableControls
+          basePath="/inventory/items"
+          direction={table.direction}
+          page={table.page}
+          pageSize={table.pageSize}
+          query={table.query}
+          sort={table.sort}
+          sortOptions={sortOptions}
+          total={total}
+        />
 
         {canManage && (
           <div className="card h-fit p-5">

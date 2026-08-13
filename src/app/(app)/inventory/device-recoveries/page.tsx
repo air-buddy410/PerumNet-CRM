@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -9,18 +10,26 @@ import {
 } from "@/lib/constants";
 import { isOverdue } from "@/lib/recovery";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Penarikan Perangkat" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "slaDueAt", label: "Batas SLA" },
+  { value: "createdAt", label: "Terbaru" },
+  { value: "recoveryNumber", label: "Nomor" },
+  { value: "status", label: "Status" },
+];
 
 export default async function DeviceRecoveriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; status?: string; overdue?: string; q?: string; technician?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "slaDueAt", defaultDirection: "asc", sortOptions });
   const now = new Date();
-  const query = sp.q?.trim();
+  const query = table.query.q?.trim();
   const canViewAll = [
     PERMISSIONS.RECOVERY_ASSIGN,
     PERMISSIONS.RECOVERY_RECEIVE,
@@ -37,10 +46,9 @@ export default async function DeviceRecoveriesPage({
       })
     : [];
 
-  const recoveries = await db.deviceRecoveryIssue.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.overdue === "1"
+  const where: Prisma.DeviceRecoveryIssueWhereInput = {
+      ...(table.query.status ? { status: table.query.status } : {}),
+      ...(table.query.overdue === "1"
         ? {
             slaDueAt: { lte: now },
             status: { notIn: ["COMPLETED", "CLOSED_UNRECOVERED"] },
@@ -48,8 +56,8 @@ export default async function DeviceRecoveriesPage({
         : {}),
       ...(scopedToTechnician
         ? { OR: [{ assigneeId: user.id }, { workOrder: { technicianId: user.id } }] }
-        : sp.technician
-          ? { OR: [{ assigneeId: sp.technician }, { workOrder: { technicianId: sp.technician } }] }
+        : table.query.technician
+          ? { OR: [{ assigneeId: table.query.technician }, { workOrder: { technicianId: table.query.technician } }] }
           : {}),
       ...(query
         ? {
@@ -66,7 +74,18 @@ export default async function DeviceRecoveriesPage({
             }] as const,
           }
         : {}),
-    },
+    };
+  const orderBy: Prisma.DeviceRecoveryIssueOrderByWithRelationInput[] = table.sort === "createdAt"
+    ? [{ createdAt: table.direction }, { id: "asc" }]
+    : table.sort === "recoveryNumber"
+      ? [{ recoveryNumber: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ slaDueAt: table.direction }, { id: "asc" }];
+
+  const [recoveries, total] = await Promise.all([
+    db.deviceRecoveryIssue.findMany({
+    where,
     include: {
       termination: {
         include: {
@@ -77,9 +96,12 @@ export default async function DeviceRecoveriesPage({
       assignee: { select: { name: true } },
       items: { select: { status: true, snapshotSerial: true, actualSerial: true, actualMac: true, mismatchNote: true } },
     },
-    orderBy: [{ slaDueAt: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+    orderBy,
+    skip: (table.page - 1) * table.pageSize,
+    take: table.pageSize,
+  }),
+    db.deviceRecoveryIssue.count({ where }),
+  ]);
 
   const overdueCount = recoveries.filter((r) => isOverdue(r, now)).length;
   const completedCount = recoveries.filter((r) => ["COMPLETED", "CLOSED_UNRECOVERED"].includes(r.status)).length;
@@ -99,7 +121,7 @@ export default async function DeviceRecoveriesPage({
           </Link>
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="card p-4"><span className="text-xs text-slate-500">Ditampilkan</span><strong className="mt-1 block text-xl">{recoveries.length}</strong></div>
@@ -108,10 +130,10 @@ export default async function DeviceRecoveriesPage({
         <div className="card p-4"><span className="text-xs text-slate-500">Mismatch</span><strong className="mt-1 block text-xl text-rose-700">{mismatchCount}</strong></div>
       </div>
 
-      {overdueCount > 0 && sp.overdue !== "1" && (
+      {overdueCount > 0 && table.query.overdue !== "1" && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {overdueCount} penarikan melewati batas SLA.{" "}
-          <Link href="/inventory/device-recoveries?overdue=1" className="font-semibold underline">
+            <Link href={"/inventory/device-recoveries?overdue=1"} className="font-semibold underline">
             Lihat saja yang terlambat
           </Link>
         </div>
@@ -120,11 +142,11 @@ export default async function DeviceRecoveriesPage({
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
           <label className="label" htmlFor="q">Cari recovery, pelanggan, serial, atau MAC</label>
-          <input id="q" name="q" className="input" defaultValue={sp.q ?? ""} placeholder="Contoh: DRI-, pelanggan, SN, MAC" />
+          <input id="q" name="q" className="input" defaultValue={table.query.q ?? ""} placeholder="Contoh: DRI-, pelanggan, SN, MAC" />
         </div>
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" className="input w-56" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input w-56" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             {RECOVERY_STATUSES.map((s) => (
               <option key={s} value={s}>{recoveryStatusLabel(s)}</option>
@@ -134,7 +156,7 @@ export default async function DeviceRecoveriesPage({
         {canViewAll && (
           <div>
             <label className="label" htmlFor="technician">Teknisi</label>
-            <select id="technician" name="technician" className="input w-56" defaultValue={sp.technician ?? ""}>
+            <select id="technician" name="technician" className="input w-56" defaultValue={table.query.technician ?? ""}>
               <option value="">Semua teknisi</option>
               {technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.name}</option>)}
             </select>
@@ -151,13 +173,13 @@ export default async function DeviceRecoveriesPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/device-recoveries" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="recoveryNumber" /></th>
                 <th className="th">Pelanggan</th>
                 <th className="th">Teknisi</th>
                 <th className="th">Perangkat</th>
                 <th className="th">Mismatch</th>
-                <th className="th">Batas SLA</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/inventory/device-recoveries" currentDirection={table.direction} currentSort={table.sort} label="Batas SLA" query={table.query} sortKey="slaDueAt" /></th>
+                <th className="th"><SortableTableHeader basePath="/inventory/device-recoveries" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -203,6 +225,7 @@ export default async function DeviceRecoveriesPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/inventory/device-recoveries" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { decideMaterialRequestAction } from "../../portal/actions";
 
 export const metadata = { title: "Permintaan Material" };
@@ -13,32 +15,46 @@ export const metadata = { title: "Permintaan Material" };
 export default async function MaterialRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.STOCK_CREATE);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "status", label: "Status" },
+    { value: "createdAt", label: "Dibuat" },
+    { value: "requestNumber", label: "Nomor" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "status", sortOptions: tableOptions });
+  const orderBy: Prisma.MaterialRequestOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const requests = await db.materialRequest.findMany({
-    include: {
-      requester: true,
-      warehouse: true,
-      decidedBy: true,
-      tx: { select: { id: true, txNumber: true } },
-      lines: { include: { item: true } },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
-  const pending = requests.filter((r) => r.status === "SUBMITTED");
+  const [requests, totalCount, pending] = await Promise.all([
+    db.materialRequest.findMany({
+      include: {
+        requester: true,
+        warehouse: true,
+        decidedBy: true,
+        tx: { select: { id: true, txNumber: true } },
+        lines: { include: { item: true } },
+      },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.materialRequest.count(),
+    db.materialRequest.count({ where: { status: "SUBMITTED" } }),
+  ]);
 
   return (
     <div>
       <PageHeader
         title="Permintaan Material"
-        subtitle={`Pengajuan dari lapangan. ${pending.length} menunggu keputusan.`}
+        subtitle={`Pengajuan dari lapangan. ${pending} menunggu keputusan.`}
       />
 
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       {requests.length === 0 ? (
         <div className="card"><EmptyState message="Belum ada permintaan material." /></div>
@@ -104,6 +120,16 @@ export default async function MaterialRequestsPage({
                 ))}
             </div>
           ))}
+          <TableControls
+            basePath="/inventory/requests"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
       )}
     </div>

@@ -9,6 +9,8 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { DocumentSignatureImagePanel } from "@/components/document-signature-image-panel";
+import { documentSignatures } from "@/lib/document-signature";
 import {
   postTransactionAction,
   cancelTransactionAction,
@@ -17,6 +19,7 @@ import {
   createDeliveryOrderAction,
   approveDeliveryOrderAction,
   issueMaterialAction,
+  attachSignatureImageAction,
 } from "../actions";
 
 export const metadata = { title: "Detail Transaksi" };
@@ -50,6 +53,8 @@ export default async function TransactionDetailPage({
     },
   });
   if (!tx) notFound();
+
+  const signatures = tx.irf ? await documentSignatures("IRF", tx.irf.id) : [];
 
   const canPost = user.permissions.has(PERMISSIONS.STOCK_POST);
   const canReverse = user.permissions.has(PERMISSIONS.STOCK_REVERSE);
@@ -260,6 +265,22 @@ export default async function TransactionDetailPage({
                 Cetak IRF
               </Link>
             </div>
+          )}
+          {tx.irf && (
+            <DocumentSignatureImagePanel
+              txId={tx.id}
+              docType="IRF"
+              docId={tx.irf.id}
+              signatures={signatures.map((signature) => ({
+                id: signature.id,
+                role: signature.role,
+                signerName: signature.signerName,
+                signedAt: signature.signedAt.toISOString(),
+                attachmentId: signature.attachmentId,
+              }))}
+              canUpload={canCreate}
+              action={attachSignatureImageAction}
+            />
           )}
           {tx.status === "DRAFT" && canPost && !readyToIssue && (
             <div className="card p-5">

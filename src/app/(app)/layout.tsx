@@ -201,7 +201,12 @@ export default async function AppLayout({
     if (can(PERMISSIONS.ACCESS_MANAGE))
       itItems.push({ href: "/it/mailboxes", label: "Mailbox & Divisi" });
     if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
-      itItems.push({ href: "/it/mailserver", label: "Mailserver" });
+      itItems.push(
+        { href: "/it/mailserver", label: "Mailserver" },
+        { href: "/it/identity-groups", label: "Grup Authentik" }
+      );
+    if (can(PERMISSIONS.USERS_CREATE))
+      itItems.push({ href: "/it/mailserver/accounts", label: "Akun CRM dari Mailbox" });
     groups.push({ title: "IT/DevOps", items: itItems });
   } else {
     // Service desk terbuka untuk seluruh staff (PRD §39–40).
@@ -212,6 +217,13 @@ export default async function AppLayout({
       supportItems.push({ href: "/it/access", label: "Akses Sistem" });
     if (supportItems.length)
       groups.push({ title: "IT Support", items: supportItems });
+    const itDevopsItems = [];
+    if (can(PERMISSIONS.INTEGRATIONS_MANAGE))
+      itDevopsItems.push({ href: "/it/identity-groups", label: "Grup Authentik" });
+    if (can(PERMISSIONS.USERS_CREATE))
+      itDevopsItems.push({ href: "/it/mailserver/accounts", label: "Akun CRM dari Mailbox" });
+    if (itDevopsItems.length)
+      groups.push({ title: "IT/DevOps", items: itDevopsItems });
   }
 
   if (can(PERMISSIONS.CHANNELS_VIEW)) {
@@ -238,6 +250,8 @@ export default async function AppLayout({
       { href: "/hrd/employees", label: "Karyawan" },
       { href: "/hrd/shifts", label: "Shift & Lokasi" }
     );
+    if (can(PERMISSIONS.HRD_MANAGE))
+      hrdItems.push({ href: "/hrd/employees/import", label: "Impor Karyawan" });
   }
   if (hrdItems.length) groups.push({ title: "HRD", items: hrdItems });
 

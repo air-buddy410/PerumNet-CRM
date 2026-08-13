@@ -1,27 +1,44 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveAnnouncementAction } from "../actions";
 
 export const metadata = { title: "Pengumuman & Promo" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "startAt", label: "Mulai tayang" },
+  { value: "title", label: "Judul" },
+  { value: "createdAt", label: "Dibuat" },
+];
 
 export default async function AnnouncementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CHANNELS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "startAt", defaultDirection: "desc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.CHANNELS_MANAGE);
+  const orderBy: Prisma.AnnouncementOrderByWithRelationInput[] = table.sort === "title"
+    ? [{ title: table.direction }, { id: "asc" }]
+    : table.sort === "createdAt"
+      ? [{ createdAt: table.direction }, { id: "asc" }]
+      : [{ startAt: table.direction }, { id: "asc" }];
 
-  const announcements = await db.announcement.findMany({
-    include: { createdBy: true },
-    orderBy: { startAt: "desc" },
-    take: 60,
-  });
-  const editRow = sp.edit ? (announcements.find((a) => a.id === sp.edit) ?? null) : null;
+  const [announcements, total, editRow] = await Promise.all([
+    db.announcement.findMany({
+      include: { createdBy: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.announcement.count(),
+    table.query.edit ? db.announcement.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
   const now = new Date();
   const isLive = (a: (typeof announcements)[number]) =>
     a.isPublished && a.startAt <= now && (!a.endAt || a.endAt >= now);
@@ -32,7 +49,7 @@ export default async function AnnouncementsPage({
         title="Pengumuman & Promo"
         subtitle="Kelola konten portal dan aplikasi pelanggan; hanya pengumuman yang diterbitkan dan sedang tayang yang terlihat."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="card overflow-x-auto">
@@ -42,9 +59,9 @@ export default async function AnnouncementsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Judul</th>
+                  <th className="th"><SortableTableHeader basePath="/channels/announcements" currentDirection={table.direction} currentSort={table.sort} label="Judul" query={table.query} sortKey="title" /></th>
                   <th className="th">Badge</th>
-                  <th className="th">Periode Tayang</th>
+                  <th className="th"><SortableTableHeader basePath="/channels/announcements" currentDirection={table.direction} currentSort={table.sort} label="Periode Tayang" query={table.query} sortKey="startAt" /></th>
                   <th className="th">Dibuat</th>
                   <th className="th">Status</th>
                   {canManage && <th className="th"></th>}
@@ -78,6 +95,8 @@ export default async function AnnouncementsPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/channels/announcements" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

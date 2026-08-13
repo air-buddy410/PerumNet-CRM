@@ -1,34 +1,46 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveWarehouseAction, toggleWarehouseAction } from "../actions";
 
 export const metadata = { title: "Gudang" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "code", label: "Kode" },
+  { value: "name", label: "Nama" },
+];
 
 export default async function WarehousesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.INVENTORY_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.ITEMS_MANAGE);
+  const orderBy: Prisma.WarehouseOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : [{ code: table.direction }, { id: "asc" }];
 
-  const warehouses = await db.warehouse.findMany({
-    include: {
-      stockLevels: true,
-      _count: { select: { devices: { where: { status: "AVAILABLE" } } } },
-    },
-    orderBy: { code: "asc" },
-  });
-  const editRow = sp.edit ? (warehouses.find((w) => w.id === sp.edit) ?? null) : null;
+  const [warehouses, total, editRow] = await Promise.all([
+    db.warehouse.findMany({
+      include: { stockLevels: true, _count: { select: { devices: { where: { status: "AVAILABLE" } } } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.warehouse.count(),
+    table.query.edit ? db.warehouse.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
 
   return (
     <div>
       <PageHeader title="Gudang" subtitle="Lokasi penyimpanan stock dan perangkat." />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -38,8 +50,8 @@ export default async function WarehousesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/warehouses" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
+                  <th className="th"><SortableTableHeader basePath="/inventory/warehouses" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Alamat</th>
                   <th className="th">Item Terdata</th>
                   <th className="th">Perangkat Tersedia</th>
@@ -75,6 +87,8 @@ export default async function WarehousesPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/inventory/warehouses" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

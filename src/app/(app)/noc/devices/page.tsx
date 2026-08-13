@@ -1,30 +1,46 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, NET_DEVICE_TYPES, CRITICALITY, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveNetDeviceAction } from "../actions";
 
 export const metadata = { title: "Perangkat Jaringan" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "hostname", label: "Hostname" },
+  { value: "deviceType", label: "Jenis" },
+  { value: "status", label: "Status" },
+];
 
 export default async function NetDevicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "hostname", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const orderBy: Prisma.NetworkDeviceOrderByWithRelationInput[] = table.sort === "deviceType"
+    ? [{ deviceType: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ hostname: table.direction }, { id: "asc" }];
 
-  const [devices, sites, users] = await Promise.all([
+  const [devices, total, sites, users, editRow] = await Promise.all([
     db.networkDevice.findMany({
       include: { site: true, owner: true },
-      orderBy: { hostname: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.networkDevice.count(),
     db.networkSite.findMany({ where: { status: { not: "INACTIVE" } }, orderBy: { siteCode: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    table.query.edit ? db.networkDevice.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
   ]);
-  const editRow = sp.edit ? (devices.find((d) => d.id === sp.edit) ?? null) : null;
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
 
   return (
@@ -33,7 +49,7 @@ export default async function NetDevicesPage({
         title="Perangkat Jaringan"
         subtitle="Kelola perangkat jaringan aktif seperti router, switch, OLT, dan backhaul."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -43,12 +59,12 @@ export default async function NetDevicesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Hostname</th>
-                  <th className="th">Jenis</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Hostname" query={table.query} sortKey="hostname" /></th>
+                  <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Jenis" query={table.query} sortKey="deviceType" /></th>
                   <th className="th">Site</th>
                   <th className="th">Mgmt IP</th>
                   <th className="th">Kritikalitas</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -79,6 +95,7 @@ export default async function NetDevicesPage({
             </table>
           )}
         </div>
+        <TableControls basePath="/noc/devices" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

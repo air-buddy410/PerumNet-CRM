@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
+import { SortableTableHeader, TableControls, type TableDirection, type TablePageSize, type TableQuery, type TableSortOption } from "@/components/table-controls";
 import { saveMasterAction, toggleMasterAction, type MasterEntity } from "./actions";
 
 export interface MasterRow {
@@ -12,6 +13,16 @@ export interface MasterRow {
   extraFields?: Record<string, string | number>; // prefill edit (paket)
 }
 
+export interface MasterTableState {
+  query: TableQuery;
+  page: number;
+  pageSize: TablePageSize;
+  sort: string;
+  direction: TableDirection;
+  sortOptions: readonly TableSortOption[];
+  total: number;
+}
+
 export function MasterCrud({
   entity,
   title,
@@ -22,6 +33,7 @@ export function MasterCrud({
   canManage,
   isPackage = false,
   flash,
+  table,
 }: {
   entity: MasterEntity;
   title: string;
@@ -32,6 +44,7 @@ export function MasterCrud({
   canManage: boolean;
   isPackage?: boolean;
   flash: { ok?: string; error?: string };
+  table: MasterTableState;
 }) {
   const base = `/settings/master/${entity}`;
 
@@ -48,8 +61,8 @@ export function MasterCrud({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath={base} query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="code" label="Kode" /></th>
+                  <th className="th"><SortableTableHeader basePath={base} query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
                   {extraHeaders.map((h) => (
                     <th key={h} className="th">{h}</th>
                   ))}
@@ -95,6 +108,16 @@ export function MasterCrud({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath={base}
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={table.sortOptions}
+            total={table.total}
+          />
         </div>
 
         {canManage && (

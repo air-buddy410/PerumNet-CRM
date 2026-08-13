@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, Flash, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { createSubnetAction } from "./actions";
 
 export const metadata = { title: "IP Address Management" };
@@ -10,20 +12,36 @@ export const metadata = { title: "IP Address Management" };
 export default async function IpamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.IPAM_MANAGE);
+  const tableOptions = [
+    { value: "cidr", label: "CIDR" },
+    { value: "name", label: "Nama" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "cidr", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.SubnetOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [subnets, sites, users] = await Promise.all([
+  const [subnets, totalCount, ipCounts, sites, users] = await Promise.all([
     db.subnet.findMany({
       include: {
         site: true,
         owner: true,
-        ips: true,
       },
-      orderBy: { cidr: "asc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.subnet.count(),
+    db.iPAddress.groupBy({
+      by: ["subnetId"],
+      where: { status: { not: "RELEASED" } },
+      _count: { _all: true },
     }),
     db.networkSite.findMany({ orderBy: { siteCode: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
@@ -35,7 +53,7 @@ export default async function IpamPage({
         title="IP Address Management"
         subtitle="Setiap IP harus unik dan tertaut ke perangkat atau layanan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -45,8 +63,8 @@ export default async function IpamPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">CIDR</th>
-                  <th className="th">Nama / Tujuan</th>
+                <th className="th"><SortableTableHeader basePath="/noc/ipam" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="cidr" label="CIDR" /></th>
+                <th className="th"><SortableTableHeader basePath="/noc/ipam" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama / Tujuan" /></th>
                   <th className="th">VLAN</th>
                   <th className="th">Site</th>
                   <th className="th">Owner</th>
@@ -69,13 +87,23 @@ export default async function IpamPage({
                     <td className="td text-xs">{s.site?.siteCode ?? "-"}</td>
                     <td className="td text-xs">{s.owner?.name ?? "-"}</td>
                     <td className="td text-right">
-                      {s.ips.filter((ip) => ip.status !== "RELEASED").length}
+                      {ipCounts.find((x) => x.subnetId === s.id)?._count._all ?? 0}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/noc/ipam"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

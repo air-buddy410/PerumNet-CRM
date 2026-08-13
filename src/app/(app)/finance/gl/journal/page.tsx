@@ -1,26 +1,43 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, formatDateTime, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Jurnal Umum" };
 
 export default async function JournalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; source?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.GL_VIEW);
   const sp = await searchParams;
   const canPost = user.permissions.has(PERMISSIONS.GL_POST);
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "entryNumber", label: "Nomor" },
+    { value: "entryDate", label: "Tanggal" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const where: Prisma.JournalEntryWhereInput = table.query.source ? { source: table.query.source } : {};
+  const orderBy: Prisma.JournalEntryOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const entries = await db.journalEntry.findMany({
-    where: sp.source ? { source: sp.source } : {},
-    include: { lines: true, postedBy: true },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [entries, totalCount] = await Promise.all([
+    db.journalEntry.findMany({
+      where,
+      include: { lines: true, postedBy: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.journalEntry.count({ where }),
+  ]);
   const sources = ["INVOICE", "PAYMENT", "COLLECTOR_FEE", "MANUAL", "REVERSAL"];
 
   return (
@@ -36,12 +53,12 @@ export default async function JournalPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <form method="GET" className="mb-4 flex flex-wrap items-end gap-3">
         <div>
           <label className="label" htmlFor="source">Sumber</label>
-          <select id="source" name="source" className="input w-48" defaultValue={sp.source ?? ""}>
+          <select id="source" name="source" className="input w-48" defaultValue={table.query.source ?? ""}>
             <option value="">Semua sumber</option>
             {sources.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -58,8 +75,8 @@ export default async function JournalPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
-                <th className="th">Tanggal</th>
+                <th className="th"><SortableTableHeader basePath="/finance/gl/journal" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="entryNumber" label="Nomor" /></th>
+                <th className="th"><SortableTableHeader basePath="/finance/gl/journal" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="entryDate" label="Tanggal" /></th>
                 <th className="th">Sumber</th>
                 <th className="th">Memo</th>
                 <th className="th">Nilai</th>
@@ -90,8 +107,18 @@ export default async function JournalPage({
               })}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/finance/gl/journal"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
     </div>
   );
 }

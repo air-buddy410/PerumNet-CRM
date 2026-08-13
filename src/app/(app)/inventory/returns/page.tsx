@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/rbac";
 import { redirect } from "next/navigation";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { verifyReturnAction } from "./actions";
 
 export const metadata = { title: "Pengembalian Material" };
@@ -18,27 +20,41 @@ const CONDITION_LABELS: Record<string, string> = {
 export default async function ReturnsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const sp = await searchParams;
 
   const canVerify = user.permissions.has(PERMISSIONS.STOCK_POST);
-  const requests = await db.returnRequest.findMany({
-    // Pemegang barang hanya melihat pengajuannya sendiri.
-    where: canVerify ? {} : { requesterId: user.id },
-    include: {
-      requester: true,
-      warehouseTo: true,
-      verifiedBy: true,
-      lines: { include: { item: true, device: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-
-  const pending = requests.filter((r) => r.status === "PENDING").length;
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "returnNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const where: Prisma.ReturnRequestWhereInput = canVerify ? {} : { requesterId: user.id };
+  const orderBy: Prisma.ReturnRequestOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const [requests, totalCount, pending] = await Promise.all([
+    db.returnRequest.findMany({
+      // Pemegang barang hanya melihat pengajuannya sendiri.
+      where,
+      include: {
+        requester: true,
+        warehouseTo: true,
+        verifiedBy: true,
+        lines: { include: { item: true, device: true } },
+      },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.returnRequest.count({ where }),
+    db.returnRequest.count({ where: { ...where, status: "PENDING" } }),
+  ]);
 
   return (
     <div>
@@ -52,7 +68,7 @@ export default async function ReturnsPage({
         }
       />
 
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       {requests.length === 0 ? (
         <div className="card">
@@ -119,6 +135,16 @@ export default async function ReturnsPage({
               )}
             </div>
           ))}
+          <TableControls
+            basePath="/inventory/returns"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
       )}
     </div>

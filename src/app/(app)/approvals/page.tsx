@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
@@ -9,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { isEligibleApprover } from "@/lib/approval";
 
 export const metadata = { title: "Approval Request" };
@@ -17,29 +19,55 @@ function moduleName(code: string) {
   return APPROVAL_MODULES.find((m) => m.code === code)?.name ?? code;
 }
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<TableSearchParams>;
+}) {
   const user = await requirePermission(PERMISSIONS.APPROVALS_VIEW);
+  const sp = await searchParams;
+  const tableOptions = [
+    { value: "createdAt", label: "Tanggal" },
+    { value: "requestNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const pendingWhere: Prisma.ApprovalRequestWhereInput = {
+    status: APPROVAL_STATUS.PENDING,
+    requestedById: { not: user.id },
+  };
+  const mineWhere: Prisma.ApprovalRequestWhereInput = { requestedById: user.id };
+  const recentWhere: Prisma.ApprovalRequestWhereInput = {};
+  const orderBy: Prisma.ApprovalRequestOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [pending, mine, recent] = await Promise.all([
+  const [pending, pendingTotal, mine, mineTotal, recent, recentTotal] = await Promise.all([
     db.approvalRequest.findMany({
-      where: {
-        status: APPROVAL_STATUS.PENDING,
-        requestedById: { not: user.id },
-      },
+      where: pendingWhere,
       include: { requestedBy: true, steps: true },
-      orderBy: { createdAt: "desc" },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.approvalRequest.count({ where: pendingWhere }),
     db.approvalRequest.findMany({
-      where: { requestedById: user.id },
+      where: mineWhere,
       include: { requestedBy: true, steps: true },
-      orderBy: { createdAt: "desc" },
-      take: 25,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.approvalRequest.count({ where: mineWhere }),
     db.approvalRequest.findMany({
+      where: recentWhere,
       include: { requestedBy: true, steps: true },
-      orderBy: { createdAt: "desc" },
-      take: 25,
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.approvalRequest.count({ where: recentWhere }),
   ]);
 
   // "Menunggu keputusan saya": step aktif dapat diputus oleh saya
@@ -60,14 +88,14 @@ export default async function ApprovalsPage() {
         <table className="w-full">
           <thead className="border-b border-slate-100 bg-slate-50/60">
             <tr>
-              <th className="th">Nomor</th>
+              <th className="th"><SortableTableHeader basePath="/approvals" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="requestNumber" label="Nomor" /></th>
               <th className="th">Judul</th>
               <th className="th">Modul</th>
               <th className="th">Nilai</th>
               <th className="th">Pengaju</th>
               <th className="th">Step</th>
-              <th className="th">Status</th>
-              <th className="th">Tanggal</th>
+              <th className="th"><SortableTableHeader basePath="/approvals" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
+              <th className="th"><SortableTableHeader basePath="/approvals" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="createdAt" label="Tanggal" /></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -121,6 +149,7 @@ export default async function ApprovalsPage() {
             Menunggu Keputusan Saya ({actionable.length})
           </div>
           <Table rows={actionable} />
+          <TableControls basePath="/approvals" query={table.query} page={table.page} pageSize={table.pageSize} sort={table.sort} direction={table.direction} sortOptions={tableOptions} total={pendingTotal} />
         </section>
 
         <section className="card">
@@ -128,6 +157,7 @@ export default async function ApprovalsPage() {
             Pengajuan Saya
           </div>
           <Table rows={mine} />
+          <TableControls basePath="/approvals" query={table.query} page={table.page} pageSize={table.pageSize} sort={table.sort} direction={table.direction} sortOptions={tableOptions} total={mineTotal} />
         </section>
 
         <section className="card">
@@ -135,6 +165,7 @@ export default async function ApprovalsPage() {
             Riwayat Terbaru
           </div>
           <Table rows={recent} />
+          <TableControls basePath="/approvals" query={table.query} page={table.page} pageSize={table.pageSize} sort={table.sort} direction={table.direction} sortOptions={tableOptions} total={recentTotal} />
         </section>
       </div>
     </div>

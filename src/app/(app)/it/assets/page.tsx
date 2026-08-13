@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, IT_ASSET_TYPES, statusLabel, formatRupiah } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveItAssetAction } from "../actions";
 
 export const metadata = { title: "Domain, SSL & License" };
@@ -10,20 +12,33 @@ export const metadata = { title: "Domain, SSL & License" };
 export default async function ItAssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.IT_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.IT_ASSETS_MANAGE);
+  const tableOptions = [
+    { value: "expiryDate", label: "Expiry" },
+    { value: "name", label: "Nama" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "expiryDate", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ItAssetOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [assets, users] = await Promise.all([
+  const [assets, totalCount, editRow, users] = await Promise.all([
     db.itAsset.findMany({
       include: { owner: true },
-      orderBy: [{ expiryDate: "asc" }],
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.itAsset.count(),
+    table.query.edit ? db.itAsset.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
-  const editRow = sp.edit ? (assets.find((a) => a.id === sp.edit) ?? null) : null;
   const typeLabel = (t: string) => IT_ASSET_TYPES.find(([v]) => v === t)?.[1] ?? t;
   const now = Date.now();
   const daysLeft = (d: Date | null) =>
@@ -35,7 +50,7 @@ export default async function ItAssetsPage({
         title="Domain, SSL, License & Subscription"
         subtitle="Pantau aset digital, tanggal kedaluwarsa, dan pengingat perpanjangan."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -45,13 +60,13 @@ export default async function ItAssetsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/it/assets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="name" label="Nama" /></th>
                   <th className="th">Jenis</th>
                   <th className="th">Provider</th>
-                  <th className="th">Expiry</th>
+                  <th className="th"><SortableTableHeader basePath="/it/assets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="expiryDate" label="Expiry" /></th>
                   <th className="th">Auto-Renew</th>
                   <th className="th">Biaya</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/it/assets" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -90,6 +105,16 @@ export default async function ItAssetsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/it/assets"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

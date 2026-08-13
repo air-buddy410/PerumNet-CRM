@@ -1,26 +1,43 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, formatDateTime, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { createInvoiceRunAction } from "../actions";
 
 export const metadata = { title: "Invoice Runs" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "period", label: "Periode" },
+  { value: "createdAt", label: "Dibuat" },
+  { value: "status", label: "Status" },
+];
 
 export default async function InvoiceRunsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "period", defaultDirection: "desc", sortOptions });
   const canCreate = user.permissions.has(PERMISSIONS.INVOICES_CREATE);
+  const orderBy: Prisma.InvoiceRunOrderByWithRelationInput[] = table.sort === "createdAt"
+    ? [{ createdAt: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ period: table.direction }, { id: "asc" }];
 
-  const runs = await db.invoiceRun.findMany({
-    include: { createdBy: true },
-    orderBy: { period: "desc" },
-    take: 60,
-  });
+  const [runs, total] = await Promise.all([
+    db.invoiceRun.findMany({
+      include: { createdBy: true },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.invoiceRun.count(),
+  ]);
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -30,7 +47,7 @@ export default async function InvoiceRunsPage({
         title="Invoice Runs"
         subtitle="Proses tagihan bulanan yang aman dijalankan ulang tanpa menggandakan invoice."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card overflow-x-auto">
@@ -40,12 +57,12 @@ export default async function InvoiceRunsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Periode</th>
+                <th className="th"><SortableTableHeader basePath="/billing/runs" currentDirection={table.direction} currentSort={table.sort} label="Periode" query={table.query} sortKey="period" /></th>
                   <th className="th">Invoice</th>
                   <th className="th">Total</th>
                   <th className="th">Dibuat</th>
                   <th className="th">Diposting</th>
-                  <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/billing/runs" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -67,6 +84,8 @@ export default async function InvoiceRunsPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/billing/runs" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canCreate && (
           <div className="card h-fit p-5">

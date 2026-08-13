@@ -1,28 +1,42 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Absensi Harian" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "employeeNo", label: "NIK" },
+  { value: "clockInAt", label: "Jam masuk" },
+  { value: "status", label: "Status" },
+];
 
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.HRD_VIEW);
   const sp = await searchParams;
-  const dateStr = sp.date ?? new Date().toISOString().slice(0, 10);
+  const table = parseTableQuery(sp, { defaultSort: "employeeNo", defaultDirection: "asc", sortOptions });
+  const dateStr = table.query.date ?? new Date().toISOString().slice(0, 10);
   const from = new Date(`${dateStr}T00:00:00`);
   const to = new Date(`${dateStr}T23:59:59`);
 
-  const rows = await db.attendance.findMany({
-    where: { date: { gte: from, lte: to } },
-    include: { employee: true, shift: true, clockInLocation: true },
-    orderBy: { employee: { employeeNo: "asc" } },
-  });
-  const employees = await db.employee.count({ where: { isActive: true } });
-  const notYet = employees - rows.filter((r) => r.clockInAt).length;
+  const where = { date: { gte: from, lte: to } };
+  const orderBy: Prisma.AttendanceOrderByWithRelationInput[] = table.sort === "clockInAt"
+    ? [{ clockInAt: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ employee: { employeeNo: table.direction } }, { id: "asc" }];
+  const [rows, total, employees, attended] = await Promise.all([
+    db.attendance.findMany({ where, include: { employee: true, shift: true, clockInLocation: true }, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.attendance.count({ where }),
+    db.employee.count({ where: { isActive: true } }),
+    db.attendance.count({ where: { ...where, clockInAt: { not: null } } }),
+  ]);
+  const notYet = employees - attended;
 
   return (
     <div>
@@ -46,15 +60,15 @@ export default async function AttendancePage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">NIK</th>
+                <th className="th"><SortableTableHeader basePath="/hrd/attendance" currentDirection={table.direction} currentSort={table.sort} label="NIK" query={table.query} sortKey="employeeNo" /></th>
                 <th className="th">Nama</th>
                 <th className="th">Shift</th>
-                <th className="th">Masuk</th>
+                <th className="th"><SortableTableHeader basePath="/hrd/attendance" currentDirection={table.direction} currentSort={table.sort} label="Masuk" query={table.query} sortKey="clockInAt" /></th>
                 <th className="th">Lokasi / Jarak</th>
                 <th className="th">Pulang</th>
                 <th className="th">Terlambat</th>
                 <th className="th">Kerja</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/hrd/attendance" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -83,6 +97,7 @@ export default async function AttendancePage({
           </table>
         )}
       </div>
+      <TableControls basePath="/hrd/attendance" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

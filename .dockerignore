@@ -21,9 +21,15 @@ uploads
 .gitignore
 .claude
 docs
-tests
 coverage
 README.md
+
+# Tes tidak ikut ke citra produksi. Penjalannya ikut dibuang bersama mereka —
+# `next build` memeriksa tipe SELURUH berkas .ts termasuk yang di scripts/,
+# jadi penjalan tes yang tertinggal akan gagal mencari modul tes yang sudah
+# tidak ada. Keduanya harus pergi bersama.
+tests
+scripts/test-integration.ts
 
 # Berkas kerja sementara
 *.log

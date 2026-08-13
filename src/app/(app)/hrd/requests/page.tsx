@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, LEAVE_TYPES, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { syncRequestsAction } from "../actions";
 
 export const metadata = { title: "Izin & Lembur" };
@@ -10,22 +12,40 @@ export const metadata = { title: "Izin & Lembur" };
 export default async function HrdRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.HRD_VIEW);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "createdAt", label: "Dibuat" },
+    { value: "requestNumber", label: "Nomor" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", sortOptions: tableOptions });
+  const leaveOrderBy: Prisma.LeaveRequestOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const overtimeOrderBy: Prisma.OvertimeRequestOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [leaves, overtimes] = await Promise.all([
+  const [leaves, leaveTotal, overtimes, overtimeTotal] = await Promise.all([
     db.leaveRequest.findMany({
       include: { employee: true },
-      orderBy: { createdAt: "desc" },
-      take: 100,
+      orderBy: leaveOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.leaveRequest.count(),
     db.overtimeRequest.findMany({
       include: { employee: true },
-      orderBy: { createdAt: "desc" },
-      take: 100,
+      orderBy: overtimeOrderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.overtimeRequest.count(),
   ]);
   const approvalIds = [
     ...leaves.map((l) => l.approvalRequestId),
@@ -49,7 +69,7 @@ export default async function HrdRequestsPage({
           </form>
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="space-y-6">
         <div className="card overflow-x-auto">
@@ -60,13 +80,13 @@ export default async function HrdRequestsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/requests" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="requestNumber" label="Nomor" /></th>
                   <th className="th">Karyawan</th>
                   <th className="th">Jenis</th>
                   <th className="th">Periode</th>
                   <th className="th">Hari</th>
                   <th className="th">Approval</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/requests" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -97,6 +117,16 @@ export default async function HrdRequestsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/hrd/requests"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={leaveTotal}
+          />
         </div>
 
         <div className="card overflow-x-auto">
@@ -107,13 +137,13 @@ export default async function HrdRequestsPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Nomor</th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/requests" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="requestNumber" label="Nomor" /></th>
                   <th className="th">Karyawan</th>
                   <th className="th">Tanggal</th>
                   <th className="th">Jam</th>
                   <th className="th">Durasi</th>
                   <th className="th">Approval</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/hrd/requests" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -142,6 +172,16 @@ export default async function HrdRequestsPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/hrd/requests"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={overtimeTotal}
+          />
         </div>
       </div>
     </div>

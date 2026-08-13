@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, ENVIRONMENTS, CRITICALITY, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveServerAction } from "../actions";
 
 export const metadata = { title: "Server Inventory" };
@@ -10,20 +12,33 @@ export const metadata = { title: "Server Inventory" };
 export default async function ServersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.IT_VIEW);
   const sp = await searchParams;
   const canManage = user.permissions.has(PERMISSIONS.IT_INVENTORY_MANAGE);
+  const tableOptions = [
+    { value: "environment", label: "Environment" },
+    { value: "hostname", label: "Hostname" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "environment", defaultDirection: "asc", sortOptions: tableOptions });
+  const orderBy: Prisma.ServerOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
 
-  const [servers, users] = await Promise.all([
+  const [servers, totalCount, editRow, users] = await Promise.all([
     db.server.findMany({
       include: { owner: true, _count: { select: { apps: true, backups: true } } },
-      orderBy: [{ environment: "asc" }, { hostname: "asc" }],
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
     }),
+    db.server.count(),
+    table.query.edit ? db.server.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
-  const editRow = sp.edit ? (servers.find((s) => s.id === sp.edit) ?? null) : null;
 
   return (
     <div>
@@ -31,7 +46,7 @@ export default async function ServersPage({
         title="Server Inventory"
         subtitle="Kelola server berdasarkan environment, owner, tujuan, dan tingkat kritikalitas."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <div className="card overflow-x-auto">
@@ -41,13 +56,13 @@ export default async function ServersPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Hostname</th>
-                  <th className="th">Environment</th>
+                  <th className="th"><SortableTableHeader basePath="/it/servers" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="hostname" label="Hostname" /></th>
+                  <th className="th"><SortableTableHeader basePath="/it/servers" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="environment" label="Environment" /></th>
                   <th className="th">Provider</th>
                   <th className="th">Owner</th>
                   <th className="th">Criticality</th>
                   <th className="th">Aplikasi</th>
-                  <th className="th">Status</th>
+                  <th className="th"><SortableTableHeader basePath="/it/servers" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -73,6 +88,16 @@ export default async function ServersPage({
               </tbody>
             </table>
           )}
+          <TableControls
+            basePath="/it/servers"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
 
         {canManage && (

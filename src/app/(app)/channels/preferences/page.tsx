@@ -1,25 +1,35 @@
 import { db } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, CUSTOMER_CHANNELS, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { setCustomerChannelAction } from "../actions";
 
 export const metadata = { title: "Preferensi Notifikasi" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "name", label: "Nama" },
+  { value: "customerNumber", label: "Nomor pelanggan" },
+];
 
 export default async function PreferencesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CHANNELS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "name", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.CHANNELS_MANAGE);
 
-  const customers = await db.customer.findMany({
-    where: { status: "ACTIVE" },
-    orderBy: { name: "asc" },
-    take: 300,
-  });
+  const where = { status: "ACTIVE" } as const;
+  const orderBy: Prisma.CustomerOrderByWithRelationInput[] = table.sort === "customerNumber"
+    ? [{ customerNumber: table.direction }, { id: "asc" }]
+    : [{ name: table.direction }, { id: "asc" }];
+  const [customers, total] = await Promise.all([
+    db.customer.findMany({ where, orderBy, skip: (table.page - 1) * table.pageSize, take: table.pageSize }),
+    db.customer.count({ where }),
+  ]);
   const counts = CUSTOMER_CHANNELS.map(([v, l]) => ({
     value: v,
     label: l,
@@ -32,7 +42,7 @@ export default async function PreferencesPage({
         title="Preferensi Notifikasi Pelanggan"
         subtitle={`Preferensi kanal pelanggan. ${counts.map((c) => `${c.label}: ${c.count}`).join(" · ")}. Pelanggan yang memilih tidak menerima tidak akan dikirimi pesan.`}
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         {customers.length === 0 ? (
@@ -41,7 +51,7 @@ export default async function PreferencesPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Pelanggan</th>
+                <th className="th"><SortableTableHeader basePath="/channels/preferences" currentDirection={table.direction} currentSort={table.sort} label="Pelanggan" query={table.query} sortKey="customerNumber" /></th>
                 <th className="th">Telepon</th>
                 <th className="th">Email</th>
                 <th className="th">Preferensi</th>
@@ -79,6 +89,7 @@ export default async function PreferencesPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/channels/preferences" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

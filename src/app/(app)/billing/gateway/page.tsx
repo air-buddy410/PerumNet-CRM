@@ -1,29 +1,46 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, GATEWAY_PROVIDERS, formatRupiah, formatDateTime, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Gateway Bundles" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Tanggal dibuat" },
+  { value: "bundleRef", label: "Bundle Ref" },
+  { value: "status", label: "Status" },
+];
 
 export default async function GatewayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.BILLING_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
   const canCreate = user.permissions.has(PERMISSIONS.PAYMENTS_CREATE);
+  const orderBy: Prisma.PaymentGatewayTxOrderByWithRelationInput[] = table.sort === "bundleRef"
+    ? [{ bundleRef: table.direction }, { id: "asc" }]
+    : table.sort === "status"
+      ? [{ status: table.direction }, { id: "asc" }]
+      : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const bundles = await db.paymentGatewayTx.findMany({
-    include: {
-      customer: true,
-      integration: true,
-      _count: { select: { invoices: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [bundles, total] = await Promise.all([
+    db.paymentGatewayTx.findMany({
+      include: {
+        customer: true,
+        integration: true,
+        _count: { select: { invoices: true } },
+      },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.paymentGatewayTx.count(),
+  ]);
   const provLabel = (p: string) => GATEWAY_PROVIDERS.find(([v]) => v === p)?.[1] ?? p;
 
   return (
@@ -39,7 +56,7 @@ export default async function GatewayPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         {bundles.length === 0 ? (
@@ -48,14 +65,14 @@ export default async function GatewayPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Bundle Ref</th>
+                <th className="th"><SortableTableHeader basePath="/billing/gateway" currentDirection={table.direction} currentSort={table.sort} label="Bundle Ref" query={table.query} sortKey="bundleRef" /></th>
                 <th className="th">Pelanggan</th>
                 <th className="th">Provider</th>
                 <th className="th">Invoice</th>
                 <th className="th">Total</th>
                 <th className="th">Dibayar</th>
                 <th className="th">Kedaluwarsa</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/billing/gateway" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -82,6 +99,7 @@ export default async function GatewayPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/billing/gateway" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/rbac";
 import { profileView } from "@/lib/profile";
-import { USER_LEVEL_LABELS } from "@/lib/constants";
+import { JOB_LEVELS, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, Flash } from "@/components/ui";
 import { ProfileContactForm } from "@/components/profile-contact-form";
 import { ProfilePasswordForm } from "@/components/profile-password-form";
@@ -16,6 +16,13 @@ const employeeTypeLabels: Record<string, string> = {
   CONTRACT: "Kontrak",
   PROBATION: "Masa percobaan",
 };
+
+const workPatternLabels: Record<string, string> = {
+  SHIFT: "Shift",
+  NON_SHIFT: "Non-shift",
+};
+
+const jobLevelLabels = Object.fromEntries(JOB_LEVELS) as Record<string, string>;
 
 function formatJoinedAt(value: string | null | undefined) {
   if (!value) return "—";
@@ -48,8 +55,12 @@ export default async function ProfilePage({
   if (!profile) notFound();
 
   const { user, employee, auth } = profile;
-  const isMailserver = auth.provider === "MAILSERVER";
-  const providerLabel = isMailserver ? "Identity mailserver terpusat" : "Akun CRM lokal";
+  const isCentralIdentity = auth.provider === "MAILSERVER" || auth.provider === "OIDC";
+  const providerLabel = auth.provider === "MAILSERVER"
+    ? "Identity mailserver terpusat"
+    : auth.provider === "OIDC"
+      ? "Identity Authentik terpusat"
+      : "Akun CRM lokal";
 
   return (
     <div className="crm-profile-page">
@@ -104,6 +115,11 @@ export default async function ProfilePage({
               <ProfileField label="Jenis karyawan" value={employeeTypeLabels[employee.employeeType] ?? employee.employeeType} />
               <ProfileField label="Tanggal bergabung" value={formatJoinedAt(employee.joinedAt)} />
               <ProfileField label="Atasan" value={employee.supervisorName} />
+              <ProfileField label="Alamat" value={employee.address} />
+              <ProfileField label="Pola kerja" value={workPatternLabels[employee.workPattern] ?? employee.workPattern} />
+              <ProfileField label="Jenjang jabatan" value={jobLevelLabels[employee.jobLevel] ?? employee.jobLevel} />
+              <ProfileField label="Mulai kontrak" value={formatJoinedAt(employee.contractStartAt)} />
+              <ProfileField label="Berakhir kontrak" value={formatJoinedAt(employee.contractEndAt)} />
             </dl>
           ) : <div className="crm-profile-empty">Belum ada data pegawai yang tertaut ke akun ini.</div>}
         </section>
@@ -137,8 +153,8 @@ export default async function ProfilePage({
           <span className="crm-profile-contract-badge"><BadgeCheck aria-hidden="true" /> {auth.provider}</span>
         </div>
         <div className="crm-profile-password-body">
-          {isMailserver ? (
-            <div className="crm-profile-password-note"><Building2 aria-hidden="true" /><p>Password dikelola oleh identity mailserver terpusat. CRM tidak menyimpan, menampilkan, atau mengirim password email.</p></div>
+          {isCentralIdentity ? (
+            <div className="crm-profile-password-note"><Building2 aria-hidden="true" /><p>Password dikelola oleh {providerLabel.toLowerCase()}. CRM tidak menyimpan, menampilkan, atau mengirim password identity terpusat.</p></div>
           ) : auth.passwordChangeAvailable ? (
             <div className="crm-profile-password-local"><p>Anda dapat mengganti password akun CRM lokal. Sesi aktif akan diperbarui setelah berhasil.</p><ProfilePasswordForm action={changePasswordAction} /></div>
           ) : (

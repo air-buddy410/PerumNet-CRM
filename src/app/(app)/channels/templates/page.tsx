@@ -1,26 +1,44 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, MESSAGE_CHANNELS, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, ActiveBadge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveTemplateAction } from "../actions";
 
 export const metadata = { title: "Template Pesan" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "code", label: "Kode" },
+  { value: "name", label: "Nama" },
+  { value: "channel", label: "Kanal" },
+];
 
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string; edit?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.CHANNELS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "code", defaultDirection: "asc", sortOptions });
   const canManage = user.permissions.has(PERMISSIONS.CHANNELS_MANAGE);
+  const orderBy: Prisma.MessageTemplateOrderByWithRelationInput[] = table.sort === "name"
+    ? [{ name: table.direction }, { id: "asc" }]
+    : table.sort === "channel"
+      ? [{ channel: table.direction }, { id: "asc" }]
+      : [{ code: table.direction }, { id: "asc" }];
 
-  const templates = await db.messageTemplate.findMany({
-    include: { _count: { select: { messages: true } } },
-    orderBy: { code: "asc" },
-  });
-  const editRow = sp.edit ? (templates.find((t) => t.id === sp.edit) ?? null) : null;
+  const [templates, total, editRow] = await Promise.all([
+    db.messageTemplate.findMany({
+      include: { _count: { select: { messages: true } } },
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.messageTemplate.count(),
+    table.query.edit ? db.messageTemplate.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+  ]);
 
   return (
     <div>
@@ -28,7 +46,7 @@ export default async function TemplatesPage({
         title="Template Pesan"
         subtitle="Template pesan untuk WhatsApp, email, dan aplikasi dengan placeholder yang diisi saat pesan masuk antrean."
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
         <div className="card overflow-x-auto">
@@ -38,8 +56,8 @@ export default async function TemplatesPage({
             <table className="w-full">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
-                  <th className="th">Kode</th>
-                  <th className="th">Nama</th>
+                  <th className="th"><SortableTableHeader basePath="/channels/templates" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
+                  <th className="th"><SortableTableHeader basePath="/channels/templates" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Kanal</th>
                   <th className="th">Isi</th>
                   <th className="th">Dipakai</th>
@@ -69,6 +87,8 @@ export default async function TemplatesPage({
             </table>
           )}
         </div>
+
+        <TableControls basePath="/channels/templates" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
 
         {canManage && (
           <div className="card h-fit p-5">

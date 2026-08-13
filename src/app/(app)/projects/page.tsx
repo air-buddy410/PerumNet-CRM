@@ -1,34 +1,48 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatRupiah } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 
 export const metadata = { title: "Projects" };
+const sortOptions: readonly TableSortOption[] = [
+  { value: "createdAt", label: "Terbaru" },
+  { value: "projectNumber", label: "Nomor" },
+  { value: "name", label: "Nama" },
+  { value: "status", label: "Status" },
+];
 
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.PROJECTS_VIEW);
   const sp = await searchParams;
+  const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
+  const orderBy: Prisma.ProjectOrderByWithRelationInput[] = table.sort === "projectNumber"
+    ? [{ projectNumber: table.direction }, { id: "asc" }]
+    : table.sort === "name"
+      ? [{ name: table.direction }, { id: "asc" }]
+      : table.sort === "status"
+        ? [{ status: table.direction }, { id: "asc" }]
+        : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const projects = await db.project.findMany({
-    include: {
-      manager: true,
-      customer: true,
-      cashTransactions: {
-        where: {
-          status: "POSTED",
-          reversedById: null,
-          reversalOfId: null,
-          type: { in: ["EXPENSE", "REIMBURSEMENT", "ADVANCE_SETTLEMENT"] },
-        },
+  const [projects, total] = await Promise.all([
+    db.project.findMany({
+      include: {
+        manager: true,
+        customer: true,
+        cashTransactions: { where: { status: "POSTED", reversedById: null, reversalOfId: null, type: { in: ["EXPENSE", "REIMBURSEMENT", "ADVANCE_SETTLEMENT"] } } },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.project.count(),
+  ]);
 
   return (
     <div>
@@ -41,7 +55,7 @@ export default async function ProjectsPage({
           ) : undefined
         }
       />
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="card overflow-x-auto">
         {projects.length === 0 ? (
@@ -50,12 +64,12 @@ export default async function ProjectsPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Nomor</th>
-                <th className="th">Nama</th>
+                <th className="th"><SortableTableHeader basePath="/projects" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="projectNumber" /></th>
+                <th className="th"><SortableTableHeader basePath="/projects" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                 <th className="th">Manager</th>
                 <th className="th text-right">Budget</th>
                 <th className="th text-right">Realisasi Biaya</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/projects" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -93,6 +107,7 @@ export default async function ProjectsPage({
           </table>
         )}
       </div>
+      <TableControls basePath="/projects" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
     </div>
   );
 }

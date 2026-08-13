@@ -1,38 +1,55 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, recoveryStatusLabel, formatDateTime, statusLabel } from "@/lib/constants";
 import { isOverdue } from "@/lib/recovery";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
+import { parseTableQuery, TableControls, type TableSearchParams } from "@/components/table-controls";
 
 export const metadata = { title: "Penarikan Saya" };
 
 export default async function TechnicianRecoveryPortal({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   const user = await requirePermission(PERMISSIONS.RECOVERY_PICKUP);
   const sp = await searchParams;
   const now = new Date();
-  const recoveries = await db.deviceRecoveryIssue.findMany({
-    where: {
-      ...(sp.status ? { status: sp.status } : {}),
-      OR: [{ assigneeId: user.id }, { workOrder: { technicianId: user.id } }],
-    },
-    include: {
-      termination: {
-        include: {
-          customer: { select: { name: true, address: true } },
-          subscription: { select: { serviceNumber: true } },
+  const tableOptions = [
+    { value: "scheduledAt", label: "Jadwal" },
+    { value: "slaDueAt", label: "SLA" },
+    { value: "status", label: "Status" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "scheduledAt", defaultDirection: "asc", sortOptions: tableOptions });
+  const where: Prisma.DeviceRecoveryIssueWhereInput = {
+    ...(table.query.status ? { status: table.query.status } : {}),
+    OR: [{ assigneeId: user.id }, { workOrder: { technicianId: user.id } }],
+  };
+  const orderBy: Prisma.DeviceRecoveryIssueOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const [recoveries, totalCount] = await Promise.all([
+    db.deviceRecoveryIssue.findMany({
+      where,
+      include: {
+        termination: {
+          include: {
+            customer: { select: { name: true, address: true } },
+            subscription: { select: { serviceNumber: true } },
+          },
         },
+        workOrder: { select: { technicianId: true, scheduledAt: true } },
+        items: { select: { status: true } },
       },
-      workOrder: { select: { technicianId: true, scheduledAt: true } },
-      items: { select: { status: true } },
-    },
-    orderBy: [{ scheduledAt: "asc" }, { slaDueAt: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.deviceRecoveryIssue.count({ where }),
+  ]);
 
   return (
     <div className="crm-portal-page">
@@ -45,7 +62,7 @@ export default async function TechnicianRecoveryPortal({
       <form method="get" className="card mb-4 flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="label" htmlFor="status">Status tugas</label>
-          <select id="status" name="status" className="input" defaultValue={sp.status ?? ""}>
+          <select id="status" name="status" className="input" defaultValue={table.query.status ?? ""}>
             <option value="">Semua status</option>
             {["OPEN", "ASSIGNED", "IN_PROGRESS", "PARTIAL", "RECOVERED", "INSPECTION", "COMPLETED", "CLOSED_UNRECOVERED"].map((value) => (
               <option key={value} value={value}>{recoveryStatusLabel(value)}</option>
@@ -80,6 +97,16 @@ export default async function TechnicianRecoveryPortal({
               </Link>
             );
           })}
+          <TableControls
+            basePath="/portal/recoveries"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
         </div>
       )}
     </div>

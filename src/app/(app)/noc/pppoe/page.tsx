@@ -1,7 +1,9 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
+import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { pppoeSummary } from "@/lib/pppoe-monitor";
 
 export const metadata = { title: "Monitor PPPoE" };
@@ -18,15 +20,22 @@ const STATUS_TONE: Record<string, string> = {
 export default async function PppoeMonitorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; ok?: string; error?: string }>;
+  searchParams: Promise<TableSearchParams>;
 }) {
   await requirePermission(PERMISSIONS.NOC_VIEW);
   const sp = await searchParams;
+  const tableOptions = [
+    { value: "username", label: "Username" },
+    { value: "status", label: "Status" },
+    { value: "lastSeenAt", label: "Terakhir terlihat" },
+  ] as const;
+  const table = parseTableQuery(sp, { defaultSort: "status", defaultDirection: "asc", sortOptions: tableOptions });
 
   const summary = await pppoeSummary();
 
-  const baseWhere = {
-    ...(sp.q ? { username: { contains: sp.q, mode: "insensitive" as const } } : {}),
+  const baseWhere: Prisma.PppoeSessionWhereInput = {
+    ...(table.query.q ? { username: { contains: table.query.q, mode: "insensitive" } } : {}),
+    ...(table.query.status ? { status: table.query.status } : {}),
   };
   const include = {
     router: { include: { networkDevice: { select: { hostname: true } } } },
@@ -35,30 +44,24 @@ export default async function PppoeMonitorPage({
     },
   };
 
-  // Urutan berdasarkan KEMENDESAKAN, bukan alfabet. Mengurutkan status secara
-  // alfabetis menaruh DISABLED di paling atas — akun yang memang sengaja
-  // dimatikan — sementara pelanggan OFFLINE yang sedang bermasalah tenggelam
-  // di bawah. Yang perlu ditindaklanjuti harus terlihat lebih dulu.
-  const PRIORITAS = ["OFFLINE", "DISABLED", "ONLINE"] as const;
-  const LIMIT = 300;
-  const batches = [];
-  let terkumpul = 0;
-  for (const status of sp.status ? [sp.status] : PRIORITAS) {
-    if (terkumpul >= LIMIT) break;
-    const batch = await db.pppoeSession.findMany({
-      where: { ...baseWhere, status },
+  const orderBy: Prisma.PppoeSessionOrderByWithRelationInput[] = [
+    { [table.sort]: table.direction },
+    { id: "asc" },
+  ];
+  const [sessions, totalCount] = await Promise.all([
+    db.pppoeSession.findMany({
+      where: baseWhere,
       include,
-      orderBy: { username: "asc" },
-      take: LIMIT - terkumpul,
-    });
-    terkumpul += batch.length;
-    batches.push(batch);
-  }
-  const sessions = batches.flat();
+      orderBy,
+      skip: (table.page - 1) * table.pageSize,
+      take: table.pageSize,
+    }),
+    db.pppoeSession.count({ where: baseWhere }),
+  ]);
 
-  // Dihitung dari seluruh data, bukan dari 300 baris yang sedang tampil —
-  // kalau tidak, angkanya berbohong tentang cakupannya.
-  const unmatched = await db.pppoeSession.count({ where: { subscriptionId: null } });
+  // Dihitung dari query yang sama dengan tabel agar angka mengikuti filter
+  // aktif, sementara total row tetap dihitung di database.
+  const unmatched = await db.pppoeSession.count({ where: { ...baseWhere, subscriptionId: null } });
   const failedRuns = summary.lastRuns.filter((r) => r.status === "FAILED");
 
   return (
@@ -73,7 +76,7 @@ export default async function PppoeMonitorPage({
         }
       />
 
-      <Flash ok={sp.ok} error={sp.error} />
+      <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         {[
@@ -127,7 +130,7 @@ export default async function PppoeMonitorPage({
       <form method="get" className="card mb-4 flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="label" htmlFor="status">Status</label>
-          <select id="status" name="status" defaultValue={sp.status ?? ""} className="input">
+          <select id="status" name="status" defaultValue={table.query.status ?? ""} className="input">
             <option value="">Semua</option>
             <option value="ONLINE">Aktif</option>
             <option value="OFFLINE">Offline</option>
@@ -136,7 +139,7 @@ export default async function PppoeMonitorPage({
         </div>
         <div>
           <label className="label" htmlFor="q">Cari username</label>
-          <input id="q" type="search" name="q" defaultValue={sp.q ?? ""} className="input" />
+          <input id="q" type="search" name="q" defaultValue={table.query.q ?? ""} className="input" />
         </div>
         <button type="submit" className="btn-primary">Terapkan</button>
       </form>
@@ -148,10 +151,10 @@ export default async function PppoeMonitorPage({
           <table className="w-full">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
-                <th className="th">Username</th>
+                <th className="th"><SortableTableHeader basePath="/noc/pppoe" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="username" label="Username" /></th>
                 <th className="th">Pelanggan</th>
                 <th className="th">Router</th>
-                <th className="th">Status</th>
+                <th className="th"><SortableTableHeader basePath="/noc/pppoe" query={table.query} currentSort={table.sort} currentDirection={table.direction} sortKey="status" label="Status" /></th>
                 <th className="th">IP</th>
                 <th className="th">MAC</th>
                 <th className="th text-right">Uptime</th>
@@ -181,8 +184,18 @@ export default async function PppoeMonitorPage({
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+          )}
+          <TableControls
+            basePath="/noc/pppoe"
+            query={table.query}
+            page={table.page}
+            pageSize={table.pageSize}
+            sort={table.sort}
+            direction={table.direction}
+            sortOptions={tableOptions}
+            total={totalCount}
+          />
+        </div>
 
       {unmatched > 0 && (
         <p className="mt-3 text-xs text-amber-600">
