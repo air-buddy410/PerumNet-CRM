@@ -1,6 +1,6 @@
 import { parseCellDate, XlsxError } from "@/lib/xlsx-read";
 import { contractRejection } from "@/lib/employment";
-import { EMPLOYEE_TYPES, WORK_PATTERNS, JOB_LEVELS } from "@/lib/constants";
+import { EMPLOYEE_TYPES, WORK_PATTERNS, JOB_LEVELS, EDUCATION_LEVELS, BLOOD_TYPES } from "@/lib/constants";
 
 // ── Pembacaan tabel pegawai dari template HRD (Fase 51) ─────────
 //
@@ -42,6 +42,15 @@ const COLUMNS: readonly ColumnDef[] = [
   // kolom kosong berarti seseorang terlewat, dan pegawai tanpa divisi tidak
   // bisa dibuatkan akun maupun dilabeli kotak emailnya.
   { key: "divisionRef", label: "Divisi" },
+  // Fase 60 — data diri. Sama seperti Divisi, kolomnya boleh TIDAK ADA sama
+  // sekali. Bedanya: kalau kolomnya ada, selnya BOLEH kosong. Empatnya bukan
+  // syarat untuk apa pun — orang tetap bisa dibuatkan akun, kartu, dan kontrak
+  // tanpanya. Memaksa mengisinya hanya akan membuat HRD menebak, dan golongan
+  // darah yang ditebak lebih berbahaya daripada yang kosong.
+  { key: "birthPlace", label: "Tempat Lahir" },
+  { key: "birthDate", label: "Tanggal Lahir" },
+  { key: "education", label: "Pendidikan Terakhir" },
+  { key: "bloodType", label: "Golongan Darah" },
 ] as const;
 
 type RawRow = Record<
@@ -58,7 +67,11 @@ type RawRow = Record<
   | "supervisorNo"
   | "accountEmail"
   | "isActive"
-  | "divisionRef",
+  | "divisionRef"
+  | "birthPlace"
+  | "birthDate"
+  | "education"
+  | "bloodType",
   string
 >;
 
@@ -94,6 +107,13 @@ export interface ImportRow {
    * penerapan, bukan di sini — daftarnya data, bukan konstanta kode.
    */
   divisionRef: string | null;
+  /// Fase 60 — data diri. Semuanya boleh null; lihat COLUMNS di atas.
+  birthPlace: string | null;
+  birthDate: Date | null;
+  /** Kode EDUCATION_LEVELS, bukan label yang diketik HRD. */
+  education: string | null;
+  /** Kode BLOOD_TYPES. "UNKNOWN" adalah jawaban yang sah, bukan kegagalan. */
+  bloodType: string | null;
 }
 
 export interface RowIssue {
@@ -173,6 +193,51 @@ function parseBoolean(raw: string): boolean | null {
   if (TRUE_WORDS.includes(s)) return true;
   if (FALSE_WORDS.includes(s)) return false;
   return null;
+}
+
+// ── Golongan darah ──────────────────────────────────────────────
+//
+// Punya penerjemah SENDIRI, tidak lewat codeFromLabel(), dan itu bukan
+// duplikasi yang terlewat.
+//
+// codeFromLabel() membandingkan lewat loose(), yang MEMBUANG tanda hubung
+// supaya "Non-Shift" cocok dengan "NON_SHIFT". Untuk golongan darah, tandanya
+// justru bagian paling penting dari jawabannya: kalau tanda dibuang, "A" dan
+// "A−" menjadi teks yang sama persis, dan seseorang yang menulis "A" akan
+// diam-diam tercatat A-negatif. Golongan darah yang salah dipakai justru pada
+// saat tidak ada waktu memeriksanya ulang.
+//
+// Karena itu di sini tandanya WAJIB. Golongan tanpa tanda ditolak dan
+// ditanyakan, bukan ditebak.
+
+/** Semua bentuk garis yang mungkin muncul: strip biasa, minus, en dash, em dash. */
+const DASHES = /[-‐‑‒–—−]/g;
+const UNKNOWN_WORDS = ["UNKNOWN", "TIDAKDIKETAHUI", "TIDAKTAHU", "BELUMTAHU", "?"];
+
+/**
+ * Menerima "A+", "A-", "A −", "O negatif", "AB_POS", maupun kodenya sendiri.
+ *
+ * Mengembalikan null bila tidak dikenal, dan string kosong TIDAK dianggap
+ * kesalahan — kolom ini memang boleh kosong.
+ */
+export function bloodTypeFromLabel(raw: string): string | null {
+  let s = raw.trim().toUpperCase().replace(DASHES, "-");
+  s = s.replace(/[\s_]+/g, "");
+  if (!s) return null;
+  if (UNKNOWN_WORDS.includes(s)) return "UNKNOWN";
+
+  // Kata di UJUNG diterjemahkan jadi tanda, supaya "O negatif" dan "O-" sama.
+  s = s.replace(/(POSITIF|POSITIVE|POS|PLUS)$/, "+").replace(/(NEGATIF|NEGATIVE|NEG|MINUS|MIN)$/, "-");
+
+  const m = /^(AB|A|B|O)([+-])$/.exec(s);
+  if (!m) return null;
+  return `${m[1]}_${m[2] === "+" ? "POS" : "NEG"}`;
+}
+
+/** Apakah isian ini golongan yang benar tapi TANPA tanda? Dipakai untuk pesan yang menolong. */
+function bloodMissingSign(raw: string): boolean {
+  const s = raw.trim().toUpperCase().replace(/[\s_]+/g, "");
+  return ["A", "B", "AB", "O"].includes(s);
 }
 
 /**
@@ -366,6 +431,48 @@ export function parseEmployeeSheet(rows: string[][]): ParsedSheet {
       problem("Divisi", "Wajib diisi. Pilih dari daftar di dropdown.");
     }
 
+    // ── Data diri (Fase 60) ─────────────────────────────────────
+    //
+    // Semuanya boleh kosong. Yang TIDAK boleh adalah terisi tapi tak terbaca —
+    // itu berarti data hilang diam-diam, dan yang paling terasa adalah tanggal
+    // lahir: ucapan ulang tahun akan muncul di hari yang salah, atau tidak
+    // muncul sama sekali, tanpa ada yang tahu kenapa.
+    const birthDate = parseCellDate(raw.birthDate);
+    if (raw.birthDate && !birthDate) {
+      problem("Tanggal Lahir", `"${raw.birthDate}" bukan tanggal yang jelas. Tulis 1990-08-17.`);
+    } else if (birthDate) {
+      // Dua pemeriksaan yang menangkap salah ketik tahun — bentuk salah ketik
+      // paling sering pada tanggal, dan yang paling tidak terlihat.
+      if (birthDate.getTime() > Date.now()) {
+        problem("Tanggal Lahir", "Tanggal lahir ada di masa depan. Periksa tahunnya.");
+      } else if (birthDate.getUTCFullYear() < 1930) {
+        problem("Tanggal Lahir", `Tahun ${birthDate.getUTCFullYear()} tidak masuk akal. Periksa tahunnya.`);
+      } else if (joinedAt && birthDate.getTime() >= joinedAt.getTime()) {
+        problem("Tanggal Lahir", "Tanggal lahir tidak boleh sama atau setelah Tanggal Bergabung.");
+      }
+    }
+
+    let education: string | null = null;
+    if (raw.education) {
+      education = codeFromLabel(EDUCATION_LEVELS, raw.education);
+      if (!education) {
+        problem("Pendidikan Terakhir", `"${raw.education}" tidak dikenal. Pilih: ${labelsOf(EDUCATION_LEVELS)}.`);
+      }
+    }
+
+    let bloodType: string | null = null;
+    if (raw.bloodType) {
+      bloodType = bloodTypeFromLabel(raw.bloodType);
+      if (!bloodType) {
+        problem(
+          "Golongan Darah",
+          bloodMissingSign(raw.bloodType)
+            ? `"${raw.bloodType}" belum menyebut tandanya. Tulis ${raw.bloodType.trim().toUpperCase()}+ atau ${raw.bloodType.trim().toUpperCase()}−, atau pilih "Tidak diketahui".`
+            : `"${raw.bloodType}" tidak dikenal. Pilih: ${labelsOf(BLOOD_TYPES)}.`
+        );
+      }
+    }
+
     if (issues.length > before) continue;
 
     out.push({
@@ -385,6 +492,10 @@ export function parseEmployeeSheet(rows: string[][]): ParsedSheet {
       accountEmail,
       isActive: isActive!,
       divisionRef: raw.divisionRef || null,
+      birthPlace: raw.birthPlace || null,
+      birthDate,
+      education,
+      bloodType,
     });
   }
 

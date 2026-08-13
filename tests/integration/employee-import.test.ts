@@ -292,3 +292,104 @@ describe("impor pegawai dari Excel", () => {
     assert.match(log!.description, /Mengimpor \d+ pegawai dari berkas/);
   });
 });
+
+// ── Data diri lewat impor massal (Fase 60) ──────────────────────
+//
+// Menempuh jalur yang SAMA: xlsx nyata → zip → XML → tabel → basis data.
+// Yang dibuktikan di sini bukan "pengurainya membaca", melainkan nilainya
+// benar-benar SAMPAI ke kolom Employee — sebab pengurai yang benar dengan
+// penerapan yang lupa meneruskan bidangnya akan lulus seluruh tes unit dan
+// tetap menyimpan data kosong.
+
+const HEADER_DIRI = [...HEADER, "Tempat Lahir", "Tanggal Lahir", "Pendidikan Terakhir", "Golongan Darah"];
+
+interface D extends R {
+  lahir?: string;
+  tglLahir?: string;
+  didik?: string;
+  darah?: string;
+}
+
+function berkasDiri(...rows: D[]): File {
+  return xlsxFile([
+    ["Data Pegawai PerumNet"],
+    ["petunjuk"],
+    HEADER_DIRI,
+    ...rows.map((r) => [...baris(r), r.lahir ?? "", r.tglLahir ?? "", r.didik ?? "", r.darah ?? ""]),
+  ]);
+}
+
+describe("data diri ikut tersimpan lewat impor", () => {
+  // Setup SENDIRI, tidak menumpang blok di atas: blok itu menutup dengan
+  // resetTransactionalData() + disconnect, jadi akun HRD-nya sudah tidak ada
+  // saat blok ini berjalan — dan jejak audit yang menunjuk pengguna terhapus
+  // menggagalkan impor dengan galat yang sama sekali tidak menyebut sebabnya.
+  //
+  // Sengaja TIDAK memanggil resetTransactionalData() di sini: memanggilnya
+  // berarti blok ini ikut menghapus kerja blok lain, persis kesalahan yang
+  // baru saja terjadi.
+  let PETUGAS: ReturnType<typeof actor>;
+  before(async () => {
+    await ensureMasterData();
+    await db.division.upsert({ where: { code: "NOC" }, update: {}, create: { code: "NOC", name: "NOC" } });
+    PETUGAS = actor((await makeUser(tag("hrddiri").toLowerCase(), "HRD")).id, "hrd");
+  });
+
+  test("keempatnya SAMPAI ke basis data, bukan hanya terbaca pengurai", async () => {
+    const r = await applyEmployeeImport(
+      PETUGAS,
+      berkasDiri({
+        nama: "Komang Data Diri",
+        email: "",
+        lahir: "Singaraja",
+        tglLahir: "1993-11-02",
+        didik: "D3",
+        darah: "AB−",
+      })
+    );
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+
+    const e = await db.employee.findFirst({ where: { fullName: "Komang Data Diri" } });
+    assert.notEqual(e, null);
+    assert.equal(e!.birthPlace, "Singaraja");
+    assert.equal(e!.birthDate?.toISOString().slice(0, 10), "1993-11-02");
+    assert.equal(e!.education, "D3");
+    assert.equal(e!.bloodType, "AB_NEG", "kode, bukan label yang diketik HRD");
+  });
+
+  test("STRIP BIASA dari papan ketik sama dengan minus di dropdown", async () => {
+    // Label resminya memakai minus (U+2212); papan ketik menghasilkan strip
+    // (U+002D). Kalau hanya satu yang diterima, HRD mengetik sendiri lalu
+    // ditolak tanpa tahu bedanya di mana.
+    const r = await applyEmployeeImport(
+      PETUGAS,
+      berkasDiri({ nama: "Nyoman Strip Biasa", darah: "O-" })
+    );
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const e = await db.employee.findFirst({ where: { fullName: "Nyoman Strip Biasa" } });
+    assert.equal(e!.bloodType, "O_NEG");
+  });
+
+  test("golongan TANPA TANDA menggagalkan seluruh impor — tidak ada yang tersimpan setengah", async () => {
+    const sebelum = await db.employee.count();
+    const r = await applyEmployeeImport(
+      PETUGAS,
+      berkasDiri(
+        { nama: "Gede Benar", darah: "B+" },
+        { nama: "Putu Tanpa Tanda", darah: "A" }
+      )
+    );
+    assert.equal(r.ok, false);
+    assert.equal(await db.employee.count(), sebelum, "impor bersifat semua-atau-tidak sama sekali");
+  });
+
+  test("berkas TANPA empat kolom itu tetap diterima", async () => {
+    // Berkas yang HRD sudah mulai isi sebelum kolom ini ada tidak boleh
+    // mendadak ditolak setelah kita menambahkannya.
+    const r = await applyEmployeeImport(PETUGAS, berkas({ nama: "Wayan Berkas Lama" }));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const e = await db.employee.findFirst({ where: { fullName: "Wayan Berkas Lama" } });
+    assert.equal(e!.bloodType, null);
+    assert.equal(e!.birthDate, null);
+  });
+});

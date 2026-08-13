@@ -6,7 +6,8 @@ Untuk HRD mengisi data pegawai, lalu diimpor ke CRM.
 
 **Kolom dan nilainya mengikuti kode**, bukan karangan: dropdown pada Jenjang
 Jabatan, Status Kepegawaian, Pola Kerja, dan Aktif diambil dari `JOB_LEVELS`,
-`EMPLOYEE_TYPES`, dan `WORK_PATTERNS` di `src/lib/constants.ts`. Labelnya
+`EMPLOYEE_TYPES`, `WORK_PATTERNS`, `EDUCATION_LEVELS`, dan `BLOOD_TYPES`
+di `src/lib/constants.ts`. Labelnya
 Indonesia supaya HRD tidak perlu tahu kode internalnya; pemetaan kembali ke
 kode dilakukan saat impor.
 
@@ -85,3 +86,33 @@ keduanya dilaporkan sebagai catatan di pratinjau, bukan diselaraskan diam-diam.
 
 `scripts/_buat-template-pegawai.py` (butuh `openpyxl`). Templatenya sendiri
 di-commit supaya HRD bisa langsung mengunduh tanpa menjalankan apa pun.
+
+## Data diri (Fase 60)
+
+Empat kolom terakhir sebelum `Cek` — Tempat Lahir, Tanggal Lahir, Pendidikan
+Terakhir, Golongan Darah — **semuanya opsional.** Berkas yang sudah terlanjur
+diisi sebelum kolom ini ada tetap bisa diimpor apa adanya.
+
+**Golongan darah wajib menyebut tandanya.** `A` saja ditolak; yang diterima
+`A+` atau `A−`. Ini satu-satunya tempat di importer yang menolak sesuatu yang
+"jelas maksudnya", dan itu disengaja: pembanding umum di importer membuang
+tanda hubung supaya "Non-Shift" cocok dengan "NON_SHIFT" — kalau golongan darah
+ikut jalur itu, `A` dan `A−` menjadi teks yang sama persis dan orang yang
+menulis `A` tercatat A-negatif. Golongan darah yang salah dipakai justru pada
+saat tidak ada waktu memeriksanya ulang. Yang belum tahu memilih **Tidak
+diketahui**, bukan mengosongkan atau menebak.
+
+**Tanggal lahir diperiksa terhadap Tanggal Bergabung.** Lahir pada atau setelah
+tanggal bergabung ditolak — bentuk salah ketik paling mungkin adalah dua kolom
+tanggal yang tertukar, dan tanpa pemeriksaan ini ucapan ulang tahun muncul di
+hari yang salah selamanya tanpa ada yang tahu sebabnya.
+
+### Membangkitkan ulang berkasnya
+
+```
+python3 scripts/_buat-template-pegawai.py
+```
+
+Jalurnya relatif terhadap skrip. Sebelum Fase 60 ia menunjuk jalur mutlak ke
+folder lama; setelah proyek dipindah ke `APP-Perumnet`, skrip tetap melaporkan
+"tersimpan" sambil menulis ke tempat yang tidak dibaca siapa pun.
