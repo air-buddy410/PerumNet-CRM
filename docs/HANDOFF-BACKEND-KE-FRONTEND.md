@@ -1204,6 +1204,52 @@ tetap ada.
 
 ---
 
+## 25. ⚠️ Formulir ganti password tersembunyi padahal sudah bisa
+
+**Satu kondisi, dan 23 orang terdampak sekarang juga.**
+
+Di `src/app/(app)/profile/page.tsx:58`:
+
+```ts
+const isCentralIdentity = auth.provider === "MAILSERVER" || auth.provider === "OIDC";
+```
+
+Blok `isCentralIdentity` menampilkan *"Password dikelola oleh identity
+mailserver terpusat. CRM tidak menyimpan, menampilkan, atau mengirim
+password"* — lalu menyembunyikan formulirnya.
+
+Kalimat itu **benar untuk OIDC, tidak lagi benar untuk MAILSERVER.**
+
+Sejak Fase 54, mengganti password dari profil di mode MAILSERVER **benar-benar
+mengubah password surel di mailcow** — setelah password lama diverifikasi
+lebih dulu ke mailserver. Mesinnya sudah jadi, teruji, dan sudah jalan di
+produksi.
+
+### Perbaikannya
+
+**Percayai `auth.passwordChangeAvailable`, jangan hitung ulang dari
+`provider`.** Nilai itu sudah mengikuti aturan yang benar: menyala bila CRM
+memang bisa mengubah kredensial yang dipakai untuk masuk, mati untuk OIDC.
+
+Teksnya juga perlu disesuaikan — sekarang yang berganti adalah **password
+surel**, dan itu sebaiknya disebut terang-terangan supaya orang tahu password
+webmail-nya ikut berubah:
+
+> Mengganti password di sini mengubah password surel Anda. Password yang sama
+> dipakai untuk masuk CRM maupun webmail.
+
+Blok "dikelola penyedia identitas" tetap dipertahankan untuk OIDC — jangan
+dihapus, hanya jangan dipakai untuk MAILSERVER.
+
+### Yang tidak perlu kamu urus
+
+Password lama tetap diverifikasi ke mailserver sebelum apa pun berubah,
+minimal 10 karakter ditegakkan server, dan sesi di perangkat lain ikut
+dimatikan. Pesan galat sudah membedakan "password lama salah" dari "mailserver
+tidak terjawab".
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
