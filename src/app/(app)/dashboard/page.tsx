@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { initialsOf } from "@/lib/avatar";
+import { birthdayHeadline } from "@/lib/birthday";
+import { birthdaysToday } from "@/lib/birthday-service";
 import { PERMISSIONS, APPROVAL_STATUS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
 import { isEligibleApprover } from "@/lib/approval";
@@ -14,7 +17,7 @@ export default async function DashboardPage() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  const [activeUsers, roleCount, pendingApprovals, auditToday, pendingAll, recentRequests] =
+  const [activeUsers, roleCount, pendingApprovals, auditToday, pendingAll, recentRequests, birthdays] =
     await Promise.all([
       db.user.count({ where: { isActive: true } }),
       db.role.count(),
@@ -33,6 +36,7 @@ export default async function DashboardPage() {
         orderBy: { createdAt: "desc" },
         take: 5,
       }),
+      birthdaysToday(),
     ]);
 
   const myPending = pendingAll
@@ -71,6 +75,35 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </section>
+
+      {birthdays.length > 0 && (
+        <section className="crm-panel crm-birthday-panel" aria-labelledby="birthday-panel-title">
+          <div className="crm-panel-heading">
+            <div>
+              <h2 id="birthday-panel-title">{birthdayHeadline(birthdays)}</h2>
+              <p>Ucapan untuk rekan yang berulang tahun hari ini.</p>
+            </div>
+          </div>
+          <ul className="crm-birthday-list">
+            {birthdays.map((person) => (
+              <li key={person.employeeId} className="crm-birthday-row">
+                <div className="crm-birthday-avatar" aria-hidden={person.avatarUrl ? undefined : true}>
+                  {person.avatarUrl ? (
+                    <img src={person.avatarUrl} alt={`Foto profil ${person.fullName}`} />
+                  ) : (
+                    <span>{initialsOf(person.fullName)}</span>
+                  )}
+                </div>
+                <div className="crm-birthday-copy">
+                  <strong>{person.fullName}</strong>
+                  <span>{[person.jobTitle, person.divisionName].filter(Boolean).join(" · ") || "Rekan PerumNet"}</span>
+                  <p>{person.greeting}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="crm-dashboard-panels">
         <div className="crm-panel">

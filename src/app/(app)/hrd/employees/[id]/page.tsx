@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import {
   EMPLOYEE_TYPES,
+  BLOOD_TYPES,
+  EDUCATION_LEVELS,
   JOB_LEVELS,
   PERMISSIONS,
   USER_LEVEL_LABELS,
@@ -20,6 +22,7 @@ import {
 import { cardInvalidReason } from "@/lib/employee-card";
 import { loadEmployeeCards } from "@/lib/employee-card-service";
 import { ActiveBadge, BackLink, Flash, PageHeader } from "@/components/ui";
+import { formatUiDate } from "@/components/ui-formatters";
 import { EmployeeCardPanel, type EmployeeCardView } from "@/components/employee-card-panel";
 import { EmployeeForm, type EmployeeFormRow } from "../employee-form";
 
@@ -28,6 +31,8 @@ export const metadata = { title: "Detail Karyawan" };
 const employeeTypeLabels = Object.fromEntries(EMPLOYEE_TYPES) as Record<string, string>;
 const jobLevelLabels = Object.fromEntries(JOB_LEVELS) as Record<string, string>;
 const workPatternLabels = Object.fromEntries(WORK_PATTERNS) as Record<string, string>;
+const educationLabels = Object.fromEntries(EDUCATION_LEVELS) as Record<string, string>;
+const bloodTypeLabels = Object.fromEntries(BLOOD_TYPES) as Record<string, string>;
 
 const iso = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : null);
 
@@ -148,7 +153,7 @@ export default async function EmployeeDetailPage({
       {phase === "DUE_SOON" && employee.contractEndAt && (
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           Kontrak berakhir dalam {contractRemainingDays(employee.contractEndAt, now)} hari
-          ({employee.contractEndAt.toLocaleDateString("id-ID")}). Pastikan HRD menindaklanjuti sebelum
+          ({formatUiDate(employee.contractEndAt)}). Pastikan HRD menindaklanjuti sebelum
           akun dibekukan otomatis.
         </div>
       )}
@@ -161,10 +166,10 @@ export default async function EmployeeDetailPage({
       {employee.user?.frozenAt && (
         <div className="mb-5 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <p className="font-medium">
-            Akun {employee.user.username} beku sejak {employee.user.frozenAt.toLocaleDateString("id-ID")}.
+            Akun {employee.user.username} beku sejak {formatUiDate(employee.user.frozenAt)}.
           </p>
           <p className="mt-1">
-            {employee.user.freezeReason ?? "Tanpa keterangan."} Akan diarsipkan pada {archiveDueAt(employee.user.frozenAt).toLocaleDateString("id-ID")}.
+            {employee.user.freezeReason ?? "Tanpa keterangan."} Akan diarsipkan pada {formatUiDate(archiveDueAt(employee.user.frozenAt))}.
           </p>
           {canViewUser && (
             <Link href={`/settings/users/${employee.user.id}`} className="mt-2 inline-block text-sky-700 underline">
@@ -185,12 +190,25 @@ export default async function EmployeeDetailPage({
               <DetailField label="Jenjang jabatan" value={jobLevelLabels[employee.jobLevel] ?? employee.jobLevel} />
               <DetailField label="Jenis karyawan" value={employeeTypeLabels[employee.employeeType] ?? employee.employeeType} />
               <DetailField label="Pola kerja" value={workPatternLabels[employee.workPattern] ?? employee.workPattern} />
-              <DetailField label="Tanggal bergabung" value={employee.joinedAt.toLocaleDateString("id-ID")} />
+              <DetailField label="Tanggal bergabung" value={formatUiDate(employee.joinedAt)} />
               <DetailField label="Status data pegawai" value={employee.isActive ? "Aktif" : "Nonaktif"} />
               <div className="min-w-0 sm:col-span-2">
                 <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Alamat</dt>
                 <dd className="mt-1 whitespace-pre-wrap break-words text-sm font-medium text-slate-700">{employee.address || "—"}</dd>
               </div>
+            </dl>
+          </section>
+
+          <section className="card p-6" aria-labelledby="personal-data-title">
+            <h2 id="personal-data-title" className="mb-2 text-lg font-semibold text-slate-700">Data diri</h2>
+            <p className="mb-5 text-sm leading-relaxed text-slate-500">
+              Data yang dicocokkan HRD dengan dokumen kepegawaian. Golongan darah hanya tersedia untuk akses HRD.
+            </p>
+            <dl className="grid min-w-0 gap-x-6 gap-y-5 sm:grid-cols-2">
+              <DetailField label="Tempat lahir" value={employee.birthPlace} />
+              <DetailField label="Tanggal lahir" value={formatUiDate(employee.birthDate)} />
+              <DetailField label="Pendidikan terakhir" value={employee.education ? (educationLabels[employee.education] ?? employee.education) : null} />
+              <DetailField label="Golongan darah" value={employee.bloodType ? (bloodTypeLabels[employee.bloodType] ?? employee.bloodType) : null} />
             </dl>
           </section>
 
@@ -201,8 +219,8 @@ export default async function EmployeeDetailPage({
             ) : (
               <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-3">
                 <DetailField label="Status" value={phase === "ENDED" ? "Berakhir" : phase === "DUE_SOON" ? "Segera berakhir" : "Berjalan"} />
-                <DetailField label="Mulai" value={employee.contractStartAt?.toLocaleDateString("id-ID")} />
-                <DetailField label="Berakhir" value={employee.contractEndAt?.toLocaleDateString("id-ID")} />
+                <DetailField label="Mulai" value={formatUiDate(employee.contractStartAt)} />
+                <DetailField label="Berakhir" value={formatUiDate(employee.contractEndAt)} />
               </dl>
             )}
           </section>

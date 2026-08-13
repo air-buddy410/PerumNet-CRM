@@ -8,6 +8,7 @@ import {
   uploadEmployeePhotoAction,
 } from "@/app/(app)/hrd/actions";
 import { EmployeeCardPreview, type EmployeeCardPreviewData } from "@/components/employee-card-preview";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export type EmployeeCardView = {
   id: string;
@@ -25,7 +26,7 @@ export type EmployeeCardView = {
 };
 
 function dateLabel(value: Date | null) {
-  return value ? value.toLocaleDateString("id-ID") : "—";
+  return formatUiDate(value);
 }
 
 export function EmployeeCardPanel({

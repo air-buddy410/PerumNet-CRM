@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import type { TerminationSnapshot } from "@/lib/termination";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Berita Acara Terminasi" };
 
@@ -199,7 +200,7 @@ export default async function TerminationPrintPage({
                 {snapshot.outstandingInvoices.map((i) => (
                   <tr key={i.number}>
                     <td>{i.number}</td>
-                    <td>{new Date(i.dueAt).toLocaleDateString("id-ID")}</td>
+                    <td>{formatUiDate(i.dueAt, "-")}</td>
                     <td>{Number(i.outstanding).toLocaleString("id-ID")}</td>
                   </tr>
                 ))}

@@ -196,7 +196,7 @@ export default async function SubscriptionDetailPage({
               {!canActivate && nextStatuses.includes("ACTIVE") && (
                 <p className="mt-3 text-xs text-amber-600">
                   Aktivasi memerlukan izin khusus — Sales tidak dapat mengaktifkan layanan
-                  (business rule 17).
+                  sesuai kewenangan aktivasi layanan.
                 </p>
               )}
             </div>

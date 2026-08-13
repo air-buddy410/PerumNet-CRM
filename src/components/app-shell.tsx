@@ -27,12 +27,21 @@ type CrmAppShellProps = {
 
 const SIDEBAR_STORAGE_KEY = "perumnet-crm.sidebar-collapsed";
 const CrmMenuContext = createContext<() => void>(() => undefined);
+const ROUTE_TITLE_OVERRIDES = [
+  ["/profile", "Profil Saya"],
+  ["/notifications", "Notifikasi"],
+] as const;
 
 export function useCrmMenu() {
   return useContext(CrmMenuContext);
 }
 
 function pageTitle(groups: NavGroup[], pathname: string) {
+  const override = ROUTE_TITLE_OVERRIDES
+    .filter(([href]) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort(([a], [b]) => b.length - a.length)[0]?.[1];
+  if (override) return override;
+
   const item = groups
     .flatMap((group) => group.items)
     .filter((candidate) => pathname === candidate.href || pathname.startsWith(`${candidate.href}/`))

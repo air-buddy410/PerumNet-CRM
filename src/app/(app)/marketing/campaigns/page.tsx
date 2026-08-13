@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatRupiah, statusLabel } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
 import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Campaigns" };
 const sortOptions: readonly TableSortOption[] = [
@@ -81,7 +82,7 @@ export default async function CampaignsPage({
                   <td className="td">{c.name}</td>
                   <td className="td">{c.channel}</td>
                   <td className="td whitespace-nowrap text-xs text-slate-500">
-                    {c.startDate ? c.startDate.toLocaleDateString("id-ID") : "-"} — {c.endDate ? c.endDate.toLocaleDateString("id-ID") : "-"}
+                    {formatUiDate(c.startDate, "-")} — {formatUiDate(c.endDate, "-")}
                   </td>
                   <td className="td">{formatRupiah(c.budget)}</td>
                   <td className="td">{c._count.leads} / {c.targetLeads}</td>

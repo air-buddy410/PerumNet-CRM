@@ -10,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { formatUiDate } from "@/components/ui-formatters";
 import { projectReconciliation } from "@/lib/project";
 import {
   saveBomLineAction,
@@ -124,8 +125,8 @@ export default async function ProjectDetailPage({
               <div>
                 <dt className="text-xs uppercase tracking-wide text-slate-400">Periode</dt>
                 <dd className="mt-0.5 text-sm">
-                  {project.startDate ? project.startDate.toLocaleDateString("id-ID") : "—"} s.d.{" "}
-                  {project.endDate ? project.endDate.toLocaleDateString("id-ID") : "—"}
+                  {formatUiDate(project.startDate)} s.d.{" "}
+                  {formatUiDate(project.endDate)}
                 </dd>
               </div>
               {project.closedAt && (
@@ -299,7 +300,7 @@ export default async function ProjectDetailPage({
             )}
             {docs.length === 0 ? (
               <p className="text-xs text-slate-400">
-                Belum ada — wajib sebelum proyek ditutup (PRD §19).
+                Belum ada dokumen. Dokumen wajib tersedia sebelum proyek ditutup.
               </p>
             ) : (
               <ul className="space-y-1">
@@ -322,8 +323,8 @@ export default async function ProjectDetailPage({
             <div className="card p-5">
               <h2 className="mb-3 text-sm font-medium">Tutup Proyek</h2>
               <p className="mb-3 text-xs text-slate-500">
-                Syarat (PRD §19): material dipertanggungjawabkan, advance selesai, tidak ada
-                transaksi menggantung, dokumentasi ada.
+                Sebelum ditutup, pastikan material sudah dipertanggungjawabkan, uang muka selesai,
+                tidak ada transaksi menggantung, dan dokumentasi lengkap.
               </p>
               <form action={closeProjectAction}>
                 <input type="hidden" name="projectId" value={project.id} />

@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/rbac";
 import { profileView } from "@/lib/profile";
-import { JOB_LEVELS, USER_LEVEL_LABELS } from "@/lib/constants";
+import { initialsOf } from "@/lib/avatar";
+import { BLOOD_TYPES, EDUCATION_LEVELS, JOB_LEVELS, USER_LEVEL_LABELS } from "@/lib/constants";
 import { PageHeader, Flash } from "@/components/ui";
 import { ProfileContactForm } from "@/components/profile-contact-form";
 import { ProfilePasswordForm } from "@/components/profile-password-form";
+import { ProfileAvatarForm } from "@/components/profile-avatar-form";
+import { formatUiDate } from "@/components/ui-formatters";
 import { BadgeCheck, BriefcaseBusiness, Building2, KeyRound, LockKeyhole, Mail, Phone, ShieldCheck, UserRound } from "lucide-react";
-import { updateContactAction, changePasswordAction } from "./actions";
+import { changePasswordAction, removeAvatarAction, updateContactAction, uploadAvatarAction } from "./actions";
 
 export const metadata = { title: "Profil" };
 
@@ -23,16 +26,11 @@ const workPatternLabels: Record<string, string> = {
 };
 
 const jobLevelLabels = Object.fromEntries(JOB_LEVELS) as Record<string, string>;
+const educationLabels = Object.fromEntries(EDUCATION_LEVELS) as Record<string, string>;
+const bloodTypeLabels = Object.fromEntries(BLOOD_TYPES) as Record<string, string>;
 
 function formatJoinedAt(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  return formatUiDate(value);
 }
 
 function ProfileField({ label, value }: { label: string; value: string | null | undefined }) {
@@ -71,8 +69,12 @@ export default async function ProfilePage({
       <Flash ok={sp.ok} error={sp.error} />
 
       <section className="crm-profile-hero card" aria-labelledby="profile-overview-title">
-        <div className="crm-profile-avatar" aria-hidden="true">
-          {user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
+        <div className="crm-profile-avatar" role="img" aria-label={user.avatarUrl ? "Foto profil aplikasi" : `Inisial ${initialsOf(user.name)}`}>
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt={`Foto profil ${user.name}`} />
+          ) : (
+            <span aria-hidden="true">{initialsOf(user.name)}</span>
+          )}
         </div>
         <div className="crm-profile-hero-copy">
           <span className="crm-profile-eyebrow">Identitas akun</span>
@@ -85,6 +87,12 @@ export default async function ProfilePage({
             </span>
             <span className="crm-profile-auth-source"><Mail aria-hidden="true" /> {providerLabel}</span>
           </div>
+          <p className="crm-profile-avatar-note">Foto ini hanya untuk tampilan aplikasi, bukan foto resmi kartu pegawai.</p>
+          <ProfileAvatarForm
+            currentUrl={user.avatarUrl}
+            uploadAction={uploadAvatarAction}
+            removeAction={removeAvatarAction}
+          />
         </div>
       </section>
 
@@ -120,6 +128,10 @@ export default async function ProfilePage({
               <ProfileField label="Jenjang jabatan" value={jobLevelLabels[employee.jobLevel] ?? employee.jobLevel} />
               <ProfileField label="Mulai kontrak" value={formatJoinedAt(employee.contractStartAt)} />
               <ProfileField label="Berakhir kontrak" value={formatJoinedAt(employee.contractEndAt)} />
+              <ProfileField label="Tempat lahir" value={employee.birthPlace} />
+              <ProfileField label="Tanggal lahir" value={formatJoinedAt(employee.birthDate)} />
+              <ProfileField label="Pendidikan terakhir" value={employee.education ? (educationLabels[employee.education] ?? employee.education) : null} />
+              <ProfileField label="Golongan darah" value={employee.bloodType ? (bloodTypeLabels[employee.bloodType] ?? employee.bloodType) : null} />
             </dl>
           ) : <div className="crm-profile-empty">Belum ada data pegawai yang tertaut ke akun ini.</div>}
         </section>

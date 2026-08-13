@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, EmptyState } from "@/components/ui";
 import { ArchiveRestoreButton } from "@/components/archive-restore-button";
+import { formatUiDate } from "@/components/ui-formatters";
 import { listArchive, archivedEntityTypes, isRestorable } from "@/lib/archive";
 import { restoreArchivedAction } from "./actions";
 
@@ -155,7 +156,7 @@ export default async function TrashPage({
                       // Baris yang sudah dipulihkan TETAP tampil: tabelnya
                       // append-only dan pemulihan itu sendiri bagian dari jejak.
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] text-emerald-800">
-                        Dipulihkan {r.restoredAt.toLocaleDateString("id-ID")}
+                        Dipulihkan {formatUiDate(r.restoredAt)}
                         {r.restoredBy ? ` · ${r.restoredBy.name}` : ""}
                       </span>
                     ) : (

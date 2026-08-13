@@ -6,6 +6,7 @@ import { PERMISSIONS, IT_ASSET_TYPES, statusLabel, formatRupiah } from "@/lib/co
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
 import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams } from "@/components/table-controls";
 import { saveItAssetAction } from "../actions";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Domain, SSL & License" };
 
@@ -82,7 +83,7 @@ export default async function ItAssetsPage({
                       <td className="td text-xs">
                         {a.expiryDate ? (
                           <span className={warn ? "font-semibold text-red-600" : ""}>
-                            {a.expiryDate.toLocaleDateString("id-ID")}
+                            {formatUiDate(a.expiryDate)}
                             {left !== null && left >= 0 ? ` (${left} hari)` : left !== null ? " (lewat!)" : ""}
                           </span>
                         ) : (

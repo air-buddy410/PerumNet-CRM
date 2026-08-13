@@ -12,6 +12,7 @@ import {
   toggleBreakGlassAction,
 } from "../actions";
 import { archiveDueAt, FREEZE_GRACE_MONTHS } from "@/lib/employment";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Detail User" };
 
@@ -178,7 +179,7 @@ export default async function UserDetailPage({
                   <>
                     Beku sejak {formatDateTime(user.frozenAt)}
                     {user.freezeReason ? ` — ${user.freezeReason}` : ""}. Akan
-                    diarsipkan otomatis {archiveDueAt(user.frozenAt).toLocaleDateString("id-ID")}{" "}
+                    diarsipkan otomatis {formatUiDate(archiveDueAt(user.frozenAt))}{" "}
                     bila tidak dicairkan.
                   </>
                 ) : (

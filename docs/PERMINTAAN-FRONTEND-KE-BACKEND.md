@@ -32,6 +32,12 @@ field-nya di `docs/HANDOFF-BACKEND-KE-FRONTEND.md`, bukan di sini.
 
 Frontend sudah mengaktifkan form melalui server action resmi. Tidak ada token reset, password baru, atau request Mailcow langsung dari browser.
 
+### Konfirmasi rencana data diri — tanggal lahir dan golongan darah
+- **Layar:** `/profile`, `/hrd/employees/[id]`, form `/hrd/employees`, dan panel ulang tahun dashboard.
+- **Butuh:** Handoff Fase 59/60 menyebut `profileView.employee.birthPlace`, `birthDate`, `education`, `bloodType`, konstanta `EDUCATION_LEVELS`/`BLOOD_TYPES`, serta loader `birthdaysToday()` sudah tersedia. Mohon konfirmasi rencana final: apakah empat field ini hanya diisi melalui impor Excel, atau form pegawai juga harus dapat membuat/mengubahnya? Saat ini `saveEmployeeAction` belum meneruskan empat field tersebut.
+- **Kenapa tidak bisa di sisi frontend:** frontend dapat menampilkan data read-only dan melakukan validasi kenyamanan, tetapi tidak boleh mengarang persistence atau mengirim field yang belum diterima action. Jika form pegawai harus menjadi sumber input, action/service perlu menerima dan memvalidasi field dengan permission `hrd.manage`.
+- **Batas UI yang dikunci:** golongan darah hanya tampil di profil pegawai sendiri dan detail pegawai dengan `hrd.view`; tidak di daftar, ekspor, atau verifikasi kartu publik. `UNKNOWN` ditampilkan sebagai “Tidak diketahui”; tanggal lahir tidak menjadi filter dan umur tidak ditampilkan.
+
 ### Pagination dan sorting list bertabel
 - **Layar:** seluruh halaman list bertabel; loader khusus seperti `/settings/trash` termasuk bila kontraknya sudah mendukung parameter.
 - **Butuh:** loader permission-scoped menerima `page`, `pageSize`, `sort`, `direction`, filter/pencarian yang ada, lalu mengembalikan row page aktif dan `totalCount`. Whitelist sort serta tie-breaker stabil harus diterapkan di server menggunakan `count` + `skip` + `take`.

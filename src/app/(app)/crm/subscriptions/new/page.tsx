@@ -80,7 +80,7 @@ export default async function NewSubscriptionPage({
           </div>
           <div>
             <label className="label" htmlFor="ipAddress">IP Address</label>
-            <input id="ipAddress" name="ipAddress" className="input" placeholder="opsional — IPAM di Phase 5" />
+            <input id="ipAddress" name="ipAddress" className="input" placeholder="opsional — isi jika alamat IP sudah ditetapkan" />
           </div>
           <div className="sm:col-span-2">
             <label className="label" htmlFor="notes">Catatan</label>

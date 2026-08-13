@@ -13,6 +13,7 @@ import {
   archiveDueAt,
 } from "@/lib/employment";
 import { EmployeeForm, type EmployeeFormRow } from "./employee-form";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Karyawan" };
 const sortOptions: readonly TableSortOption[] = [
@@ -40,7 +41,7 @@ function ContractCell({
   // "aman" pada sesuatu yang tidak ada.
   if (phase === "NONE") return <span className="text-slate-400">—</span>;
 
-  const due = contractEndAt!.toLocaleDateString("id-ID");
+  const due = formatUiDate(contractEndAt);
   const remaining = contractRemainingDays(contractEndAt!, now);
 
   if (phase === "ENDED") {
@@ -133,11 +134,11 @@ export default async function EmployeesPage({
         <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm">
           <p className="font-medium text-sky-900">
             Akun {editRow.user.username} beku sejak{" "}
-            {editRow.user.frozenAt.toLocaleDateString("id-ID")}
+            {formatUiDate(editRow.user.frozenAt)}
           </p>
           <p className="mt-1 text-sky-800">
             {editRow.user.freezeReason ?? "Tanpa keterangan."} Akan diarsipkan{" "}
-            {archiveDueAt(editRow.user.frozenAt).toLocaleDateString("id-ID")} bila tidak dicairkan.
+            {formatUiDate(archiveDueAt(editRow.user.frozenAt))} bila tidak dicairkan.
             Data kepegawaian tetap utuh.
           </p>
           <Link
@@ -150,7 +151,8 @@ export default async function EmployeesPage({
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-        <div className="card overflow-x-auto">
+        <div className="crm-list-column">
+          <div className="card overflow-x-auto">
           {employees.length === 0 ? (
             <EmptyState message="Belum ada karyawan." />
           ) : (
@@ -231,9 +233,10 @@ export default async function EmployeesPage({
               </tbody>
             </table>
           )}
-        </div>
+          </div>
 
         <TableControls basePath="/hrd/employees" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
+        </div>
 
         {canManage && (
           <div className="card h-fit p-5">

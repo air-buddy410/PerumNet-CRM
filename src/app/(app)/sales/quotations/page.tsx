@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatRupiah, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
 import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
+import { formatUiDate } from "@/components/ui-formatters";
 
 export const metadata = { title: "Quotations" };
 const sortOptions: readonly TableSortOption[] = [
@@ -85,7 +86,7 @@ export default async function QuotationsPage({
                     {q.discount > BigInt(0) ? formatRupiah(q.discount) : "-"}
                   </td>
                   <td className="td whitespace-nowrap text-xs">
-                    {q.validUntil ? q.validUntil.toLocaleDateString("id-ID") : "-"}
+                    {formatUiDate(q.validUntil, "-")}
                   </td>
                   <td className="td">
                     <Badge value={q.status} label={statusLabel(q.status)} />

@@ -24,6 +24,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition, type ComponentType } from "react";
+import { formatUiDateTime, formatUiTime } from "@/components/ui-formatters";
 
 export type TicketWallStep = {
   id: string;
@@ -117,32 +118,15 @@ function toneForStatus(status: string) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) return "Belum dijadwalkan";
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Makassar",
-  }).format(new Date(value));
+  return formatUiDateTime(value, "Belum dijadwalkan");
 }
 
 function formatClock(value: Date) {
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Makassar",
-  }).format(value);
+  return formatUiTime(value);
 }
 
 function formatUpdatedAt(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Makassar",
-  }).format(new Date(value));
+  return formatUiTime(value);
 }
 
 function categoryIcon(category: string | null) {

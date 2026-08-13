@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatUiDateTime } from "@/components/ui-formatters";
 
 type FormAction = (formData: FormData) => Promise<void>;
 
@@ -72,7 +73,5 @@ export function RecoveryEvidencePanel({
 }
 
 function formatEvidenceDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Waktu tidak tersedia";
-  return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return formatUiDateTime(value, "Waktu tidak tersedia");
 }

@@ -1470,3 +1470,35 @@ Yang perlu kamu tahu saat menampilkannya:
   halaman verifikasi kartu publik.
 - **Tanggal lahir jangan dijadikan penyaring** di daftar pegawai, dan **jangan
   tampilkan umur** — panel ulang tahun pun tidak pernah menghitungnya.
+
+---
+
+## 29. Pratinjau impor punya tindakan ketiga: LENGKAPI (Fase 60)
+
+`PlanRow.action` sekarang `"CREATE" | "LENGKAPI" | "SKIP"`, dan `ImportPlan`
+membawa `willComplete` di samping `willCreate` dan `willSkip`.
+
+**LENGKAPI** berarti orangnya sudah terdaftar dan yang akan ditulis hanya empat
+kolom data diri. Sebelum ini baris seperti itu selalu `SKIP` — HRD mengisi 23
+baris, mengunggah, dan tidak ada satu pun yang tersimpan tanpa galat apa pun.
+
+Yang perlu ada di layar pratinjau:
+
+- **Bedakan bertiga secara visual.** LENGKAPI bukan CREATE dan bukan SKIP;
+  menyamakannya dengan salah satu membuat HRD salah menduga hasilnya.
+- **Tampilkan `notes` pada baris LENGKAPI.** Isinya sudah berbentuk
+  `"Tempat Lahir: (kosong) → Tabanan"`, satu baris per kolom yang berubah.
+  Perubahan yang tidak terlihat di pratinjau sama saja dengan perubahan yang
+  tidak diputuskan siapa pun.
+- **`notes` juga memuat peringatan nama berbeda** — "TIDAK diubah, perbaiki
+  lewat halaman pegawai". Jangan disembunyikan; itu satu-satunya tanda bahwa
+  suntingan nama di spreadsheet diabaikan dengan sengaja.
+
+Hasil penerapan (`ImportOutcome`) kini punya `completed: { employeeNo, fullName,
+fields }[]` di samping `created`. Tampilkan keduanya — "12 dibuat, 23
+dilengkapi" jauh lebih menenangkan daripada "12 dibuat" saja.
+
+**Sel kosong tidak menghapus apa pun.** Kalau kamu menulis teks bantuan di
+layar itu, katakan ini terang-terangan: mengosongkan sel berarti "tidak ada
+keterangan", bukan "hapus". Orang mengosongkan sel karena tidak tahu jauh lebih
+sering daripada karena ingin menghapus.

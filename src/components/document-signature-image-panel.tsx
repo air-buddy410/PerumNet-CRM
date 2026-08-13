@@ -3,6 +3,7 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { AlertTriangle, CheckCircle2, FileImage, ImageOff, UploadCloud } from "lucide-react";
+import { formatUiDateTime } from "@/components/ui-formatters";
 
 export type DocumentSignatureView = {
   id: string;
@@ -27,12 +28,7 @@ function roleLabel(role: string) {
   return ROLE_LABELS[role] ?? role;
 }
 function formatSignedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Waktu tidak tersedia";
-  return new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return formatUiDateTime(value, "Waktu tidak tersedia");
 }
 
 function isAcceptedImage(file: File) {

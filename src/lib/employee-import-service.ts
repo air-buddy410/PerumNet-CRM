@@ -32,13 +32,70 @@ import type { CurrentUser } from "@/lib/rbac";
 // melonggarkannya untuk SELURUH lampiran di aplikasi — bukti pekerjaan,
 // faktur, semuanya. Jejaknya cukup dari AuditLog.
 
+// ── Data diri: apa yang boleh dilengkapi lewat impor ────────────
+//
+// DAFTAR TERTUTUP, dan itu inti pengamanannya. Selama yang bisa ditulis lewat
+// jalur ini hanya empat kolom ini, mengunggah spreadsheet tidak akan pernah
+// bisa memindahkan divisi, memutus kontrak, atau mengubah atasan seseorang.
+
+interface DataDiri {
+  birthPlace: string | null;
+  birthDate: Date | null;
+  education: string | null;
+  bloodType: string | null;
+}
+
+const KOLOM_DIRI = [
+  { key: "birthPlace", judul: "Tempat Lahir" },
+  { key: "birthDate", judul: "Tanggal Lahir" },
+  { key: "education", judul: "Pendidikan Terakhir" },
+  { key: "bloodType", judul: "Golongan Darah" },
+] as const;
+
+function tampil(v: string | Date | null): string {
+  if (v === null) return "(kosong)";
+  return v instanceof Date ? v.toISOString().slice(0, 10) : v;
+}
+
+/**
+ * Perbedaan data diri antara berkas dan basis data.
+ *
+ * SEL KOSONG TIDAK MENGHAPUS APA PUN. Kosong di spreadsheet berarti "tidak ada
+ * keterangan", bukan "hapus yang sudah ada" — dan orang mengosongkan sel
+ * karena tidak tahu jauh lebih sering daripada karena ingin menghapus. Kalau
+ * kosong berarti hapus, satu berkas lama yang diunggah ulang akan menghapus
+ * data diri semua orang sekaligus.
+ */
+function personalChanges(
+  r: ImportRow,
+  ada: DataDiri
+): { key: string; ringkas: string }[] {
+  const out: { key: string; ringkas: string }[] = [];
+  for (const { key, judul } of KOLOM_DIRI) {
+    const baru = r[key];
+    if (baru === null) continue; // kosong = tidak ada keterangan
+    const lama = ada[key];
+    const sama =
+      lama instanceof Date && baru instanceof Date
+        ? lama.getTime() === baru.getTime()
+        : lama === baru;
+    if (!sama) out.push({ key, ringkas: `${judul}: ${tampil(lama)} → ${tampil(baru)}` });
+  }
+  return out;
+}
+
 /** Yang akan terjadi pada satu baris bila impor diterapkan. */
 export interface PlanRow {
   rowNumber: number;
   fullName: string;
   /** Kosong berarti NIK akan diterbitkan sistem saat penerapan. */
   employeeNo: string;
-  action: "CREATE" | "SKIP";
+  /**
+   * LENGKAPI (Fase 60) — pegawainya sudah ada, dan yang ditulis HANYA empat
+   * kolom data diri yang masih kosong atau berbeda. Tidak ada tindakan yang
+   * mengubah nama, divisi, kontrak, jabatan, atau atasan lewat jalur ini.
+   */
+  action: "CREATE" | "LENGKAPI" | "SKIP";
   /** Alasan dilewati, untuk SKIP. */
   reason: string | null;
   /** Catatan yang tidak menghalangi penerapan. */
@@ -53,11 +110,14 @@ export interface ImportPlan {
   /** Baris kosong yang dilewati — template menyediakan 200. */
   blankRows: number;
   willCreate: number;
+  /** Pegawai yang sudah ada dan hanya dilengkapi data dirinya. */
+  willComplete: number;
   willSkip: number;
 }
 
 export interface ImportOutcome {
   created: { rowNumber: number; employeeNo: string; fullName: string }[];
+  completed: { employeeNo: string; fullName: string; fields: string[] }[];
   skipped: number;
 }
 
@@ -119,7 +179,13 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
   const [byNumber, byName, users, refByNumber, refByName] = await Promise.all([
     db.employee.findMany({
       where: { employeeNo: { in: numbers } },
-      select: { id: true, employeeNo: true, fullName: true },
+      // Data diri ikut dibaca supaya pratinjau bisa menyebut APA yang berubah,
+      // bukan sekadar "akan dilengkapi". Perubahan yang tidak terlihat di
+      // pratinjau sama saja dengan perubahan yang tidak diputuskan siapa pun.
+      select: {
+        id: true, employeeNo: true, fullName: true,
+        birthPlace: true, birthDate: true, education: true, bloodType: true,
+      },
     }),
     db.employee.findMany({
       where: { fullName: { in: names } },
@@ -159,6 +225,34 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
     // ── Sudah ada? ──
     const taken = r.employeeNo ? existingNo.get(r.employeeNo) : undefined;
     if (taken) {
+      // Fase 60 — orangnya sudah ada, tapi berkasnya mungkin membawa data diri
+      // yang belum pernah terisi. Sebelum ini seluruh barisnya dilewati, jadi
+      // HRD mengisi empat kolom untuk 23 orang lalu mengunggahnya dan TIDAK
+      // ADA yang tersimpan — tanpa satu pun galat.
+      //
+      // Yang ditulis HANYA empat kolom itu. Nama, jabatan, divisi, kontrak,
+      // dan atasan tidak pernah berubah lewat jalur ini: semuanya punya
+      // konsekuensi RBAC atau kepegawaian, dan mengubahnya sebagai efek
+      // samping mengunggah spreadsheet berarti memindahkan kewenangan orang
+      // tanpa ada yang memutuskan.
+      const berubah = personalChanges(r, taken);
+      if (berubah.length) {
+        if (taken.fullName.toLowerCase() !== r.fullName.toLowerCase()) {
+          // Dicatat, bukan diterapkan. Kalau didiamkan, HRD mengira namanya
+          // ikut terbetulkan padahal tidak.
+          notes.push(
+            `Nama di berkas ("${r.fullName}") berbeda dari data ("${taken.fullName}"). ` +
+              `TIDAK diubah — perbaiki lewat halaman pegawai bila memang perlu.`
+          );
+        }
+        plan.push({
+          ...base(r),
+          action: "LENGKAPI",
+          reason: null,
+          notes: [...notes, ...berubah.map((c) => c.ringkas)],
+        });
+        continue;
+      }
       plan.push({
         ...base(r),
         action: "SKIP",
@@ -229,13 +323,15 @@ async function buildPlan(buf: Buffer): Promise<ImportPlan> {
   }
 
   const willCreate = plan.filter((p) => p.action === "CREATE").length;
+  const willComplete = plan.filter((p) => p.action === "LENGKAPI").length;
   return {
     ok: issues.length === 0,
     rows: plan,
     issues,
     blankRows: parsed.skipped,
     willCreate,
-    willSkip: plan.length - willCreate,
+    willComplete,
+    willSkip: plan.length - willCreate - willComplete,
   };
 }
 
@@ -348,15 +444,62 @@ export async function applyEmployeeImport(user: CurrentUser, file: File): Promis
     created.push({ rowNumber: r.rowNumber, employeeNo: saved?.employeeNo ?? "", fullName: r.fullName });
   }
 
+  // ── Melengkapi data diri pegawai yang sudah ada (Fase 60) ─────
+  //
+  // Dilakukan setelah pembuatan, dan SENGAJA tidak lewat saveEmployee():
+  // fungsi itu menyimpan seluruh catatan kepegawaian, jadi memakainya di sini
+  // berarti nama, jabatan, divisi, kontrak, dan atasan ikut ditulis ulang dari
+  // spreadsheet. Yang boleh berubah lewat jalur ini cuma empat kolom.
+  const toComplete = new Map(
+    plan.rows.filter((p) => p.action === "LENGKAPI").map((p) => [p.rowNumber, p.employeeNo])
+  );
+  const completed: ImportOutcome["completed"] = [];
+  for (const r of parsed.rows) {
+    const no = toComplete.get(r.rowNumber);
+    if (!no) continue;
+    const ada = await db.employee.findUnique({
+      where: { employeeNo: no },
+      select: {
+        id: true, fullName: true,
+        birthPlace: true, birthDate: true, education: true, bloodType: true,
+      },
+    });
+    if (!ada) continue;
+
+    // Dihitung ULANG terhadap keadaan sekarang, bukan memakai hasil pratinjau —
+    // penerapan membaca ulang berkasnya, jadi ia tidak boleh bergantung pada
+    // apa pun yang sudah dihitung sebelumnya.
+    const berubah = personalChanges(r, ada);
+    if (!berubah.length) continue;
+
+    const data: Record<string, unknown> = {};
+    for (const c of berubah) data[c.key] = r[c.key as keyof ImportRow];
+    await db.employee.update({ where: { id: ada.id }, data });
+
+    await logAudit({
+      userId: user.id,
+      action: "EMPLOYEE_PERSONAL_UPDATE",
+      module: "hrd",
+      entityType: "Employee",
+      entityId: ada.id,
+      // Nilainya ikut dicatat: golongan darah yang salah baru ketahuan saat
+      // dibutuhkan, dan saat itu yang menolong hanya jejak siapa mengubah apa.
+      description: `Melengkapi data diri ${ada.fullName} dari berkas "${file.name}" — ${berubah.map((c) => c.ringkas).join("; ")}`,
+    });
+    completed.push({ employeeNo: no, fullName: ada.fullName, fields: berubah.map((c) => c.ringkas) });
+  }
+
   await logAudit({
     userId: user.id,
     action: "EMPLOYEE_IMPORT",
     module: "hrd",
     entityType: "Employee",
-    description: `Mengimpor ${created.length} pegawai dari berkas "${file.name}" (${plan.willSkip} dilewati karena sudah terdaftar).`,
+    description:
+      `Mengimpor ${created.length} pegawai dari berkas "${file.name}" ` +
+      `(${completed.length} dilengkapi data dirinya, ${plan.willSkip} dilewati karena sudah terdaftar).`,
   });
 
-  return { ok: true, data: { created, skipped: plan.willSkip } };
+  return { ok: true, data: { created, completed, skipped: plan.willSkip } };
 }
 
 /** Id atasan: dari baris yang baru dibuat, atau dari data yang sudah ada. */

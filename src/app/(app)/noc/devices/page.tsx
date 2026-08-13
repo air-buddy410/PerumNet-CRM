@@ -52,7 +52,8 @@ export default async function NetDevicesPage({
       <Flash ok={table.query.ok} error={table.query.error} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-        <div className="card overflow-x-auto">
+        <div className="crm-list-column">
+          <div className="card overflow-x-auto">
           {devices.length === 0 ? (
             <EmptyState message="Belum ada perangkat jaringan." />
           ) : (
@@ -94,8 +95,9 @@ export default async function NetDevicesPage({
               </tbody>
             </table>
           )}
-        </div>
+          </div>
         <TableControls basePath="/noc/devices" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
+        </div>
 
         {canManage && (
           <div className="card h-fit p-5">
