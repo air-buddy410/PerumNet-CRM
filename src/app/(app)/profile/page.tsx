@@ -55,7 +55,7 @@ export default async function ProfilePage({
   if (!profile) notFound();
 
   const { user, employee, auth } = profile;
-  const isCentralIdentity = auth.provider === "MAILSERVER" || auth.provider === "OIDC";
+  const isOidcIdentity = auth.provider === "OIDC";
   const providerLabel = auth.provider === "MAILSERVER"
     ? "Identity mailserver terpusat"
     : auth.provider === "OIDC"
@@ -153,10 +153,10 @@ export default async function ProfilePage({
           <span className="crm-profile-contract-badge"><BadgeCheck aria-hidden="true" /> {auth.provider}</span>
         </div>
         <div className="crm-profile-password-body">
-          {isCentralIdentity ? (
+          {isOidcIdentity ? (
             <div className="crm-profile-password-note"><Building2 aria-hidden="true" /><p>Password dikelola oleh {providerLabel.toLowerCase()}. CRM tidak menyimpan, menampilkan, atau mengirim password identity terpusat.</p></div>
           ) : auth.passwordChangeAvailable ? (
-            <div className="crm-profile-password-local"><p>Anda dapat mengganti password akun CRM lokal. Sesi aktif akan diperbarui setelah berhasil.</p><ProfilePasswordForm action={changePasswordAction} /></div>
+            <div className="crm-profile-password-local"><p>{auth.provider === "MAILSERVER" ? "Ganti password di sini untuk memperbarui password email, CRM, dan webmail. Sesi aktif akan diperbarui setelah berhasil." : "Anda dapat mengganti password akun CRM lokal. Sesi aktif akan diperbarui setelah berhasil."}</p><ProfilePasswordForm action={changePasswordAction} /></div>
           ) : (
             <div className="crm-profile-password-note"><Building2 aria-hidden="true" /><p>Perubahan password belum tersedia untuk penyedia identitas ini.</p></div>
           )}

@@ -7,6 +7,7 @@ import {
   revokeCardAction,
   uploadEmployeePhotoAction,
 } from "@/app/(app)/hrd/actions";
+import { EmployeeCardPreview, type EmployeeCardPreviewData } from "@/components/employee-card-preview";
 
 export type EmployeeCardView = {
   id: string;
@@ -20,6 +21,7 @@ export type EmployeeCardView = {
   issuedByName: string | null;
   revokedByName: string | null;
   invalidReason: string | null;
+  qrSvg: string | null;
 };
 
 function dateLabel(value: Date | null) {
@@ -29,17 +31,35 @@ function dateLabel(value: Date | null) {
 export function EmployeeCardPanel({
   employeeId,
   employeeName,
+  employeeNo,
+  jobTitle,
+  divisionName,
   photoAttachmentId,
   cards,
   canManage,
 }: {
   employeeId: string;
   employeeName: string;
+  employeeNo: string;
+  jobTitle: string | null;
+  divisionName: string | null;
   photoAttachmentId: string | null;
   cards: EmployeeCardView[];
   canManage: boolean;
 }) {
   const activeCard = cards.find((card) => card.status === "ACTIVE") ?? null;
+  const previewCard = activeCard ?? cards[0] ?? null;
+  const previewData: EmployeeCardPreviewData | null = previewCard
+    ? {
+        fullName: employeeName,
+        jobTitle,
+        divisionName,
+        employeeNo,
+        cardNumber: previewCard.cardNumber,
+        photoUrl: photoAttachmentId ? `/api/files/${photoAttachmentId}` : null,
+        qrSvg: previewCard.qrSvg,
+      }
+    : null;
 
   return (
     <section className="card min-w-0 p-5 sm:p-6" aria-labelledby="employee-card-title">
@@ -145,6 +165,51 @@ export function EmployeeCardPanel({
           )}
         </div>
       </div>
+
+      {previewData && previewCard && (
+        <div className="employee-card-preview-panel mt-6 border-t border-slate-100 pt-5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-slate-700">Pratinjau kartu B4</h3>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+                Sisi depan dan belakang memakai rasio ISO B4. Balik kartu untuk memeriksa informasi di sisi kedua.
+              </p>
+            </div>
+            {previewCard.qrSvg && !previewCard.invalidReason ? (
+              <a
+                href={`/hrd/employees/${employeeId}/card/print`}
+                className="btn-secondary shrink-0 justify-center text-xs"
+              >
+                Cetak dua sisi
+              </a>
+            ) : (
+              <span
+                className="employee-card-print-disabled shrink-0"
+                aria-disabled="true"
+                title={previewCard.invalidReason ?? "Menunggu QR verifikasi resmi dari server"}
+              >
+                {previewCard.invalidReason ? "Cetak tidak tersedia" : "Cetak menunggu QR"}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 max-w-[25rem]">
+            <EmployeeCardPreview data={previewData} />
+          </div>
+          {(!previewCard.qrSvg || previewCard.invalidReason) && (
+            <p className="mt-3 text-xs leading-relaxed text-amber-700">
+              {previewCard.invalidReason
+                ? `${previewCard.invalidReason} Preview tetap dapat dibalik, tetapi kartu fisik belum dapat dicetak.`
+                : "QR verifikasi resmi belum disediakan oleh loader backend. Preview tetap dapat dibalik, tetapi kartu fisik belum dapat dicetak."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!previewData && (
+        <div className="employee-card-empty mt-6 border-t border-slate-100 pt-5">
+          Belum ada kartu untuk dipratinjau. Terbitkan kartu terlebih dahulu setelah data pegawai siap.
+        </div>
+      )}
 
       {canManage && (
         <div className="mt-6 grid min-w-0 gap-4 border-t border-slate-100 pt-5 lg:grid-cols-2">

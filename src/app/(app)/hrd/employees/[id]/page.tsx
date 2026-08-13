@@ -31,6 +31,12 @@ const workPatternLabels = Object.fromEntries(WORK_PATTERNS) as Record<string, st
 
 const iso = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : null);
 
+function loaderQrSvg(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const qrSvg = (value as { qrSvg?: unknown }).qrSvg;
+  return typeof qrSvg === "string" && qrSvg.trim() ? qrSvg : null;
+}
+
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="min-w-0">
@@ -108,6 +114,7 @@ export default async function EmployeeDetailPage({
       },
       now,
     ),
+    qrSvg: loaderQrSvg(card),
   }));
   const phase = contractPhase(employee, now);
   const account = employee.user ? accountState(employee.user) : null;
@@ -217,6 +224,9 @@ export default async function EmployeeDetailPage({
           <EmployeeCardPanel
             employeeId={employee.id}
             employeeName={employee.fullName}
+            employeeNo={employee.employeeNo}
+            jobTitle={employee.jobTitle}
+            divisionName={employee.user?.division?.name ?? null}
             photoAttachmentId={employee.photoAttachmentId}
             cards={employeeCards}
             canManage={canManage}

@@ -58,3 +58,5 @@ stock.
 - **Layar:** `/hrd/employees/[id]`
 - **Butuh:** loader kartu mengembalikan `qrSvg` atau `verificationUrl` yang dibuat server untuk setiap kartu, atau kontrak resmi yang aman untuk memanggil `cardQrSvg` tanpa mengirim token mentah ke UI.
 - **Kenapa tidak bisa di sisi frontend:** `loadEmployeeCards()` saat ini hanya mengembalikan metadata kartu dan tidak mengembalikan `publicToken`; frontend tidak boleh mengambil token dengan query database langsung atau membuat QR dari NIK/nama.
+
+Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman scan publik, dan route print duplex. Sampai `qrSvg` resmi tersedia, preview menampilkan status `QR belum tersedia` dan print fisik tetap ditahan. Kontrak yang direkomendasikan: tambahkan `qrSvg: string | null` pada hasil `loadEmployeeCards()` dengan SVG yang dibuat server-side.

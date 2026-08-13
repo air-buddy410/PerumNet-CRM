@@ -1,4 +1,5 @@
 import { verifyCardToken } from "@/lib/employee-card-service";
+import { EmployeeCardPreview } from "@/components/employee-card-preview";
 
 // ── Halaman verifikasi kartu pegawai (Fase 50) ──────────────────
 //
@@ -25,9 +26,21 @@ export default async function VerifyPage({
   const { token } = await params;
   const hasil = await verifyCardToken(token);
 
+  const publicCard = hasil.valid
+    ? {
+        fullName: hasil.employeeName ?? "PerumNet",
+        jobTitle: hasil.jobTitle,
+        divisionName: null,
+        employeeNo: null,
+        cardNumber: hasil.cardNumber ?? "—",
+        photoUrl: hasil.photoUrl,
+        qrSvg: null,
+      }
+    : null;
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-sm">
+    <main className="employee-card-verify-page">
+      <div className="employee-card-verify-wrap">
         <div className="mb-6 text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
             PerumNet
@@ -37,7 +50,7 @@ export default async function VerifyPage({
           </h1>
         </div>
 
-        <div className="card overflow-hidden p-0">
+        <div className="employee-card-verify-status card overflow-hidden p-0">
           <div
             className={`px-5 py-4 text-center text-sm font-semibold text-white ${
               hasil.valid ? "bg-emerald-600" : "bg-rose-600"
@@ -46,26 +59,11 @@ export default async function VerifyPage({
             {hasil.valid ? "KARTU BERLAKU" : "KARTU TIDAK BERLAKU"}
           </div>
 
-          {hasil.valid ? (
-            <div className="space-y-4 p-6 text-center">
-              {hasil.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={hasil.photoUrl}
-                  alt={`Foto ${hasil.employeeName}`}
-                  className="mx-auto h-32 w-32 rounded-full object-cover ring-4 ring-emerald-100"
-                />
-              ) : (
-                <div className="mx-auto flex h-32 w-32 items-center justify-center rounded-full bg-slate-100 text-sm text-slate-400 ring-4 ring-slate-50">
-                  Tanpa foto
-                </div>
-              )}
-              <div>
-                <p className="text-lg font-semibold text-slate-800">{hasil.employeeName}</p>
-                {hasil.jobTitle && <p className="text-sm text-slate-500">{hasil.jobTitle}</p>}
-              </div>
-              <p className="font-mono text-xs tracking-wider text-slate-400">
-                {hasil.cardNumber}
+          {publicCard ? (
+            <div className="employee-card-verify-content">
+              <EmployeeCardPreview data={publicCard} mode="public" />
+              <p className="employee-card-verify-note">
+                Balik kartu untuk melihat sisi belakang. Halaman ini hanya menampilkan data publik yang diperlukan untuk verifikasi.
               </p>
             </div>
           ) : (
