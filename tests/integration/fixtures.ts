@@ -251,6 +251,13 @@ export async function resetTransactionalData() {
   await db.leaveRequest.deleteMany({});
   await db.overtimeRequest.deleteMany({});
   await db.shiftSchedule.deleteMany({});
+  // Kartu pegawai (Fase 49) terlewat saat model itu ditambahkan, dan baru
+  // ketahuan di Fase 50 — berkas tes mana pun yang membuat kartu langsung
+  // membuat penghapusan pegawai ditolak foreign key. Sama seperti relasi
+  // atasan di bawah, rujukan antar-kartu ditawar dulu menjadi null: satu kartu
+  // bisa menunjuk kartu yang digantikannya.
+  await db.employeeCard.updateMany({ data: { replacesId: null } });
+  await db.employeeCard.deleteMany({});
   await db.employee.updateMany({ data: { supervisorId: null } });
   await db.employee.deleteMany({});
   await db.userRole.deleteMany({});

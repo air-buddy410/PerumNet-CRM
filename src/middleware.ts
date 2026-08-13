@@ -7,7 +7,10 @@ const SESSION_COOKIE = "perumnet_session";
 // karena justru DI SITULAH sesi dibuat. Keduanya punya penjaganya sendiri:
 // `/start` hanya mengalihkan ke IdP, dan `/callback` menolak apa pun yang
 // state-nya tidak cocok dengan cookie yang kita terbitkan sendiri.
-const PUBLIC_PATHS = ["/login"];
+// Fase 50 — halaman verifikasi kartu dibuka pelanggan di depan pintu, tanpa
+// akun. Isinya sudah disaring publicVerification(): hanya nama, jabatan, foto,
+// dan nomor kartu, dan hanya bila kartunya berlaku.
+const PUBLIC_PATHS = ["/login", "/verify", "/api/verify/"];
 
 // Next.js middleware membangun URL dari hostname/port server (bukan Host header),
 // sehingga di belakang reverse proxy/tunnel redirect harus dibangun dari header.

@@ -1143,6 +1143,37 @@ Tidak ada kata sandi yang berubah otomatis. Reset tetap dilakukan IT.
 
 ---
 
+## 24. Verifikasi kartu publik (Fase 50) — SUDAH JADI, silakan dipoles
+
+Halaman `/verify/[token]` dan jalur fotonya sudah dibuat dan sudah diuji hidup
+tanpa login. Aku membuatnya sendiri karena ia berdiri di luar app shell — tidak
+menyentuh nav, layout, maupun `globals.css`, dan hanya memakai kelas yang sudah
+ada (`card`, palet slate/emerald/rose).
+
+**Silakan dipoles kalau kurang pas.** Yang JANGAN diubah cuma tiga hal, dan
+ketiganya soal apa yang tidak boleh bocor:
+
+1. **Jangan tampilkan apa pun selain nama, jabatan, foto, nomor kartu.**
+   Kartu dipakai di tempat umum sepanjang hari; anggap semua yang bisa dipindai
+   akan dilihat orang asing. NIK, divisi, telepon, email — tidak satu pun.
+
+2. **Kartu tidak berlaku TIDAK boleh menampilkan nama maupun foto.** Backend
+   sudah mengosongkannya, jadi jangan menambah fallback yang mengisinya lagi
+   dari sumber lain.
+
+3. **Foto memakai `hasil.photoUrl` apa adanya.** Ia menunjuk
+   `/api/verify/<token>/photo` — jalur publik berkunci token. JANGAN
+   diganti ke `/api/files/<id>`: itu butuh login, dan melonggarkannya akan
+   melonggarkan seluruh lampiran aplikasi (bukti pekerjaan, tanda tangan,
+   faktur).
+
+Halaman kartu tidak berlaku sengaja memuat peringatan agar pelanggan tidak
+memberi akses dan menghubungi PerumNet lewat nomor yang sudah dia kenal —
+bukan nomor yang diberikan orang yang membawa kartu itu. Kalimat itu sebaiknya
+tetap ada.
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan
