@@ -742,7 +742,9 @@ Acceptance QA tambahan mencakup preview tanpa perubahan, status konfigurasi, pen
 
 - `/hrd/employees/import` hanya tersedia bagi `hrd.manage`.
 - File `.xlsx` yang sama ditahan di state client untuk `previewEmployeeImportAction` dan `applyEmployeeImportAction`.
-- Preview memisahkan `CREATE`, `SKIP`, `issues`, `notes`, jumlah baris kosong, dan hasil nomor pegawai yang diterbitkan.
+- Preview membedakan `CREATE`, `LENGKAPI`, dan `SKIP`. Baris `LENGKAPI` hanya mengubah empat data diri yang diizinkan dan menampilkan `notes` per perubahan sebelum penerapan.
+- Ringkasan dan hasil penerapan menampilkan jumlah pegawai yang dibuat, dilengkapi, dan dilewati; hasil `completed` juga menampilkan field yang berubah.
+- Sel kosong berarti tidak ada keterangan dan tidak menghapus data yang sudah tersimpan.
 - Tombol Terapkan hanya aktif ketika `ImportPlan.ok === true`; penerapan tetap membaca ulang file dan bersifat all-or-nothing.
 
 ### Akun CRM dari mailbox

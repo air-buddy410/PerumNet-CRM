@@ -1,10 +1,17 @@
 "use client";
 
 import { useState, useTransition, type ChangeEvent } from "react";
-import { Badge } from "@/components/ui";
 import type { RowIssue } from "@/lib/employee-import";
 import type { ImportOutcome, ImportPlan } from "@/lib/employee-import-service";
 import { applyEmployeeImportAction, previewEmployeeImportAction } from "@/app/(app)/hrd/actions";
+
+type ImportAction = ImportPlan["rows"][number]["action"];
+
+const IMPORT_ACTION_META: Record<ImportAction, { label: string; className: string }> = {
+  CREATE: { label: "Buat", className: "is-approved" },
+  LENGKAPI: { label: "Lengkapi", className: "is-pending" },
+  SKIP: { label: "Lewati", className: "is-neutral" },
+};
 
 export function EmployeeImportWorkbench() {
   const [file, setFile] = useState<File | null>(null);
@@ -111,6 +118,7 @@ export function EmployeeImportWorkbench() {
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="crm-badge is-approved">Buat {plan.willCreate}</span>
+              <span className="crm-badge is-pending">Lengkapi {plan.willComplete}</span>
               <span className="crm-badge is-neutral">Lewati {plan.willSkip}</span>
               {plan.blankRows > 0 && <span className="crm-badge is-neutral">Kosong {plan.blankRows}</span>}
             </div>
@@ -145,12 +153,24 @@ export function EmployeeImportWorkbench() {
                 {plan.rows.map((row) => (
                   <tr key={row.rowNumber}>
                     <td className="td whitespace-nowrap">{row.rowNumber}</td>
-                    <td className="td">{row.fullName || "—"}</td>
+                    <td className="td max-w-[220px] break-words">{row.fullName || "—"}</td>
                     <td className="td whitespace-nowrap">{row.employeeNo || "Akan diterbitkan"}</td>
-                    <td className="td"><Badge value={row.action} label={row.action === "CREATE" ? "Buat" : "Lewati"} /></td>
-                    <td className="td max-w-[280px] break-words">{row.reason || "—"}</td>
+                    <td className="td align-top">
+                      <span className={`crm-badge ${IMPORT_ACTION_META[row.action].className} whitespace-nowrap`}>
+                        {IMPORT_ACTION_META[row.action].label}
+                      </span>
+                    </td>
+                    <td className="td max-w-[280px] break-words">
+                      {row.reason || (row.action === "LENGKAPI" ? "Data diri akan dilengkapi." : "—")}
+                    </td>
                     <td className="td max-w-[320px] break-words">
-                      {row.notes.length > 0 ? row.notes.join(" ") : "—"}
+                      {row.notes.length > 0 ? (
+                        <ul className="space-y-1">
+                          {row.notes.map((note, index) => (
+                            <li key={`${row.rowNumber}-note-${index}`} className="break-words">{note}</li>
+                          ))}
+                        </ul>
+                      ) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -172,9 +192,11 @@ export function EmployeeImportWorkbench() {
       {outcome && (
         <section className="card min-w-0 p-5 sm:p-6" aria-labelledby="employee-import-result-title">
           <h2 id="employee-import-result-title" className="text-lg font-semibold text-slate-700">Impor selesai</h2>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            {outcome.created.length} karyawan dibuat. {outcome.skipped} baris dilewati karena sudah terdaftar.
-          </p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-relaxed text-slate-500" role="status">
+            <span>{outcome.created.length} dibuat</span>
+            <span>{outcome.completed.length} dilengkapi</span>
+            <span>{outcome.skipped} dilewati karena sudah terdaftar</span>
+          </div>
           {outcome.created.length > 0 && (
             <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
               <table className="min-w-[520px] w-full">
@@ -191,6 +213,34 @@ export function EmployeeImportWorkbench() {
                       <td className="td whitespace-nowrap">{row.rowNumber}</td>
                       <td className="td whitespace-nowrap font-semibold">{row.employeeNo}</td>
                       <td className="td">{row.fullName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {outcome.completed.length > 0 && (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
+              <table className="min-w-[680px] w-full">
+                <thead className="bg-slate-50/70">
+                  <tr>
+                    <th className="th">NIK</th>
+                    <th className="th">Nama</th>
+                    <th className="th">Data dilengkapi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {outcome.completed.map((row) => (
+                    <tr key={row.employeeNo}>
+                      <td className="td whitespace-nowrap font-semibold">{row.employeeNo}</td>
+                      <td className="td max-w-[220px] break-words">{row.fullName}</td>
+                      <td className="td max-w-[420px] break-words">
+                        <ul className="space-y-1">
+                          {row.fields.map((field, index) => (
+                            <li key={`${row.employeeNo}-field-${index}`} className="break-words">{field}</li>
+                          ))}
+                        </ul>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
