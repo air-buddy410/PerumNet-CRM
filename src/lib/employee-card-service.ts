@@ -349,7 +349,10 @@ export async function verifyCardToken(
     {
       fullName: e.fullName,
       jobTitle: e.jobTitle,
-      photoUrl: e.photoAttachmentId ? `/api/files/${e.photoAttachmentId}` : null,
+      // Fase 50 — menunjuk jalur PUBLIK berkunci token, bukan /api/files yang
+      // butuh login dan izin hrd.view. Id lampirannya sengaja tidak pernah
+      // ikut keluar: yang beredar di halaman publik cuma tokennya.
+      photoUrl: e.photoAttachmentId ? `/api/verify/${token}/photo` : null,
     },
     now
   );
