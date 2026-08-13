@@ -22,7 +22,7 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 # (header, lebar, wajib?, catatan singkat)
 COLS = [
-    ("NIK",                 14, True,  "Huruf/angka/strip, 2-20 karakter. Harus unik."),
+    ("NIK",                 14, False, "KOSONGKAN saja - sistem menerbitkannya otomatis (1001, 1002, ...). Isi hanya bila orang ini sudah punya NIK lama."),
     ("Nama Lengkap",        26, True,  ""),
     ("Jabatan",             22, False, "Teks bebas, mis. Teknisi Lapangan"),
     ("Jenjang Jabatan",     16, True,  "Staff atau Leader"),
@@ -52,6 +52,7 @@ ws["A1"] = "Data Pegawai PerumNet"
 ws["A1"].font = Font(name=FONT, bold=True, size=14, color="1F4E79")
 ws["A2"] = (
     "Isi mulai baris 5. Kolom berlatar kuning WAJIB diisi. "
+    "Kolom NIK boleh dikosongkan - sistem yang menerbitkannya. "
     "Baris 4 adalah contoh - hapus sebelum dikirim. "
     "Kolom Cek terisi sendiri; perbaiki dulu semua yang bertanda PERIKSA."
 )
@@ -73,7 +74,7 @@ ws.row_dimensions[HDR_ROW].height = 30
 
 # ── Baris contoh ────────────────────────────────────────────────
 EXAMPLE = [
-    "EMP-001", "Teguh Santoso", "Teknisi Lapangan", "Staff", "Kontrak",
+    "", "Teguh Santoso", "Teknisi Lapangan", "Staff", "Kontrak",
     "Shift", "2026-01-06", "2026-01-06", "2026-12-31",
     "Jl. Melati No. 7, Denpasar", "", "teguh@perumnet.id", "Ya",
 ]
@@ -126,8 +127,8 @@ dropdown("M", ["Ya", "Tidak"], "Isian tidak dikenal", "Pilih Ya atau Tidak.")
 # dipakai penyapu untuk membekukan akun).
 for r in range(EX_ROW, LAST + 1):
     ws[f"N{r}"] = (
-        f'=IF(A{r}="","",'
-        f'IF(OR(B{r}="",D{r}="",E{r}="",F{r}="",G{r}="",M{r}=""),'
+        f'=IF(B{r}="","",'
+        f'IF(OR(D{r}="",E{r}="",F{r}="",G{r}="",M{r}=""),'
         f'"PERIKSA: ada kolom wajib yang kosong",'
         f'IF(AND(E{r}="Kontrak",I{r}=""),'
         f'"PERIKSA: Kontrak wajib punya Kontrak Berakhir",'
@@ -169,7 +170,9 @@ guide += [
     ("NIK Atasan", "Diisi NIK, bukan nama. Atasan harus ada di daftar ini atau sudah ada di sistem."),
     ("Email Akun CRM", "Hanya untuk yang akan punya akun sistem. Alamatnya harus sama persis dengan email di Authentik, kalau tidak yang bersangkutan tidak bisa login."),
     ("Format tanggal", "YYYY-MM-DD, contoh 2026-01-06."),
-    ("NIK", "Harus unik. Kalau ada dua baris ber-NIK sama, impor akan menolak keduanya."),
+    ("NIK", "KOSONGKAN saja. Sistem menerbitkannya berurutan mulai 1001, semua angka, dan dijamin tidak kembar walau dua orang menyimpan bersamaan."),
+    ("", "Isi manual HANYA bila orang itu sudah punya NIK lama yang menempel di dokumen lain. Nomor yang sudah dipakai otomatis dilewati sistem."),
+    ("", "Kenapa mulai 1001 dan bukan 0001: Excel menganggap 0001 sebagai bilangan dan membuang nolnya menjadi 1, sehingga NIK Atasan yang diketik tidak lagi cocok saat diimpor."),
 ]
 
 for i, (a, b) in enumerate(guide, start=2):

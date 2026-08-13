@@ -51,6 +51,51 @@ export function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: n
   return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
+// ── Nomor pegawai (NIK) ─────────────────────────────────────────
+// PerumNet belum punya NIK, jadi sistem yang menerbitkannya.
+//
+// SEMUA ANGKA, dan sengaja DIMULAI DARI 1001 — bukan 0001.
+//
+// Alasannya bukan estetika: Excel memperlakukan "0001" sebagai bilangan dan
+// membuang nol di depannya menjadi "1". Itu langsung merusak kolom "NIK
+// Atasan" pada template HRD — nomor yang diketik berubah sendiri, lalu impor
+// tidak menemukan orangnya. Memulai dari 1001 membuat lebarnya tetap tanpa
+// pernah bergantung pada nol di depan.
+
+/** Nomor awal. Angka pertama yang terbit adalah 1001. */
+export const EMPLOYEE_NO_BASE = 1000;
+const EMPLOYEE_NO_SEQ = { docType: "EMPLOYEE_NO", periodKey: "ALL" };
+
+/**
+ * Menerbitkan NIK berikutnya secara atomik.
+ *
+ * Memakai `DocumentSequence` yang sama dengan penomoran dokumen: satu UPDATE
+ * bersyarat, bukan baca-lalu-tulis, sehingga dua orang yang menyimpan
+ * bersamaan tidak pernah mendapat nomor yang sama.
+ *
+ * Tabrakan dengan NIK yang diketik manusia tetap mungkin — seseorang bisa saja
+ * mengetik 1005 sebelum counter sampai ke sana. Karena itu hasilnya diperiksa
+ * dan counter dimajukan, bukan dibiarkan gagal dengan galat unique constraint
+ * yang tidak menjelaskan apa pun.
+ */
+export async function generateEmployeeNo(): Promise<string> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const seq = await db.documentSequence.upsert({
+      where: { docType_periodKey: EMPLOYEE_NO_SEQ },
+      create: { ...EMPLOYEE_NO_SEQ, lastNumber: 1 },
+      update: { lastNumber: { increment: 1 } },
+      select: { lastNumber: true },
+    });
+    const candidate = String(EMPLOYEE_NO_BASE + seq.lastNumber);
+    const taken = await db.employee.findUnique({
+      where: { employeeNo: candidate },
+      select: { id: true },
+    });
+    if (!taken) return candidate;
+  }
+  throw new Error("Tidak bisa menerbitkan NIK baru — terlalu banyak nomor bertabrakan.");
+}
+
 async function nextNumber(base: string, count: (prefix: string) => Promise<number>): Promise<string> {
   const now = new Date();
   const prefix = `${base}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -79,7 +124,14 @@ export async function saveEmployee(
     contractEndAt?: Date | null;
   }
 ): Promise<Result> {
-  const employeeNo = data.employeeNo.trim().toUpperCase();
+  // NIK boleh dikosongkan saat MEMBUAT — sistem yang menerbitkannya.
+  // Saat MENGUBAH, mengosongkannya berarti kehilangan nomor yang sudah
+  // menempel di dokumen lain, jadi ditolak.
+  let employeeNo = (data.employeeNo ?? "").trim().toUpperCase();
+  if (!employeeNo) {
+    if (data.id) return { ok: false, error: "NIK tidak boleh dikosongkan saat mengubah data." };
+    employeeNo = await generateEmployeeNo();
+  }
   if (!/^[A-Z0-9-]{2,20}$/.test(employeeNo)) {
     return { ok: false, error: "NIK: huruf/angka/strip, 2–20 karakter." };
   }

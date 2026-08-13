@@ -44,7 +44,7 @@ export async function saveEmployeeAction(formData: FormData): Promise<void> {
   const result = await saveEmployee(user, {
     id: String(formData.get("id") ?? "") || undefined,
     userId: String(formData.get("userId") ?? "") || null,
-    employeeNo: String(formData.get("employeeNo") ?? ""),
+    employeeNo: String(formData.get("employeeNo") ?? ""), // kosong = diterbitkan sistem
     fullName: String(formData.get("fullName") ?? ""),
     jobTitle: String(formData.get("jobTitle") ?? "") || undefined,
     employeeType: String(formData.get("employeeType") ?? "FULL_TIME"),
