@@ -395,15 +395,31 @@ async function main() {
 
   console.log("Seeding admin user (owner)...");
   const adminHash = await bcrypt.hash("Admin#12345", 12);
+  // allowLocalLogin WAJIB sejak seed — bukan disetel belakangan.
+  //
+  // Pemasangan baru mana pun dengan AUTH_PROVIDER=MAILSERVER akan TERKUNCI
+  // TOTAL tanpa ini: login admin dialihkan ke mailserver, sementara alamat
+  // mailserver-nya hanya bisa didaftarkan lewat halaman yang butuh login.
+  // Buntu di kedua ujung, dan satu-satunya jalan keluar adalah menyunting
+  // database langsung.
+  //
+  // Itu benar-benar terjadi pada pemasangan pertama di server (2026-08-13):
+  // "Login gagal untuk admin (mailserver tidak terjawab: Mailserver belum
+  // didaftarkan)". Di laptop tidak pernah kelihatan karena nilainya kebetulan
+  // sudah disetel manual sejak Fase 45.
+  //
+  // Akun ini memang pintu darurat, dan pintu darurat harus ada sejak menit
+  // pertama — bukan dipasang setelah rumahnya terkunci.
   const admin = await db.user.upsert({
     where: { username: "admin" },
-    update: { level: "OWNER", divisionId: divisionMap.get("MGT") },
+    update: { level: "OWNER", divisionId: divisionMap.get("MGT"), allowLocalLogin: true },
     create: {
       username: "admin",
       email: "admin@perumnet.id",
       name: "Owner PerumNet",
       passwordHash: adminHash,
       mustChangePassword: true,
+      allowLocalLogin: true,
       level: "OWNER",
       divisionId: divisionMap.get("MGT"),
     },
