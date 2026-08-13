@@ -54,16 +54,22 @@ export function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: n
 // ── Nomor pegawai (NIK) ─────────────────────────────────────────
 // PerumNet belum punya NIK, jadi sistem yang menerbitkannya.
 //
-// SEMUA ANGKA, dan sengaja DIMULAI DARI 1001 — bukan 0001.
+// Bentuknya: DELAPAN ANGKA, selalu diawali 1 — 10000001, 10000002, ...
 //
-// Alasannya bukan estetika: Excel memperlakukan "0001" sebagai bilangan dan
-// membuang nol di depannya menjadi "1". Itu langsung merusak kolom "NIK
-// Atasan" pada template HRD — nomor yang diketik berubah sendiri, lalu impor
-// tidak menemukan orangnya. Memulai dari 1001 membuat lebarnya tetap tanpa
-// pernah bergantung pada nol di depan.
+// Berurutan, bukan diundi. Dua alasannya:
+//
+//  - Unik tanpa perlu mengulang. Nomor acak harus diperiksa dan diundi ulang
+//    saat bertabrakan, dan makin penuh tabelnya makin sering itu terjadi.
+//  - Diawali 1 berarti TIDAK PERNAH ADA NOL DI DEPAN. Excel memperlakukan
+//    "0001" sebagai bilangan dan membuang nolnya menjadi "1" — dan kolom "NIK
+//    Atasan" di template HRD justru tempat nomor itu diketik ulang, sehingga
+//    nomornya berubah sendiri lalu impor tidak menemukan orangnya.
+//
+// Rentangnya 10000001–19999999: sepuluh juta nomor, lebarnya tidak pernah
+// berubah selama masih di dalam rentang itu.
 
-/** Nomor awal. Angka pertama yang terbit adalah 1001. */
-export const EMPLOYEE_NO_BASE = 1000;
+/** Nomor awal. Angka pertama yang terbit adalah 10000001. */
+export const EMPLOYEE_NO_BASE = 10_000_000;
 const EMPLOYEE_NO_SEQ = { docType: "EMPLOYEE_NO", periodKey: "ALL" };
 
 /**

@@ -4,8 +4,11 @@ import { db, actor, makeUser, tag, ensureMasterData, resetTransactionalData } fr
 import { saveEmployee, generateEmployeeNo, EMPLOYEE_NO_BASE } from "@/lib/hrd";
 
 // NIK diterbitkan sistem karena PerumNet belum punya penomoran sendiri.
-// Semua angka, dimulai 1001 — bukan 0001, karena Excel membuang nol di depan
-// dan itu merusak kolom "NIK Atasan" pada template HRD.
+// Bentuknya DELAPAN ANGKA diawali 1 — 10000001, 10000002, ...
+//
+// Diawali 1 berarti tidak pernah ada nol di depan, dan itu penting: Excel
+// membuang nol di depan, sedangkan kolom "NIK Atasan" pada template HRD
+// justru tempat nomor itu diketik ulang.
 
 let HRD: ReturnType<typeof actor>;
 
@@ -29,8 +32,19 @@ describe("penerbitan NIK otomatis", () => {
     });
     assert.equal(r.ok, true, r.ok ? "" : r.error);
     const emp = await db.employee.findUnique({ where: { id: (r as { id: string }).id } });
-    assert.match(emp!.employeeNo, /^\d+$/, "harus semua angka");
+    // Bentuk yang diminta: delapan angka, diawali 1.
+    assert.match(emp!.employeeNo, /^1\d{7}$/, "harus 8 angka diawali 1");
     assert.equal(Number(emp!.employeeNo) > EMPLOYEE_NO_BASE, true);
+  });
+
+  test("lebarnya tetap 8 angka untuk banyak penerbitan berturut-turut", () => {
+    // Selama masih di rentang 10000001-19999999, lebarnya tidak pernah
+    // berubah — jadi kolom NIK di laporan dan kartu tidak pernah bergeser.
+    for (const n of [1, 2, 999, 100_000, 9_999_999]) {
+      const nik = String(EMPLOYEE_NO_BASE + n);
+      assert.equal(nik.length, 8, `${nik} harus 8 angka`);
+      assert.equal(nik.startsWith("1"), true);
+    }
   });
 
   test("TIDAK ADA NOL DI DEPAN — Excel akan membuangnya", async () => {

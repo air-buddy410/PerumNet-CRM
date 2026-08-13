@@ -22,7 +22,7 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 # (header, lebar, wajib?, catatan singkat)
 COLS = [
-    ("NIK",                 14, False, "KOSONGKAN saja - sistem menerbitkannya otomatis (1001, 1002, ...). Isi hanya bila orang ini sudah punya NIK lama."),
+    ("NIK",                 14, False, "KOSONGKAN saja - sistem menerbitkannya otomatis (10000001, 10000002, ...). Isi hanya bila orang ini sudah punya NIK lama."),
     ("Nama Lengkap",        26, True,  ""),
     ("Jabatan",             22, False, "Teks bebas, mis. Teknisi Lapangan"),
     ("Jenjang Jabatan",     16, True,  "Staff atau Leader"),
@@ -170,9 +170,9 @@ guide += [
     ("NIK Atasan", "Diisi NIK, bukan nama. Atasan harus ada di daftar ini atau sudah ada di sistem."),
     ("Email Akun CRM", "Hanya untuk yang akan punya akun sistem. Alamatnya harus sama persis dengan email di Authentik, kalau tidak yang bersangkutan tidak bisa login."),
     ("Format tanggal", "YYYY-MM-DD, contoh 2026-01-06."),
-    ("NIK", "KOSONGKAN saja. Sistem menerbitkannya berurutan mulai 1001, semua angka, dan dijamin tidak kembar walau dua orang menyimpan bersamaan."),
+    ("NIK", "KOSONGKAN saja. Sistem menerbitkannya berurutan mulai 10000001 - delapan angka diawali 1, dan dijamin tidak kembar walau dua orang menyimpan bersamaan."),
     ("", "Isi manual HANYA bila orang itu sudah punya NIK lama yang menempel di dokumen lain. Nomor yang sudah dipakai otomatis dilewati sistem."),
-    ("", "Kenapa mulai 1001 dan bukan 0001: Excel menganggap 0001 sebagai bilangan dan membuang nolnya menjadi 1, sehingga NIK Atasan yang diketik tidak lagi cocok saat diimpor."),
+    ("", "Kenapa diawali 1: dengan begitu tidak pernah ada nol di depan. Excel membuang nol di depan, dan kolom NIK Atasan justru tempat nomor itu diketik ulang - kalau berubah, impor tidak menemukan orangnya."),
 ]
 
 for i, (a, b) in enumerate(guide, start=2):
