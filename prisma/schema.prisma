@@ -15,24 +15,24 @@ datasource db {
 // ── Identity & RBAC ─────────────────────────────────────────────
 
 model User {
-  id                 String   @id @default(cuid())
-  username           String   @unique
-  email              String   @unique
+  id                 String    @id @default(cuid())
+  username           String    @unique
+  email              String    @unique
   name               String
   phone              String?
   passwordHash       String
   // Struktur organisasi: staff -> supervisor -> owner.
   // Level menentukan siapa yang dapat mengisi step approval dinamis
   // (SUPERVISOR = supervisor divisi pengaju, OWNER = pemilik).
-  level              String   @default("STAFF") // STAFF | SUPERVISOR | OWNER
+  level              String    @default("STAFF") // STAFF | SUPERVISOR | OWNER
   divisionId         String?
-  isActive           Boolean  @default(true)
-  mustChangePassword Boolean  @default(false)
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
   /// Fase 34 — penanda generasi sesi. Dinaikkan saat password diganti atau
   /// akun dipulihkan paksa, sehingga token JWT lama otomatis ditolak.
   /// Tanpa ini, ganti password TIDAK mengusir sesi di perangkat lain — dan
   /// justru itu alasan orang mengganti password saat akunnya disusupi.
-  sessionEpoch       Int      @default(0)
+  sessionEpoch       Int       @default(0)
   /// Fase 42 — pembekuan akun. Beku BUKAN nonaktif: orangnya tidak bisa masuk,
   /// tetapi datanya tetap utuh dan tetap terlihat di daftar. Diisi otomatis
   /// saat kontrak berakhir, dan bisa dibatalkan manusia (tanggal kontrak bisa
@@ -46,15 +46,29 @@ model User {
   /// menghapus riwayatnya. Sekaligus penjaga: token dengan `sub` berbeda
   /// ditolak meski emailnya sama, sehingga menghapus lalu membuat ulang
   /// pengguna di IdP dengan alamat yang sama tidak mengambil alih akun ini.
-  oidcSubject        String?  @unique
+  /// Fase 59 — foto profil yang diunggah PENGGUNANYA SENDIRI.
+  ///
+  /// SENGAJA terpisah dari Employee.photoAttachmentId. Yang itu foto RESMI
+  /// milik HRD: dicetak di kartu pegawai dan ditampilkan di halaman verifikasi
+  /// publik yang dipindai pelanggan. Kalau orang bisa menggantinya sendiri,
+  /// verifikasi kartu kehilangan seluruh artinya — siapa pun bisa menukar
+  /// wajah di kartunya, dan pelanggan melihat wajah yang salah persis saat ia
+  /// sedang mencoba memastikan.
+  avatarAttachmentId String?
+  /// Token buram untuk menyajikan foto profil ke aplikasi PerumNet lain.
+  /// Tidak mengandung nama, email, maupun id — jadi URL-nya boleh ditempel di
+  /// mana pun tanpa membocorkan siapa yang bekerja di sini. Bisa diterbitkan
+  /// ulang bila perlu dicabut.
+  avatarToken        String?   @unique
+  oidcSubject        String?   @unique
   /// Fase 45 — jalur darurat. Saat AUTH_PROVIDER bukan LOCAL, password lokal
   /// ditutup untuk SEMUA orang kecuali akun bertanda ini. Tanpa satu pun akun
   /// darurat, penyedia identitas yang mati mengunci seluruh perusahaan dari
   /// CRM — termasuk dari memperbaiki penyedianya. Setiap pemakaiannya dicatat
   /// dengan aksi audit tersendiri.
-  allowLocalLogin    Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  allowLocalLogin    Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   division         Division?         @relation(fields: [divisionId], references: [id])
   roles            UserRole[]
@@ -129,42 +143,42 @@ model User {
 
   notifications Notification[]
 
-  invoiceRuns     InvoiceRun[] @relation("InvoiceRunCreator")
-  invoicesCreated Invoice[]    @relation("InvoiceCreator")
-  paymentsReceived Payment[]          @relation("PaymentReceiver")
-  paymentsCreated  Payment[]          @relation("PaymentCreator")
-  gatewayTxCreated PaymentGatewayTx[] @relation("GatewayTxCreator")
-  suspensionsCreated ServiceSuspension[] @relation("SuspensionCreator")
-  journalsPosted     JournalEntry[]      @relation("JournalPoster")
-  cticketsAssigned  CustomerTicket[]     @relation("CTicketAssignee")
-  cticketsCreated   CustomerTicket[]     @relation("CTicketCreator")
-  cticketMembers    TicketMember[]       @relation("CTicketMember")
-  cticketPauses     TicketPause[]        @relation("CTicketPauser")
-  cticketStepsDone  TicketStepProgress[] @relation("CTicketStepDoer")
-  employee          Employee?            @relation("EmployeeUser")
-  outboundCreated   OutboundMessage[]    @relation("OutboundCreator")
-  announcements     Announcement[]       @relation("AnnouncementCreator")
-  transferReceipts TransferReceipt[] @relation("TransferReceiver")
-  doCreated        DeliveryOrder[] @relation("DoCreator")
-  doApproved       DeliveryOrder[] @relation("DoApprover")
-  irfCreated       InventoryRequestForm[] @relation("IrfCreator")
-  signatures       DocumentSignature[] @relation("SignatureSigner")
-  returnRequested  ReturnRequest[] @relation("ReturnRequester")
-  returnVerified   ReturnRequest[] @relation("ReturnVerifier")
-  materialRequests MaterialRequest[] @relation("MrqRequester")
-  materialDecided  MaterialRequest[] @relation("MrqDecider")
-  slotLedgerEntries SlotLedger[] @relation("SlotLedgerCreator")
-  warehouseScopes UserWarehouseScope[] @relation("WarehouseScopeUser")
-  terminationsCreated CustomerTermination[] @relation("TerminationCreator")
-  terminationsDecided CustomerTermination[] @relation("TerminationDecider")
-  recoveriesAssigned  DeviceRecoveryIssue[] @relation("RecoveryAssignee")
-  recoveryItemsReceived DeviceRecoveryItem[] @relation("RecoveryReceiver")
-  recoveryAttempts    DeviceRecoveryAttempt[] @relation("RecoveryAttemptUser")
-  deviceInspections   DeviceInspection[] @relation("DeviceInspector")
-  recordsArchived     ArchivedRecord[]   @relation("ArchiveArchiver")
-  recordsRestored     ArchivedRecord[]   @relation("ArchiveRestorer")
-  cardsIssued         EmployeeCard[]     @relation("CardIssuer")
-  cardsRevoked        EmployeeCard[]     @relation("CardRevoker")
+  invoiceRuns           InvoiceRun[]            @relation("InvoiceRunCreator")
+  invoicesCreated       Invoice[]               @relation("InvoiceCreator")
+  paymentsReceived      Payment[]               @relation("PaymentReceiver")
+  paymentsCreated       Payment[]               @relation("PaymentCreator")
+  gatewayTxCreated      PaymentGatewayTx[]      @relation("GatewayTxCreator")
+  suspensionsCreated    ServiceSuspension[]     @relation("SuspensionCreator")
+  journalsPosted        JournalEntry[]          @relation("JournalPoster")
+  cticketsAssigned      CustomerTicket[]        @relation("CTicketAssignee")
+  cticketsCreated       CustomerTicket[]        @relation("CTicketCreator")
+  cticketMembers        TicketMember[]          @relation("CTicketMember")
+  cticketPauses         TicketPause[]           @relation("CTicketPauser")
+  cticketStepsDone      TicketStepProgress[]    @relation("CTicketStepDoer")
+  employee              Employee?               @relation("EmployeeUser")
+  outboundCreated       OutboundMessage[]       @relation("OutboundCreator")
+  announcements         Announcement[]          @relation("AnnouncementCreator")
+  transferReceipts      TransferReceipt[]       @relation("TransferReceiver")
+  doCreated             DeliveryOrder[]         @relation("DoCreator")
+  doApproved            DeliveryOrder[]         @relation("DoApprover")
+  irfCreated            InventoryRequestForm[]  @relation("IrfCreator")
+  signatures            DocumentSignature[]     @relation("SignatureSigner")
+  returnRequested       ReturnRequest[]         @relation("ReturnRequester")
+  returnVerified        ReturnRequest[]         @relation("ReturnVerifier")
+  materialRequests      MaterialRequest[]       @relation("MrqRequester")
+  materialDecided       MaterialRequest[]       @relation("MrqDecider")
+  slotLedgerEntries     SlotLedger[]            @relation("SlotLedgerCreator")
+  warehouseScopes       UserWarehouseScope[]    @relation("WarehouseScopeUser")
+  terminationsCreated   CustomerTermination[]   @relation("TerminationCreator")
+  terminationsDecided   CustomerTermination[]   @relation("TerminationDecider")
+  recoveriesAssigned    DeviceRecoveryIssue[]   @relation("RecoveryAssignee")
+  recoveryItemsReceived DeviceRecoveryItem[]    @relation("RecoveryReceiver")
+  recoveryAttempts      DeviceRecoveryAttempt[] @relation("RecoveryAttemptUser")
+  deviceInspections     DeviceInspection[]      @relation("DeviceInspector")
+  recordsArchived       ArchivedRecord[]        @relation("ArchiveArchiver")
+  recordsRestored       ArchivedRecord[]        @relation("ArchiveRestorer")
+  cardsIssued           EmployeeCard[]          @relation("CardIssuer")
+  cardsRevoked          EmployeeCard[]          @relation("CardRevoker")
 }
 
 model Division {
@@ -300,9 +314,9 @@ model ApprovalRule {
 }
 
 model ApprovalRuleStep {
-  id        String  @id @default(cuid())
-  ruleId    String
-  stepOrder Int // 1, 2, 3, ...
+  id           String  @id @default(cuid())
+  ruleId       String
+  stepOrder    Int // 1, 2, 3, ...
   // ROLE       = role fungsional tertentu (roleId wajib)
   // SUPERVISOR = supervisor divisi pengaju (dinamis, di-resolve saat submit)
   // OWNER      = user level owner
@@ -378,11 +392,11 @@ model CostCenter {
 model Category {
   /// Cable | Connector | Network Device | Passive Device | Power | Consumable | Tools | Other
   materialType String?
-  id       String  @id @default(cuid())
-  type     String // EXPENSE | ITEM | TICKET | ... (Phase 1: EXPENSE)
-  code     String  @unique
-  name     String
-  isActive Boolean @default(true)
+  id           String  @id @default(cuid())
+  type         String // EXPENSE | ITEM | TICKET | ... (Phase 1: EXPENSE)
+  code         String  @unique
+  name         String
+  isActive     Boolean @default(true)
 
   items            Item[]
   cashTransactions CashTransaction[]
@@ -604,50 +618,50 @@ model Customer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  area          Area?          @relation(fields: [areaId], references: [id])
-  salesOwner    User?          @relation("CustomerOwner", fields: [salesOwnerId], references: [id])
-  lead          Lead?          @relation(fields: [leadId], references: [id])
-  createdBy     User           @relation("CustomerCreator", fields: [createdById], references: [id])
-  subscriptions Subscription[]
-  surveys       Survey[]
-  devices       SerializedDevice[]
-  workOrders    WorkOrder[]
-  projects      Project[]
-  invoices      Invoice[]
-  payments      Payment[]
-  gatewayTxs    PaymentGatewayTx[]
-  customerTickets CustomerTicket[]
+  area             Area?                 @relation(fields: [areaId], references: [id])
+  salesOwner       User?                 @relation("CustomerOwner", fields: [salesOwnerId], references: [id])
+  lead             Lead?                 @relation(fields: [leadId], references: [id])
+  createdBy        User                  @relation("CustomerCreator", fields: [createdById], references: [id])
+  subscriptions    Subscription[]
+  surveys          Survey[]
+  devices          SerializedDevice[]
+  workOrders       WorkOrder[]
+  projects         Project[]
+  invoices         Invoice[]
+  payments         Payment[]
+  gatewayTxs       PaymentGatewayTx[]
+  customerTickets  CustomerTicket[]
   outboundMessages OutboundMessage[]
-  terminations CustomerTermination[]
+  terminations     CustomerTermination[]
 }
 
 model Subscription {
-  id             String    @id @default(cuid())
-  serviceNumber  String    @unique // SVC-#####
-  customerId     String
-  packageId      String
-  monthlyPrice   BigInt
-  downloadMbps   Int
-  uploadMbps     Int
-  billingCycleDay Int      @default(1)
-  popNode        String?
-  vlan           String?
-  pppoeUsername  String?
-  routerId       String? // distribution router (NetworkDevice) — jalur isolir
-  ipAddress      String?
-  contractMonths Int?
-  quotationId    String?
-  activatedAt    DateTime?
-  terminatedAt   DateTime?
-  status         String    @default("DRAFT") // DRAFT|WAITING_INSTALLATION|ACTIVE|ISOLATED|SUSPENDED|TERMINATED
-  notes          String?
-  createdById    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  serviceNumber   String    @unique // SVC-#####
+  customerId      String
+  packageId       String
+  monthlyPrice    BigInt
+  downloadMbps    Int
+  uploadMbps      Int
+  billingCycleDay Int       @default(1)
+  popNode         String?
+  vlan            String?
+  pppoeUsername   String?
+  routerId        String? // distribution router (NetworkDevice) — jalur isolir
+  ipAddress       String?
+  contractMonths  Int?
+  quotationId     String?
+  activatedAt     DateTime?
+  terminatedAt    DateTime?
+  status          String    @default("DRAFT") // DRAFT|WAITING_INSTALLATION|ACTIVE|ISOLATED|SUSPENDED|TERMINATED
+  notes           String?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  customer  Customer @relation(fields: [customerId], references: [id])
-  package   Package  @relation(fields: [packageId], references: [id])
-  createdBy User     @relation("SubscriptionCreator", fields: [createdById], references: [id])
+  customer        Customer               @relation(fields: [customerId], references: [id])
+  package         Package                @relation(fields: [packageId], references: [id])
+  createdBy       User                   @relation("SubscriptionCreator", fields: [createdById], references: [id])
   devices         SerializedDevice[]
   workOrders      WorkOrder[]
   ips             IPAddress[]
@@ -660,10 +674,10 @@ model Subscription {
   accessJobs      NetworkAccessJob[]
   customerTickets CustomerTicket[]
   odpPort         OdpPort?
+  pppoeSessions   PppoeSession[]
+  terminations    CustomerTermination[]
 
   @@index([status])
-  pppoeSessions PppoeSession[]
-  terminations CustomerTermination[]
 }
 
 // Bukti/lampiran generik (foto survey, nota, dsb.)
@@ -678,10 +692,10 @@ model Attachment {
   uploadedById String
   createdAt    DateTime @default(now())
 
-  uploadedBy User @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+  uploadedBy User                @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+  signatures DocumentSignature[]
 
   @@index([entityType, entityId])
-  signatures DocumentSignature[]
 }
 
 // ── Phase 3: Inventory & Operational ────────────────────────────
@@ -692,29 +706,29 @@ model Attachment {
 //  - Perangkat serialized punya tepat satu lokasi & satu custodian aktif.
 
 model Warehouse {
-  id       String  @id @default(cuid())
-  code     String  @unique
-  name     String
-  address  String?
+  id        String  @id @default(cuid())
+  code      String  @unique
+  name      String
+  address   String?
   /// Fase 20 (F10) — CENTRAL|BRANCH|MINI_STOCK|PROJECT_STOCK.
   /// Stok teknisi TIDAK dijadikan tipe gudang; tetap memakai CustodyLevel.
   type      String  @default("CENTRAL")
   latitude  Float?
   longitude Float?
-  isActive Boolean @default(true)
+  isActive  Boolean @default(true)
 
-  stockLevels StockLevel[]
-  devices     SerializedDevice[]
-  txFrom      StockTransaction[] @relation("TxFrom")
-  txTo        StockTransaction[] @relation("TxTo")
-  opnames     OpnameSession[]
-  returnRequests ReturnRequest[] @relation("ReturnWarehouse")
-  materialRequests MaterialRequest[] @relation("MrqWarehouse")
-  racks      Rack[]
-  stockSlots StockSlot[]
-  userScopes UserWarehouseScope[] @relation("WarehouseScope")
-  terminationsIn CustomerTermination[] @relation("TerminationWarehouse")
-  recoveriesIn   DeviceRecoveryIssue[] @relation("RecoveryWarehouse")
+  stockLevels      StockLevel[]
+  devices          SerializedDevice[]
+  txFrom           StockTransaction[]    @relation("TxFrom")
+  txTo             StockTransaction[]    @relation("TxTo")
+  opnames          OpnameSession[]
+  returnRequests   ReturnRequest[]       @relation("ReturnWarehouse")
+  materialRequests MaterialRequest[]     @relation("MrqWarehouse")
+  racks            Rack[]
+  stockSlots       StockSlot[]
+  userScopes       UserWarehouseScope[]  @relation("WarehouseScope")
+  terminationsIn   CustomerTermination[] @relation("TerminationWarehouse")
+  recoveriesIn     DeviceRecoveryIssue[] @relation("RecoveryWarehouse")
 }
 
 model Item {
@@ -731,19 +745,19 @@ model Item {
   minStock     Int     @default(0)
   isActive     Boolean @default(true)
 
-  category    Category?              @relation(fields: [categoryId], references: [id])
-  stockLevels StockLevel[]
-  devices     SerializedDevice[]
-  txLines     StockTransactionLine[]
-  opnameLines OpnameLine[]
-  custodyLevels CustodyLevel[]
-  bomLines      ProjectBomLine[]
+  category             Category?              @relation(fields: [categoryId], references: [id])
+  stockLevels          StockLevel[]
+  devices              SerializedDevice[]
+  txLines              StockTransactionLine[]
+  opnameLines          OpnameLine[]
+  custodyLevels        CustodyLevel[]
+  bomLines             ProjectBomLine[]
   transferReceiptLines TransferReceiptLine[]
-  deliveryOrderLines DeliveryOrderLine[]
-  returnRequestLines ReturnRequestLine[]
+  deliveryOrderLines   DeliveryOrderLine[]
+  returnRequestLines   ReturnRequestLine[]
   materialRequestLines MaterialRequestLine[]
-  slotAllocations SlotAllocation[]
-  slotLedger      SlotLedger[]
+  slotAllocations      SlotAllocation[]
+  slotLedger           SlotLedger[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -802,43 +816,43 @@ model StockTransaction {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  warehouseFrom Warehouse?             @relation("TxFrom", fields: [warehouseFromId], references: [id])
-  warehouseTo   Warehouse?             @relation("TxTo", fields: [warehouseToId], references: [id])
-  custodian     User?                  @relation("TxCustodian", fields: [custodianId], references: [id])
-  workOrder     WorkOrder?             @relation(fields: [workOrderId], references: [id])
-  project       Project?               @relation(fields: [projectId], references: [id])
-  createdBy     User                   @relation("TxCreator", fields: [createdById], references: [id])
-  postedBy      User?                  @relation("TxPoster", fields: [postedById], references: [id])
-  reversalOf    StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
-  reversedBy    StockTransaction?      @relation("TxReversal")
-  lines         StockTransactionLine[]
-  receipts      TransferReceipt[]
-  deliveryOrders DeliveryOrder[]
-  irf            InventoryRequestForm?
-  returnRequest  ReturnRequest?
+  warehouseFrom   Warehouse?             @relation("TxFrom", fields: [warehouseFromId], references: [id])
+  warehouseTo     Warehouse?             @relation("TxTo", fields: [warehouseToId], references: [id])
+  custodian       User?                  @relation("TxCustodian", fields: [custodianId], references: [id])
+  workOrder       WorkOrder?             @relation(fields: [workOrderId], references: [id])
+  project         Project?               @relation(fields: [projectId], references: [id])
+  createdBy       User                   @relation("TxCreator", fields: [createdById], references: [id])
+  postedBy        User?                  @relation("TxPoster", fields: [postedById], references: [id])
+  reversalOf      StockTransaction?      @relation("TxReversal", fields: [reversalOfId], references: [id])
+  reversedBy      StockTransaction?      @relation("TxReversal")
+  lines           StockTransactionLine[]
+  receipts        TransferReceipt[]
+  deliveryOrders  DeliveryOrder[]
+  irf             InventoryRequestForm?
+  returnRequest   ReturnRequest?
+  materialRequest MaterialRequest?
 
   @@index([type, status])
-  materialRequest MaterialRequest?
 }
 
 model StockTransactionLine {
-  id       String  @id @default(cuid())
-  txId     String
-  itemId   String
-  qty      Int
-  deviceId String? // untuk item SERIALIZED: satu baris per unit (qty=1)
-  snInput  String? // SN yang akan dibuat saat posting goods receipt
+  id        String  @id @default(cuid())
+  txId      String
+  itemId    String
+  qty       Int
+  deviceId  String? // untuk item SERIALIZED: satu baris per unit (qty=1)
+  snInput   String? // SN yang akan dibuat saat posting goods receipt
   /// Fase 18 — kondisi barang saat dikembalikan: GOOD|USED|DAMAGED|RMA.
   /// GOOD/USED masuk onHand, DAMAGED/RMA masuk dimensi damaged.
   condition String?
 
-  tx           StockTransaction      @relation(fields: [txId], references: [id])
-  item         Item                  @relation(fields: [itemId], references: [id])
-  device       SerializedDevice?     @relation(fields: [deviceId], references: [id])
-  receiptLines TransferReceiptLine[]
+  tx                 StockTransaction      @relation(fields: [txId], references: [id])
+  item               Item                  @relation(fields: [itemId], references: [id])
+  device             SerializedDevice?     @relation(fields: [deviceId], references: [id])
+  receiptLines       TransferReceiptLine[]
+  deliveryOrderLines DeliveryOrderLine[]
 
   @@index([txId])
-  deliveryOrderLines DeliveryOrderLine[]
 }
 
 model SerializedDevice {
@@ -864,18 +878,18 @@ model SerializedDevice {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  item         Item              @relation(fields: [itemId], references: [id])
-  warehouse    Warehouse?        @relation(fields: [warehouseId], references: [id])
-  custodian    User?             @relation("DeviceCustodian", fields: [custodianId], references: [id])
-  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
-  customer     Customer?         @relation(fields: [customerId], references: [id])
-  txLines      StockTransactionLine[]
-  movements    DeviceMovement[]
+  item               Item                   @relation(fields: [itemId], references: [id])
+  warehouse          Warehouse?             @relation(fields: [warehouseId], references: [id])
+  custodian          User?                  @relation("DeviceCustodian", fields: [custodianId], references: [id])
+  subscription       Subscription?          @relation(fields: [subscriptionId], references: [id])
+  customer           Customer?              @relation(fields: [customerId], references: [id])
+  txLines            StockTransactionLine[]
+  movements          DeviceMovement[]
+  returnRequestLines ReturnRequestLine[]
+  recoveryItems      DeviceRecoveryItem[]
 
   @@index([status])
   @@index([custodianId])
-  returnRequestLines ReturnRequestLine[]
-  recoveryItems DeviceRecoveryItem[]
 }
 
 // Riwayat perangkat — append-only.
@@ -917,22 +931,22 @@ model WorkOrder {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  customer     Customer?          @relation(fields: [customerId], references: [id])
-  subscription Subscription?      @relation(fields: [subscriptionId], references: [id])
-  technician   User?              @relation("WoTechnician", fields: [technicianId], references: [id])
-  createdBy    User               @relation("WoCreator", fields: [createdById], references: [id])
-  closedBy     User?              @relation("WoCloser", fields: [closedById], references: [id])
-  transactions StockTransaction[]
-  movements    DeviceMovement[]
-  materialUsages MaterialUsage[]
+  customer         Customer?            @relation(fields: [customerId], references: [id])
+  subscription     Subscription?        @relation(fields: [subscriptionId], references: [id])
+  technician       User?                @relation("WoTechnician", fields: [technicianId], references: [id])
+  createdBy        User                 @relation("WoCreator", fields: [createdById], references: [id])
+  closedBy         User?                @relation("WoCloser", fields: [closedById], references: [id])
+  transactions     StockTransaction[]
+  movements        DeviceMovement[]
+  materialUsages   MaterialUsage[]
   cashTransactions CashTransaction[]
   incidents        Incident[]
   customerTickets  CustomerTicket[]
+  materialRequests MaterialRequest[]
+  deviceRecovery   DeviceRecoveryIssue?
 
   @@index([status])
   @@index([technicianId])
-  materialRequests MaterialRequest[]
-  deviceRecovery DeviceRecoveryIssue?
 }
 
 // Pemakaian material bulk pada WO — mengurangi custody teknisi.
@@ -1003,35 +1017,35 @@ model Cashbook {
 }
 
 model CashTransaction {
-  id               String    @id @default(cuid())
-  txNumber         String    @unique // CSH-/EXP-/RBM-/ADV-/STL-/CTF-YYYYMM-####
-  type             String // TOP_UP|EXPENSE|REIMBURSEMENT|CASH_ADVANCE|ADVANCE_SETTLEMENT|CASH_TRANSFER
-  status           String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|POSTED|REJECTED|CANCELLED
-  cashbookId       String
-  cashbookToId     String? // transfer
-  amount           BigInt // nominal utama (settlement: porsi expense)
-  cashReturnAmount BigInt    @default(0) // settlement: kas dikembalikan
-  categoryId       String?
-  costCenterId     String?
-  recipient        String? // penerima dana (wajib expense)
-  purpose          String // tujuan wajib (PRD §23)
-  receiptRef       String? // no. nota — deteksi duplikasi (PRD §24)
-  referenceNote    String?
-  workOrderId      String?
-  projectId        String?
-  advanceId        String? // settlement → advance induk
-  dueDate          DateTime? // cash advance
-  settledAmount    BigInt    @default(0) // advance: akumulasi pertanggungjawaban
-  settledAt        DateTime?
-  claimantId       String? // reimbursement
+  id                String    @id @default(cuid())
+  txNumber          String    @unique // CSH-/EXP-/RBM-/ADV-/STL-/CTF-YYYYMM-####
+  type              String // TOP_UP|EXPENSE|REIMBURSEMENT|CASH_ADVANCE|ADVANCE_SETTLEMENT|CASH_TRANSFER
+  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|POSTED|REJECTED|CANCELLED
+  cashbookId        String
+  cashbookToId      String? // transfer
+  amount            BigInt // nominal utama (settlement: porsi expense)
+  cashReturnAmount  BigInt    @default(0) // settlement: kas dikembalikan
+  categoryId        String?
+  costCenterId      String?
+  recipient         String? // penerima dana (wajib expense)
+  purpose           String // tujuan wajib (PRD §23)
+  receiptRef        String? // no. nota — deteksi duplikasi (PRD §24)
+  referenceNote     String?
+  workOrderId       String?
+  projectId         String?
+  advanceId         String? // settlement → advance induk
+  dueDate           DateTime? // cash advance
+  settledAmount     BigInt    @default(0) // advance: akumulasi pertanggungjawaban
+  settledAt         DateTime?
+  claimantId        String? // reimbursement
   approvalRequestId String?
-  createdById      String
-  postedById       String?
-  postedAt         DateTime?
-  reversalOfId     String?   @unique
-  reversedById     String?   @unique
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdById       String
+  postedById        String?
+  postedAt          DateTime?
+  reversalOfId      String?   @unique
+  reversedById      String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   cashbook    Cashbook          @relation("CashbookMain", fields: [cashbookId], references: [id])
   cashbookTo  Cashbook?         @relation("CashbookTo", fields: [cashbookToId], references: [id])
@@ -1053,8 +1067,8 @@ model CashTransaction {
 }
 
 model CashClosing {
-  id              String   @id @default(cuid())
-  closingNumber   String   @unique // CLS-YYYYMM-####
+  id              String    @id @default(cuid())
+  closingNumber   String    @unique // CLS-YYYYMM-####
   cashbookId      String
   type            String // DAILY | MONTHLY
   closingDate     DateTime
@@ -1064,7 +1078,7 @@ model CashClosing {
   reason          String? // wajib bila variance != 0
   lockedUntil     DateTime? // monthly: batas periode terkunci
   createdById     String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   cashbook  Cashbook @relation(fields: [cashbookId], references: [id])
   createdBy User     @relation("ClosingCreator", fields: [createdById], references: [id])
@@ -1139,18 +1153,18 @@ model NetworkSite {
   capacityNote     String?
   notes            String?
 
-  area        Area?                @relation(fields: [areaId], references: [id])
-  pic         User?                @relation("SitePic", fields: [picId], references: [id])
-  devices     NetworkDevice[]
-  linksA      NetworkLink[]        @relation("LinkSiteA")
-  linksB      NetworkLink[]        @relation("LinkSiteB")
-  subnets     Subnet[]
-  odps        Odp[]
-  alarms      NetworkAlarm[]
-  incidents   Incident[]
-  maintenance NetworkMaintenance[]
+  area         Area?                @relation(fields: [areaId], references: [id])
+  pic          User?                @relation("SitePic", fields: [picId], references: [id])
+  devices      NetworkDevice[]
+  linksA       NetworkLink[]        @relation("LinkSiteA")
+  linksB       NetworkLink[]        @relation("LinkSiteB")
+  subnets      Subnet[]
+  odps         Odp[]
+  alarms       NetworkAlarm[]
+  incidents    Incident[]
+  maintenance  NetworkMaintenance[]
   probeTargets ProbeTarget[]
-  fiberRoutes FiberRoute[]
+  fiberRoutes  FiberRoute[]
 }
 
 model NetworkDevice {
@@ -1171,17 +1185,17 @@ model NetworkDevice {
   ownerId      String?
   notes        String?
 
-  site        NetworkSite          @relation(fields: [siteId], references: [id])
-  owner       User?                @relation("NetDeviceOwner", fields: [ownerId], references: [id])
-  ips           IPAddress[]
-  alarms        NetworkAlarm[]
-  incidents     Incident[]
-  maintenance   NetworkMaintenance[]
-  subscriptions Subscription[]     @relation("SubscriptionRouter")
-  accessJobs    NetworkAccessJob[]
-  oltDevice     OltDevice?
+  site           NetworkSite          @relation(fields: [siteId], references: [id])
+  owner          User?                @relation("NetDeviceOwner", fields: [ownerId], references: [id])
+  ips            IPAddress[]
+  alarms         NetworkAlarm[]
+  incidents      Incident[]
+  maintenance    NetworkMaintenance[]
+  subscriptions  Subscription[]       @relation("SubscriptionRouter")
+  accessJobs     NetworkAccessJob[]
+  oltDevice      OltDevice?
   mikrotikRouter MikrotikRouter?
-  probeTargets ProbeTarget[]
+  probeTargets   ProbeTarget[]
 }
 
 model NetworkLink {
@@ -1345,8 +1359,8 @@ model IncidentSubscription {
 }
 
 model NetworkMaintenance {
-  id                String    @id @default(cuid())
-  maintNumber       String    @unique // MNT-YYYYMM-####
+  id                String   @id @default(cuid())
+  maintNumber       String   @unique // MNT-YYYYMM-####
   title             String
   type              String // PREVENTIVE|CORRECTIVE|EMERGENCY|FIRMWARE_UPGRADE|FIBER|POWER|TOWER|CAPACITY|SECURITY
   siteId            String?
@@ -1357,12 +1371,12 @@ model NetworkMaintenance {
   scheduledEnd      DateTime
   estDowntimeMin    Int?
   picId             String
-  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|IN_PROGRESS|COMPLETED|CANCELLED
+  status            String   @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|IN_PROGRESS|COMPLETED|CANCELLED
   approvalRequestId String?
   result            String?
   createdById       String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   site      NetworkSite?   @relation(fields: [siteId], references: [id])
   device    NetworkDevice? @relation(fields: [deviceId], references: [id])
@@ -1373,31 +1387,31 @@ model NetworkMaintenance {
 }
 
 model ChangeRequest {
-  id                String    @id @default(cuid())
-  changeNumber      String    @unique // CHG-YYYYMM-####
-  title             String
-  changeType        String // STANDARD|NORMAL|MAJOR|EMERGENCY
-  reason            String
-  impactedDevices   String?
-  impactedServices  String?
-  risk              String
+  id                 String    @id @default(cuid())
+  changeNumber       String    @unique // CHG-YYYYMM-####
+  title              String
+  changeType         String // STANDARD|NORMAL|MAJOR|EMERGENCY
+  reason             String
+  impactedDevices    String?
+  impactedServices   String?
+  risk               String
   implementationPlan String
-  testPlan          String?
-  rollbackPlan      String? // wajib kecuali STANDARD (rule 21, §35)
-  windowStart       DateTime?
-  windowEnd         DateTime?
-  picId             String
-  status            String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|COMPLETED|PENDING_REVIEW|FAILED|CANCELLED
-  approvalRequestId String?
-  result            String?
-  implementedAt     DateTime?
-  executedById      String?
-  postReviewNote    String? // emergency wajib post-review (rule 23)
-  postReviewedById  String?
-  postReviewedAt    DateTime?
-  createdById       String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  testPlan           String?
+  rollbackPlan       String? // wajib kecuali STANDARD (rule 21, §35)
+  windowStart        DateTime?
+  windowEnd          DateTime?
+  picId              String
+  status             String    @default("DRAFT") // DRAFT|WAITING_APPROVAL|APPROVED|COMPLETED|PENDING_REVIEW|FAILED|CANCELLED
+  approvalRequestId  String?
+  result             String?
+  implementedAt      DateTime?
+  executedById       String?
+  postReviewNote     String? // emergency wajib post-review (rule 23)
+  postReviewedById   String?
+  postReviewedAt     DateTime?
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   pic            User       @relation("ChangePic", fields: [picId], references: [id])
   executedBy     User?      @relation("ChangeExecutor", fields: [executedById], references: [id])
@@ -1636,20 +1650,20 @@ model Notification {
 // Registry integrasi eksternal (§56). Secret TIDAK disimpan di sini —
 // credentialRef berisi NAMA environment variable (NFR: no plaintext secrets).
 model Integration {
-  id                String    @id @default(cuid())
-  code              String    @unique // slug, dipakai di URL webhook
-  name              String
-  category          String // NETWORK|CRM_CUSTOMER|ITOPS|FINANCE
-  provider          String // MIKROTIK|RADIUS|ZABBIX|...|OTHER
-  baseUrl           String?
-  authType          String    @default("NONE") // NONE|API_KEY|BASIC|TOKEN
-  credentialRef     String? // nama env var yang menyimpan secret
-  webhookToken      String // token inbound webhook (di-generate sistem)
-  isEnabled         Boolean   @default(false)
-  lastEventAt       DateTime?
-  notes             String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  code          String    @unique // slug, dipakai di URL webhook
+  name          String
+  category      String // NETWORK|CRM_CUSTOMER|ITOPS|FINANCE
+  provider      String // MIKROTIK|RADIUS|ZABBIX|...|OTHER
+  baseUrl       String?
+  authType      String    @default("NONE") // NONE|API_KEY|BASIC|TOKEN
+  credentialRef String? // nama env var yang menyimpan secret
+  webhookToken  String // token inbound webhook (di-generate sistem)
+  isEnabled     Boolean   @default(false)
+  lastEventAt   DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   events           IntegrationEvent[]
   gatewayTxs       PaymentGatewayTx[]
@@ -1738,32 +1752,32 @@ model InvoiceRun {
 }
 
 model Invoice {
-  id             String    @id @default(cuid())
-  invoiceNumber  String    @unique // INV-YYYYMM-####
+  id             String   @id @default(cuid())
+  invoiceNumber  String   @unique // INV-YYYYMM-####
   invoiceRunId   String?
   customerId     String
   subscriptionId String?
-  type           String    @default("MONTHLY") // MONTHLY|INSTALLATION|ADDON|ADJUSTMENT|MANUAL
+  type           String   @default("MONTHLY") // MONTHLY|INSTALLATION|ADDON|ADJUSTMENT|MANUAL
   period         String? // "2026-08" untuk MONTHLY
   issuedAt       DateTime
   dueAt          DateTime
   subtotal       BigInt
-  taxPercent     Float     @default(0) // snapshot — tidak berubah saat tarif PPN ganti
-  taxAmount      BigInt    @default(0)
+  taxPercent     Float    @default(0) // snapshot — tidak berubah saat tarif PPN ganti
+  taxAmount      BigInt   @default(0)
   totalAmount    BigInt
-  paidAmount     BigInt    @default(0) // diisi modul Payment (Fase 9)
-  status         String    @default("DRAFT") // DRAFT|OPEN|PARTIAL|PAID|VOID|WRITTEN_OFF
+  paidAmount     BigInt   @default(0) // diisi modul Payment (Fase 9)
+  status         String   @default("DRAFT") // DRAFT|OPEN|PARTIAL|PAID|VOID|WRITTEN_OFF
   voidReason     String?
-  journalEntryId String?   @unique // diisi modul GL (Fase 11)
+  journalEntryId String?  @unique // diisi modul GL (Fase 11)
   notes          String?
   createdById    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  invoiceRun   InvoiceRun?   @relation(fields: [invoiceRunId], references: [id])
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
-  createdBy    User          @relation("InvoiceCreator", fields: [createdById], references: [id])
+  invoiceRun   InvoiceRun?               @relation(fields: [invoiceRunId], references: [id])
+  customer     Customer                  @relation(fields: [customerId], references: [id])
+  subscription Subscription?             @relation(fields: [subscriptionId], references: [id])
+  createdBy    User                      @relation("InvoiceCreator", fields: [createdById], references: [id])
   lines        InvoiceLine[]
   allocations  PaymentAllocation[]
   gatewayTxs   PaymentGatewayTxInvoice[]
@@ -1814,8 +1828,8 @@ model Merchant {
 }
 
 model Payment {
-  id             String    @id @default(cuid())
-  paymentNumber  String    @unique // PAY-YYYYMM-####
+  id             String   @id @default(cuid())
+  paymentNumber  String   @unique // PAY-YYYYMM-####
   customerId     String
   merchantId     String?
   receivedById   String? // kasir/kolektor — null untuk pembayaran gateway
@@ -1823,16 +1837,16 @@ model Payment {
   cashbookId     String? // kas tujuan setoran (CASH/TRANSFER)
   gatewayTxId    String? // untuk GATEWAY
   amount         BigInt
-  feeAmount      BigInt    @default(0) // biaya gateway / komisi kolektor
+  feeAmount      BigInt   @default(0) // biaya gateway / komisi kolektor
   netAmount      BigInt
   paidAt         DateTime
-  status         String    @default("DRAFT") // DRAFT|POSTED|REVERSED
-  journalEntryId String?   @unique // diisi GL Fase 11
-  reversalOfId   String?   @unique
+  status         String   @default("DRAFT") // DRAFT|POSTED|REVERSED
+  journalEntryId String?  @unique // diisi GL Fase 11
+  reversalOfId   String?  @unique
   notes          String?
   createdById    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   customer    Customer            @relation(fields: [customerId], references: [id])
   merchant    Merchant?           @relation(fields: [merchantId], references: [id])
@@ -1976,9 +1990,9 @@ model Account {
   cashbookId   String? @unique // jembatan ke Cashbook Fase 4 (§5: tanpa bongkar modul kas)
   isActive     Boolean @default(true)
 
-  parent   Account?  @relation("AccountTree", fields: [parentId], references: [id])
-  children Account[] @relation("AccountTree")
-  lines    JournalLine[]
+  parent      Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children    Account[]     @relation("AccountTree")
+  lines       JournalLine[]
   debitRules  PostingRule[] @relation("RuleDebit")
   creditRules PostingRule[] @relation("RuleCredit")
 
@@ -1986,18 +2000,18 @@ model Account {
 }
 
 model JournalEntry {
-  id           String    @id @default(cuid())
-  entryNumber  String    @unique // JRN-YYYYMM-####
+  id           String   @id @default(cuid())
+  entryNumber  String   @unique // JRN-YYYYMM-####
   entryDate    DateTime
   source       String // INVOICE|INVOICE_VOID|PAYMENT|COLLECTOR_FEE|CASH_TX|MANUAL|REVERSAL
   sourceId     String? // id entitas asal (tanpa FK — lintas modul)
   memo         String?
   partyType    String? // CUSTOMER|MERCHANT|EMPLOYEE|CONTACT
   partyId      String?
-  status       String    @default("POSTED") // POSTED|REVERSED
-  reversalOfId String?   @unique
+  status       String   @default("POSTED") // POSTED|REVERSED
+  reversalOfId String?  @unique
   postedById   String? // null = diposting sistem (event billing/payment)
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime @default(now())
 
   reversalOf JournalEntry? @relation("JournalReversal", fields: [reversalOfId], references: [id])
   reversal   JournalEntry? @relation("JournalReversal")
@@ -2056,10 +2070,10 @@ model TicketCategory {
 
 // Template workflow — dipakai tiket (dan lead, menyusul) (G17).
 model WorkflowTemplate {
-  id    String @id @default(cuid())
-  kind  String @default("TICKET") // TICKET|LEAD
-  name  String @unique
-  steps WorkflowStep[]
+  id         String           @id @default(cuid())
+  kind       String           @default("TICKET") // TICKET|LEAD
+  name       String           @unique
+  steps      WorkflowStep[]
   categories TicketCategory[]
 }
 
@@ -2245,15 +2259,15 @@ model OdpPort {
 // memakai DateTime dinormalkan ke tengah malam.
 
 model Employee {
-  id           String   @id @default(cuid())
-  userId       String?  @unique // tertaut akun sistem bila ada
-  employeeNo   String   @unique
-  fullName     String
-  jobTitle     String?
-  employeeType String   @default("FULL_TIME") // FULL_TIME|PART_TIME|CONTRACT|PROBATION
-  supervisorId String?
-  joinedAt     DateTime
-  isActive     Boolean  @default(true)
+  id              String    @id @default(cuid())
+  userId          String?   @unique // tertaut akun sistem bila ada
+  employeeNo      String    @unique
+  fullName        String
+  jobTitle        String?
+  employeeType    String    @default("FULL_TIME") // FULL_TIME|PART_TIME|CONTRACT|PROBATION
+  supervisorId    String?
+  joinedAt        DateTime
+  isActive        Boolean   @default(true)
   /// Fase 52 — divisi menurut HRD. SENGAJA terpisah dari User.divisionId,
   /// dan pembagiannya tegas:
   ///
@@ -2267,39 +2281,50 @@ model Employee {
   /// DILAPORKAN, bukan diselaraskan diam-diam — mengubahnya berarti mengubah
   /// ke mana persetujuan cuti seseorang berjalan, dan itu tidak boleh terjadi
   /// sebagai efek samping mengunggah spreadsheet.
-  divisionId   String?
+  divisionId      String?
   /// Fase 41 — alamat domisili.
-  address      String?
+  address         String?
   /// Fase 41 — pola kerja: SHIFT mengikuti jadwal bergilir, NON_SHIFT jam
   /// kantor tetap. Dibedakan dari keberadaan ShiftSchedule karena seorang
   /// pekerja non-shift pun bisa sesekali dijadwalkan.
-  workPattern  String   @default("NON_SHIFT") // SHIFT | NON_SHIFT
+  workPattern     String    @default("NON_SHIFT") // SHIFT | NON_SHIFT
   /// Fase 41 — jenjang jabatan. SENGAJA terpisah dari User.level: yang ini
   /// fakta kepegawaian, User.level adalah hierarki persetujuan. Menyatukannya
   /// membuat promosi jabatan diam-diam mengubah kewenangan approval.
-  jobLevel     String   @default("STAFF") // STAFF | LEADER
+  jobLevel        String    @default("STAFF") // STAFF | LEADER
   /// Fase 41 — masa kontrak. Hanya terisi bila employeeType = CONTRACT;
   /// ditegakkan di contractRejection(), bukan di form.
   contractStartAt DateTime?
   contractEndAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   /// Fase 49 — foto resmi pegawai, diunggah HRD. Menunjuk Attachment dengan
   /// entityType "EmployeePhoto". Disimpan sebagai penunjuk, bukan berkas,
   /// supaya melewati mesin lampiran yang sudah dikeraskan (MIME, ukuran,
   /// magic byte) dan penyajiannya tetap berizin.
+  /// Fase 59 — data diri yang dicocokkan HRD dengan dokumen. Diisi HRD, bukan
+  /// orangnya sendiri: membiarkan orang mengubahnya berarti data kepegawaian
+  /// bisa berbeda dari ijazah dan KTP tanpa ada yang tahu.
+  birthPlace        String?
+  birthDate         DateTime?
+  /// SD|SMP|SMA|D1|D2|D3|D4|S1|S2|S3 — konstanta EDUCATION_LEVELS.
+  education         String?
+  /// A|B|AB|O masing-masing +/-, atau UNKNOWN. DATA KESEHATAN: tidak pernah
+  /// ikut ke halaman verifikasi kartu publik, daftar pegawai, maupun ekspor
+  /// umum. Tempatnya hanya detail pegawai (hrd.view) dan profil orangnya.
+  bloodType         String?
   photoAttachmentId String?
 
-  user        User?              @relation("EmployeeUser", fields: [userId], references: [id])
-  division    Division?          @relation(fields: [divisionId], references: [id])
-  supervisor  Employee?          @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
-  cards       EmployeeCard[]
+  user         User?             @relation("EmployeeUser", fields: [userId], references: [id])
+  division     Division?         @relation(fields: [divisionId], references: [id])
+  supervisor   Employee?         @relation("EmployeeSupervisor", fields: [supervisorId], references: [id])
+  cards        EmployeeCard[]
   subordinates Employee[]        @relation("EmployeeSupervisor")
-  schedules   ShiftSchedule[]
-  attendances Attendance[]
-  leaves      LeaveRequest[]
-  overtimes   OvertimeRequest[]
+  schedules    ShiftSchedule[]
+  attendances  Attendance[]
+  leaves       LeaveRequest[]
+  overtimes    OvertimeRequest[]
 
   @@index([isActive])
 }
@@ -2357,8 +2382,8 @@ model Attendance {
   status            String    @default("PRESENT") // PRESENT|LATE|ABSENT|LEAVE|SICK|HOLIDAY
   note              String?
 
-  employee       Employee            @relation(fields: [employeeId], references: [id])
-  shift          Shift?              @relation(fields: [shiftId], references: [id])
+  employee        Employee            @relation(fields: [employeeId], references: [id])
+  shift           Shift?              @relation(fields: [shiftId], references: [id])
   clockInLocation AttendanceLocation? @relation(fields: [clockInLocationId], references: [id])
 
   @@unique([employeeId, date])
@@ -2518,15 +2543,15 @@ model TransferReceiptLine {
 /// Fase 18 (PRD-WAREHOUSE-ENHANCEMENT F5) — surat jalan atas transaksi
 /// pengeluaran/transfer. Maksimal satu DO aktif per transaksi.
 model DeliveryOrder {
-  id          String    @id @default(cuid())
-  doNumber    String    @unique // DO-YYYYMM-####
-  txId        String
-  status      String    @default("DRAFT") // DRAFT|APPROVED|CANCELLED
-  notes       String?
-  createdById String
+  id           String    @id @default(cuid())
+  doNumber     String    @unique // DO-YYYYMM-####
+  txId         String
+  status       String    @default("DRAFT") // DRAFT|APPROVED|CANCELLED
+  notes        String?
+  createdById  String
   approvedById String?
-  approvedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   tx         StockTransaction    @relation(fields: [txId], references: [id])
   createdBy  User                @relation("DoCreator", fields: [createdById], references: [id])
@@ -2627,33 +2652,33 @@ model ReturnRequestLine {
 /// sendiri oleh teknisi/vendor/tim proyek dari lapangan. Persetujuan
 /// menghasilkan draft pengeluaran resmi yang langsung mereservasi stock.
 model MaterialRequest {
-  id           String    @id @default(cuid())
-  requestNumber String   @unique // MRQ-YYYYMM-####
-  requesterId  String
-  warehouseId  String
-  workOrderId  String?
-  purpose      String
-  note         String?
-  status       String    @default("SUBMITTED") // SUBMITTED|APPROVED|REJECTED|CANCELLED
-  decidedById  String?
-  decidedAt    DateTime?
-  decisionNote String?
-  txId         String?   @unique
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  requestNumber String    @unique // MRQ-YYYYMM-####
+  requesterId   String
+  warehouseId   String
+  workOrderId   String?
+  purpose       String
+  note          String?
+  status        String    @default("SUBMITTED") // SUBMITTED|APPROVED|REJECTED|CANCELLED
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  txId          String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  requester User              @relation("MrqRequester", fields: [requesterId], references: [id])
-  warehouse Warehouse         @relation("MrqWarehouse", fields: [warehouseId], references: [id])
-  workOrder WorkOrder?        @relation(fields: [workOrderId], references: [id])
-  decidedBy User?             @relation("MrqDecider", fields: [decidedById], references: [id])
-  tx        StockTransaction? @relation(fields: [txId], references: [id])
+  requester User                  @relation("MrqRequester", fields: [requesterId], references: [id])
+  warehouse Warehouse             @relation("MrqWarehouse", fields: [warehouseId], references: [id])
+  workOrder WorkOrder?            @relation(fields: [workOrderId], references: [id])
+  decidedBy User?                 @relation("MrqDecider", fields: [decidedById], references: [id])
+  tx        StockTransaction?     @relation(fields: [txId], references: [id])
   lines     MaterialRequestLine[]
 
   @@index([status, requesterId])
 }
 
 model MaterialRequestLine {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   requestId String
   itemId    String
   qty       Int
@@ -2753,10 +2778,10 @@ model SlotLedger {
 
 /// Ambang nilai/jumlah yang membuat perpindahan slot butuh persetujuan.
 model SlotTransferPolicy {
-  id        String  @id @default(cuid())
-  name      String
-  maxQty    Int // di atas ini butuh izin slot.approve
-  isActive  Boolean @default(true)
+  id       String  @id @default(cuid())
+  name     String
+  maxQty   Int // di atas ini butuh izin slot.approve
+  isActive Boolean @default(true)
 }
 
 /// Fase 21 (F12) — pembatasan gudang untuk seorang user. Bila user punya
@@ -2776,16 +2801,16 @@ model UserWarehouseScope {
 /// NetworkDevice, mengikuti pola OltDevice. RouterOS v7 → REST API di atas
 /// HTTPS, jadi tidak butuh pustaka klien tambahan.
 model MikrotikRouter {
-  id              String   @id @default(cuid())
-  networkDeviceId String   @unique
-  managementUrl   String // https://host[:port]
+  id               String    @id @default(cuid())
+  networkDeviceId  String    @unique
+  managementUrl    String // https://host[:port]
   /// Nama env var berisi "user:password" — BUKAN nilainya (pola Fase 13).
-  credentialRef   String
-  pollIntervalSec Int      @default(60)
-  isPollingEnabled Boolean @default(true)
-  lastPolledAt    DateTime?
-  notes           String?
-  createdAt       DateTime @default(now())
+  credentialRef    String
+  pollIntervalSec  Int       @default(60)
+  isPollingEnabled Boolean   @default(true)
+  lastPolledAt     DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
 
   networkDevice NetworkDevice  @relation(fields: [networkDeviceId], references: [id])
   sessions      PppoeSession[]
@@ -2795,7 +2820,7 @@ model MikrotikRouter {
 /// Keadaan sesi PPPoE terakhir yang diketahui per (router × username).
 /// Diisi HANYA oleh poller — halaman monitor tidak pernah menulis ke sini.
 model PppoeSession {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   routerId       String
   subscriptionId String?
   username       String
@@ -2804,7 +2829,7 @@ model PppoeSession {
   uptimeSeconds  Int?
   status         String // ONLINE|OFFLINE|DISABLED
   lastSeenAt     DateTime?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime  @updatedAt
 
   router       MikrotikRouter @relation(fields: [routerId], references: [id])
   subscription Subscription?  @relation(fields: [subscriptionId], references: [id])
@@ -2855,13 +2880,13 @@ model ProbeTarget {
   failThreshold   Int     @default(3)
   isActive        Boolean @default(true)
 
-  consecutiveFails Int      @default(0)
+  consecutiveFails Int       @default(0)
   lastStatus       String? // UP|DOWN
   lastLatencyMs    Int?
   lastCheckedAt    DateTime?
   /// Alarm yang sedang terbuka akibat target ini — dipakai untuk auto-clear.
   openAlarmId      String?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   networkDevice NetworkDevice? @relation(fields: [networkDeviceId], references: [id])
   site          NetworkSite?   @relation(fields: [siteId], references: [id])
@@ -2892,27 +2917,27 @@ model ProbeResult {
 /// yang sama bersamaan — direbut lewat satu UPDATE bersyarat, bukan baca-lalu-
 /// tulis, sehingga aman terhadap balapan.
 model ScheduledTask {
-  id          String    @id @default(cuid())
-  code        String    @unique
+  id          String  @id @default(cuid())
+  code        String  @unique
   name        String
   description String?
   intervalSec Int
-  isEnabled   Boolean   @default(true)
+  isEnabled   Boolean @default(true)
 
   lastRunAt      DateTime?
   lastStatus     String? // SUCCESS|FAILED
   lastError      String?
   lastDurationMs Int?
-  runCount       Int      @default(0)
-  failCount      Int      @default(0)
+  runCount       Int       @default(0)
+  failCount      Int       @default(0)
 
   /// Sewa: diisi saat pekerjaan direbut, dikosongkan saat selesai. Sewa yang
   /// kedaluwarsa boleh direbut worker lain — supaya worker yang mati tidak
   /// mengunci pekerjaan selamanya.
-  lockedAt  DateTime?
-  lockedBy  String?
+  lockedAt DateTime?
+  lockedBy String?
 
-  createdAt DateTime @default(now())
+  createdAt DateTime           @default(now())
   runs      ScheduledTaskRun[]
 
   @@index([isEnabled, lastRunAt])
@@ -2991,23 +3016,23 @@ model CustomerTermination {
 }
 
 model DeviceRecoveryIssue {
-  id             String @id @default(cuid())
-  recoveryNumber String @unique // DRI-YYYYMM-####
-  terminationId  String @unique
-  workOrderId    String @unique
-  warehouseToId  String
-  status         String @default("OPEN") // OPEN|ASSIGNED|IN_PROGRESS|PARTIAL|RECOVERED|INSPECTION|COMPLETED|CLOSED_UNRECOVERED
-  assigneeId     String?
-  scheduledAt    DateTime?
-  slaDueAt       DateTime?
+  id                       String    @id @default(cuid())
+  recoveryNumber           String    @unique // DRI-YYYYMM-####
+  terminationId            String    @unique
+  workOrderId              String    @unique
+  warehouseToId            String
+  status                   String    @default("OPEN") // OPEN|ASSIGNED|IN_PROGRESS|PARTIAL|RECOVERED|INSPECTION|COMPLETED|CLOSED_UNRECOVERED
+  assigneeId               String?
+  scheduledAt              DateTime?
+  slaDueAt                 DateTime?
   /// Gerbang §13.5 — port ODP hanya boleh dilepas setelah pemutusan fisik
   /// dikonfirmasi. Tanpa ini, port bisa dijual ke pelanggan lain padahal
   /// kabelnya masih tersambung.
   physicalDisconnectedAt   DateTime?
   physicalDisconnectedById String?
   completedAt              DateTime?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   termination CustomerTermination     @relation(fields: [terminationId], references: [id])
   workOrder   WorkOrder               @relation(fields: [workOrderId], references: [id])
@@ -3020,9 +3045,9 @@ model DeviceRecoveryIssue {
 }
 
 model DeviceRecoveryItem {
-  id         String @id @default(cuid())
-  recoveryId String
-  deviceId   String
+  id               String    @id @default(cuid())
+  recoveryId       String
+  deviceId         String
   /// Snapshot saat pengajuan — pembanding untuk mendeteksi perangkat tertukar
   /// di lapangan (§13.4). Tidak ikut berubah bila master data diperbarui.
   snapshotSerial   String
@@ -3031,14 +3056,14 @@ model DeviceRecoveryItem {
   actualSerial     String?
   actualMac        String?
   mismatchNote     String? // wajib bila actual ≠ snapshot
-  status           String  @default("RECOVERY_PENDING") // RECOVERY_PENDING|PICKED_UP|RECEIVED|INSPECTED|NOT_RETURNED
+  status           String    @default("RECOVERY_PENDING") // RECOVERY_PENDING|PICKED_UP|RECEIVED|INSPECTED|NOT_RETURNED
   finalDecision    String? // LAYAK_DIGUNAKAN|PERLU_PERBAIKAN|RUSAK|SCRAP|TIDAK_KEMBALI
   pickedUpAt       DateTime?
   receivedAt       DateTime?
   receivedById     String?
   notReturnedNote  String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   recovery   DeviceRecoveryIssue @relation(fields: [recoveryId], references: [id])
   device     SerializedDevice    @relation(fields: [deviceId], references: [id])
@@ -3141,10 +3166,10 @@ model EmployeeCard {
   /// bisa digantikan sekali.
   replacesId   String?   @unique
 
-  employee  Employee      @relation(fields: [employeeId], references: [id])
-  issuedBy  User          @relation("CardIssuer", fields: [issuedById], references: [id])
-  revokedBy User?         @relation("CardRevoker", fields: [revokedById], references: [id])
-  replaces  EmployeeCard? @relation("CardReplacement", fields: [replacesId], references: [id])
+  employee   Employee      @relation(fields: [employeeId], references: [id])
+  issuedBy   User          @relation("CardIssuer", fields: [issuedById], references: [id])
+  revokedBy  User?         @relation("CardRevoker", fields: [revokedById], references: [id])
+  replaces   EmployeeCard? @relation("CardReplacement", fields: [replacesId], references: [id])
   replacedBy EmployeeCard? @relation("CardReplacement")
 
   @@index([employeeId, status])

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { authProviderMode } from "@/lib/oidc";
+import { avatarPath } from "@/lib/avatar";
 import { logAudit } from "@/lib/audit";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -33,6 +34,11 @@ export interface ProfileView {
     level: string;
     divisionName: string | null;
     isActive: boolean;
+    /// Fase 59 — foto profil milik penggunanya sendiri, atau null bila belum
+    /// ada. BUKAN foto resmi kartu pegawai: yang itu milik HRD dan tidak boleh
+    /// diganti sendiri. Bila null, tampilkan INISIAL nama — jangan jatuh ke
+    /// foto resmi, karena itu membuat orang mengira foto kartunya ikut ganti.
+    avatarUrl: string | null;
   };
   employee: {
     employeeNo: string;
@@ -53,6 +59,14 @@ export interface ProfileView {
     /// contractRejection() saat penyimpanan.
     contractStartAt: string | null;
     contractEndAt: string | null;
+    /// Fase 59 — data diri, diisi HRD dan HANYA BISA DIBACA di sini.
+    birthPlace: string | null;
+    birthDate: string | null;
+    education: string | null;
+    /// DATA KESEHATAN. Tampilkan hanya di profil orangnya sendiri dan detail
+    /// pegawai (hrd.view) — tidak di daftar, tidak di ekspor, tidak di mana pun
+    /// yang bisa dilihat orang yang tidak membutuhkannya.
+    bloodType: string | null;
   } | null;
   auth: {
     provider: AuthProvider;
@@ -111,6 +125,7 @@ export async function profileView(userId: string): Promise<ProfileView | null> {
       level: user.level,
       divisionName: user.division?.name ?? null,
       isActive: user.isActive,
+      avatarUrl: avatarPath(user.avatarToken),
     },
     employee: user.employee
       ? {
@@ -125,6 +140,10 @@ export async function profileView(userId: string): Promise<ProfileView | null> {
           jobLevel: user.employee.jobLevel,
           contractStartAt: user.employee.contractStartAt?.toISOString() ?? null,
           contractEndAt: user.employee.contractEndAt?.toISOString() ?? null,
+          birthPlace: user.employee.birthPlace,
+          birthDate: user.employee.birthDate?.toISOString() ?? null,
+          education: user.employee.education,
+          bloodType: user.employee.bloodType,
         }
       : null,
     auth: {

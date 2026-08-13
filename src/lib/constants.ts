@@ -924,6 +924,42 @@ export const JOB_LEVELS = [
   ["CEO", "CEO"],
 ] as const;
 
+// Fase 59 — data diri yang dicocokkan HRD dengan dokumen.
+//
+// Urutannya urutan JENJANG, bukan sekadar tampilan — dan itu satu-satunya
+// tempat urutan ini berarti. Tidak ada kode yang membandingkannya.
+export const EDUCATION_LEVELS = [
+  ["SD", "SD / sederajat"],
+  ["SMP", "SMP / sederajat"],
+  ["SMA", "SMA / SMK / sederajat"],
+  ["D1", "D1"],
+  ["D2", "D2"],
+  ["D3", "D3"],
+  ["D4", "D4 / Sarjana Terapan"],
+  ["S1", "S1"],
+  ["S2", "S2"],
+  ["S3", "S3"],
+] as const;
+
+// DATA KESEHATAN. Tidak pernah ikut ke halaman verifikasi kartu publik, daftar
+// pegawai, maupun ekspor umum — tempatnya hanya detail pegawai (hrd.view) dan
+// profil orangnya sendiri.
+//
+// "Tidak diketahui" ADA dengan sengaja: memaksa memilih golongan darah membuat
+// orang menebak, dan golongan darah yang salah lebih berbahaya daripada yang
+// kosong.
+export const BLOOD_TYPES = [
+  ["A_POS", "A+"],
+  ["A_NEG", "A−"],
+  ["B_POS", "B+"],
+  ["B_NEG", "B−"],
+  ["AB_POS", "AB+"],
+  ["AB_NEG", "AB−"],
+  ["O_POS", "O+"],
+  ["O_NEG", "O−"],
+  ["UNKNOWN", "Tidak diketahui"],
+] as const;
+
 export const DAY_TYPES = [
   ["WORK", "Kerja"],
   ["OFF", "Libur"],

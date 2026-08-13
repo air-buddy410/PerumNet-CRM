@@ -1250,6 +1250,90 @@ tidak terjawab".
 
 ---
 
+## 26. Foto profil, data diri, dan ulang tahun (Fase 59) — PERLU HALAMAN
+
+```ts
+import { uploadAvatarAction, removeAvatarAction } from "@/app/(app)/profile/actions";
+import { profileView } from "@/lib/profile";                 // avatarUrl + data diri
+import { initialsOf } from "@/lib/avatar";                   // murni, aman di client
+import { birthdaysToday } from "@/lib/birthday-service";     // untuk dashboard
+import { EDUCATION_LEVELS, BLOOD_TYPES } from "@/lib/constants";
+```
+
+### 26.1 Foto profil — DUA foto, jangan tertukar
+
+Ini bagian terpenting di seluruh bagian ini.
+
+| | Foto resmi | Foto profil |
+|---|---|---|
+| Sumber | `employee.photoAttachmentId` (HRD) | `view.user.avatarUrl` |
+| Dipakai di | kartu pegawai, verifikasi publik | tampilan aplikasi |
+| Boleh diganti sendiri | **tidak** | ya |
+
+**Bila `avatarUrl` bernilai `null`, tampilkan INISIAL nama** — pakai
+`initialsOf(name)`. **Jangan** jatuh ke foto resmi pegawai. Menampilkan foto
+resmi di tempat foto profil membuat orang mengira foto kartunya ikut berganti,
+lalu mengunggah foto santai ke tempat yang dipindai pelanggan.
+
+Di halaman profil, sebut terang-terangan bahwa ini bukan foto kartu pegawai.
+
+**Form unggah:** `uploadAvatarAction`, field `avatar`,
+`encType="multipart/form-data"`. Hapus: `removeAvatarAction`, tanpa field.
+
+**Tidak perlu memotong gambar di sisi klien.** Server sudah memotongnya persegi
+di tengah, mengecilkan ke 512×512, dan mengubahnya ke WebP. Tampilan lingkaran
+cukup `border-radius: 50%`.
+
+Alasan pemrosesan itu bukan kerapian: **foto dari ponsel membawa koordinat GPS
+di EXIF-nya.** Foto yang disimpan apa adanya bisa memberitahu di mana orang itu
+tinggal, dan tidak seorang pun mengira sedang membagikan itu. Pemrosesan ulang
+menghapusnya.
+
+**URL-nya boleh dipakai app PerumNet lain apa adanya** — `/api/avatar/<token>`
+terbuka tanpa login, karena tag `<img>` tidak bisa mengirim header otentikasi.
+Yang menjaganya tokennya: acak penuh, tidak mengandung nama, email, maupun id.
+
+### 26.2 Data diri — HANYA BACA di profil
+
+Empat field baru di `view.employee`: `birthPlace`, `birthDate`, `education`,
+`bloodType`. Label manusiawinya di `EDUCATION_LEVELS` dan `BLOOD_TYPES`
+(pasangan `[kode, label]`, sama polanya dengan konstanta lain).
+
+**Diisi HRD**, lewat form pegawai — bukan oleh orangnya sendiri. Tempat &
+tanggal lahir dan pendidikan adalah fakta yang HRD cocokkan dengan dokumen;
+membiarkan orang mengubahnya berarti data kepegawaian bisa berbeda dari ijazah
+dan KTP tanpa ada yang tahu. Di halaman profil keempatnya **hanya bisa dibaca**,
+sejalan dengan NIK, jabatan, dan divisi.
+
+⚠️ **Golongan darah adalah data kesehatan.** Tampilkan **hanya** di profil
+orangnya sendiri dan di detail pegawai (`hrd.view`). **Jangan** di daftar
+pegawai, **jangan** di ekspor, **jangan** di halaman verifikasi kartu publik.
+
+⚠️ **Jangan jadikan tanggal lahir sebagai penyaring** di daftar pegawai.
+Menyaring berdasarkan umur mudah ditambahkan dan sulit dijelaskan.
+
+### 26.3 Ulang tahun di dashboard
+
+```ts
+const orang = await birthdaysToday();   // [] bila tidak ada — panel jangan tampil
+// { fullName, jobTitle, divisionName, avatarUrl, greeting }
+```
+
+`greeting` sudah berisi kalimat ucapan siap pakai. **Tetap sama sepanjang hari**
+— dipilih dari namanya, bukan acak. Ucapan yang berganti tiap kali layar
+disegarkan terlihat seperti mesin, bukan seperti perhatian.
+
+**Jangan menambahkan umur.** Tidak ada satu pun umur yang keluar dari backend,
+dan itu disengaja: umur di papan pengumuman kantor adalah bahan canggung yang
+tidak diminta siapa pun.
+
+Yang sudah ditangani backend dan tidak perlu kamu urus: hanya pegawai aktif,
+berganti tengah malam **WITA** (bukan UTC — kalau UTC, ucapannya muncul sehari
+terlambat, sore hari saat orangnya sudah pulang), dan yang lahir 29 Februari
+tetap diucapkan pada 28 Februari di tahun biasa.
+
+---
+
 ## 12. Catatan kerja bersama
 
 **Direktori build sudah bisa dipisah.** Jalankan dev/build dengan

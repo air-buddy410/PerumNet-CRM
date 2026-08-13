@@ -11,6 +11,7 @@ import { AUDIT_ACTIONS } from "@/lib/constants";
 import { revalidatePath } from "next/cache";
 import { updateOwnContact, passwordChangeAvailable, passwordChangeTarget } from "@/lib/profile";
 import { changeOwnMailPassword } from "@/lib/mailserver";
+import { setOwnAvatar, removeOwnAvatar } from "@/lib/avatar-service";
 
 const schema = z
   .object({
@@ -145,5 +146,37 @@ export async function updateContactAction(formData: FormData): Promise<void> {
       (result.ok
         ? "ok=" + encodeURIComponent("Kontak diperbarui.")
         : "error=" + encodeURIComponent(result.error))
+  );
+}
+
+// ── Foto profil (Fase 59) ───────────────────────────────────────
+//
+// Tidak menerima userId: satu-satunya akun yang bisa diubah lewat jalur ini
+// adalah milik pemanggil. Parameter yang bisa dikendalikan akan berarti siapa
+// pun bisa mengganti wajah orang lain.
+
+export async function uploadAvatarAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect("/profile?error=" + encodeURIComponent("Pilih berkas foto terlebih dahulu."));
+  }
+  const r = await setOwnAvatar({ id: user.id, name: user.name }, file as File);
+  revalidatePath("/profile");
+  redirect(
+    "/profile?" +
+      (r.ok
+        ? "ok=" + encodeURIComponent("Foto profil diperbarui.")
+        : "error=" + encodeURIComponent(r.error))
+  );
+}
+
+export async function removeAvatarAction(): Promise<void> {
+  const user = await requireUser();
+  const r = await removeOwnAvatar({ id: user.id, name: user.name });
+  revalidatePath("/profile");
+  redirect(
+    "/profile?" +
+      (r.ok ? "ok=" + encodeURIComponent("Foto profil dihapus.") : "error=" + encodeURIComponent(r.error))
   );
 }

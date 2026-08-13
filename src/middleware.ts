@@ -18,6 +18,10 @@ const PUBLIC_PATHS = [
   // Isinya hampa dengan sengaja: jalur terbuka tidak boleh menyebut versi,
   // nama host, atau apa pun yang menolong orang memetakan sistem dari luar.
   "/api/health",
+  // Fase 59 — foto profil dipasang di aplikasi PerumNet lain lewat tag <img>,
+  // yang tidak bisa mengirim header otentikasi. Yang menjaganya tokennya:
+  // acak penuh, tidak mengandung nama maupun id.
+  "/api/avatar/",
 ];
 
 // Next.js middleware membangun URL dari hostname/port server (bukan Host header),

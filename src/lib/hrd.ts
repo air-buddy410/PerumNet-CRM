@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
-import { EMPLOYEE_TYPES, LEAVE_TYPES, DAY_TYPES, WORK_PATTERNS, JOB_LEVELS } from "@/lib/constants";
+import { EMPLOYEE_TYPES, LEAVE_TYPES, DAY_TYPES, WORK_PATTERNS, JOB_LEVELS, EDUCATION_LEVELS, BLOOD_TYPES } from "@/lib/constants";
 import { contractRejection } from "@/lib/employment";
 import type { CurrentUser } from "@/lib/rbac";
 
@@ -128,6 +128,11 @@ export async function saveEmployee(
     jobLevel?: string;
     /** Divisi menurut HRD. TIDAK menyentuh User.divisionId — lihat schema. */
     divisionId?: string | null;
+    /// Fase 59 — data diri, diisi HRD dan dicocokkan dengan dokumen.
+    birthPlace?: string | null;
+    birthDate?: Date | null;
+    education?: string | null;
+    bloodType?: string | null;
     contractStartAt?: Date | null;
     contractEndAt?: Date | null;
   }
@@ -152,6 +157,15 @@ export async function saveEmployee(
   const jobLevel = data.jobLevel ?? "STAFF";
   if (!isValidCode(WORK_PATTERNS, workPattern)) return { ok: false, error: "Pola kerja tidak dikenal." };
   if (!isValidCode(JOB_LEVELS, jobLevel)) return { ok: false, error: "Jenjang jabatan tidak dikenal." };
+  // Nilai di luar daftar DITOLAK, bukan disimpan apa adanya. Golongan darah
+  // yang salah ketik lebih berbahaya daripada yang kosong — dan pendidikan
+  // yang tidak konsisten membuat penyaringan di kemudian hari mustahil.
+  if (data.education && !isValidCode(EDUCATION_LEVELS, data.education)) {
+    return { ok: false, error: "Jenjang pendidikan tidak dikenal." };
+  }
+  if (data.bloodType && !isValidCode(BLOOD_TYPES, data.bloodType)) {
+    return { ok: false, error: "Golongan darah tidak dikenal." };
+  }
   // Fase 41 — masa kontrak. Ditolak di sini, bukan di form: penyapu Fase 42
   // membekukan akun berdasarkan contractEndAt, jadi tanggal yang tertinggal
   // pada karyawan tetap akan membekukan orang yang masih bekerja.
@@ -204,6 +218,10 @@ export async function saveEmployee(
     workPattern,
     jobLevel,
     divisionId: data.divisionId || null,
+    birthPlace: data.birthPlace?.trim() || null,
+    birthDate: data.birthDate ?? null,
+    education: data.education || null,
+    bloodType: data.bloodType || null,
     contractStartAt: data.contractStartAt ?? null,
     contractEndAt: data.contractEndAt ?? null,
   };
