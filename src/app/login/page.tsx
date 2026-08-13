@@ -52,7 +52,7 @@ export default async function LoginPage({
             {sp.next && <input type="hidden" name="next" value={sp.next} />}
             <div>
               <label className="label" htmlFor="identifier">
-                Username atau Email
+                Email atau Username
               </label>
               <input
                 id="identifier"
