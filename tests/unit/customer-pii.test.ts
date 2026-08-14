@@ -6,6 +6,7 @@ import {
   maskEmail,
   redactCustomer,
   redactCustomers,
+  type PiiPelanggan,
 } from "@/lib/customer-pii";
 
 // NIK asli dari berkas PerumNet, dipakai karena strukturnya yang penting:
@@ -117,7 +118,10 @@ describe("redactCustomer", () => {
   });
 
   test("baris tanpa bidang pribadi sama sekali tidak menumbuhkan bidang baru", () => {
-    const ringkas = { id: "c2", name: "PT Contoh" };
+    // Anotasinya eksplisit: tanpa itu TypeScript menolak objek yang tidak
+    // punya satu pun bidang PiiPelanggan (weak type detection). Bentuk ini
+    // nyata — query yang hanya memilih id dan nama menghasilkannya.
+    const ringkas: PiiPelanggan & { id: string; name: string } = { id: "c2", name: "PT Contoh" };
     const h = redactCustomer(ringkas, false);
     assert.deepEqual(Object.keys(h).sort(), ["id", "name"]);
   });
