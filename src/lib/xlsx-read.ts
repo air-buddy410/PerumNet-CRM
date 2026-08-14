@@ -66,15 +66,13 @@ function sharedStringsOf(buf: Buffer, entries: ReturnType<typeof listKmzEntries>
   return out;
 }
 
-/**
- * Membaca sheet pertama sebagai tabel teks.
- *
- * Sel kosong tetap menempati kolomnya — xlsx menghilangkan sel kosong dari
- * XML, dan tanpa penataan ulang berdasarkan referensi selnya, satu kolom
- * kosong akan menggeser seluruh baris ke kiri. Itu jenis kerusakan yang tidak
- * terlihat sampai datanya sudah masuk.
- */
-export function readSheetRows(buf: Buffer): string[][] {
+/** Nomor urut sheetN.xml — sheet10 harus datang sesudah sheet9, bukan sesudah sheet1. */
+function sheetOrder(name: string): number {
+  return Number(/sheet(\d+)\.xml$/.exec(name)?.[1] ?? Number.MAX_SAFE_INTEGER);
+}
+
+/** Membuka arsip dan mengurutkan lembar kerjanya; dipakai kedua pembaca di bawah. */
+function openWorkbook(buf: Buffer) {
   if (!isZip(buf)) {
     throw new XlsxError(
       "Berkas ini bukan .xlsx. Format .xls lama tidak didukung — simpan ulang sebagai .xlsx."
@@ -88,20 +86,58 @@ export function readSheetRows(buf: Buffer): string[][] {
     throw new XlsxError(e instanceof KmzError ? e.message : String(e));
   }
 
-  const sheet =
-    entries.find((e) => e.name === "xl/worksheets/sheet1.xml") ??
-    entries.find((e) => /^xl\/worksheets\/sheet\d+\.xml$/.test(e.name));
-  if (!sheet) throw new XlsxError("Arsip tidak memuat lembar kerja sama sekali.");
+  const sheets = entries
+    .filter((e) => /^xl\/worksheets\/sheet\d+\.xml$/.test(e.name))
+    .sort((a, b) => sheetOrder(a.name) - sheetOrder(b.name));
+  if (sheets.length === 0) throw new XlsxError("Arsip tidak memuat lembar kerja sama sekali.");
 
-  const shared = sharedStringsOf(buf, entries);
-  const xml = readZipEntry(buf, sheet).toString("utf8");
+  return { entries, sheets, shared: sharedStringsOf(buf, entries) };
+}
 
+/**
+ * Membaca sheet pertama sebagai tabel teks.
+ *
+ * Sel kosong tetap menempati kolomnya — xlsx menghilangkan sel kosong dari
+ * XML, dan tanpa penataan ulang berdasarkan referensi selnya, satu kolom
+ * kosong akan menggeser seluruh baris ke kiri. Itu jenis kerusakan yang tidak
+ * terlihat sampai datanya sudah masuk.
+ */
+export function readSheetRows(buf: Buffer): string[][] {
+  const { sheets, shared } = openWorkbook(buf);
+  return parseSheetXml(readZipEntry(buf, sheets[0]).toString("utf8"), shared, 0);
+}
+
+/**
+ * Membaca SELURUH lembar kerja, berurutan seperti di dalam berkas.
+ *
+ * Ada workbook yang satu berkasnya memuat beberapa tabel berbeda — katalog
+ * material, vendor, dan kategori misalnya. Batas {@link MAX_ROWS} berlaku
+ * untuk seluruh berkas, bukan per lembar: sepuluh lembar yang masing-masing
+ * setengah batas tetap berukuran sama besarnya bagi mesin yang membacanya.
+ */
+export function readAllSheetRows(buf: Buffer): string[][][] {
+  const { sheets, shared } = openWorkbook(buf);
+  const out: string[][][] = [];
+  let sudah = 0;
+  for (const sheet of sheets) {
+    const rows = parseSheetXml(readZipEntry(buf, sheet).toString("utf8"), shared, sudah);
+    sudah += rows.length;
+    out.push(rows);
+  }
+  return out;
+}
+
+/**
+ * @param sudah Jumlah baris yang sudah terbaca dari lembar sebelumnya, supaya
+ *   batas {@link MAX_ROWS} dihitung untuk seluruh berkas.
+ */
+function parseSheetXml(xml: string, shared: string[], sudah: number): string[][] {
   const rows: string[][] = [];
   const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
   let rowMatch: RegExpExecArray | null;
 
   while ((rowMatch = rowRe.exec(xml))) {
-    if (rows.length >= MAX_ROWS) {
+    if (sudah + rows.length >= MAX_ROWS) {
       throw new XlsxError(`Berkas memuat lebih dari ${MAX_ROWS} baris — terlalu besar untuk diimpor sekaligus.`);
     }
     const row: string[] = [];

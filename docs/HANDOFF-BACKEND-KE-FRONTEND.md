@@ -1640,3 +1640,91 @@ kalau baru satu yang terisi.
 Yang ditolak backend: di luar jangkauan (termasuk lintang & bujur **tertukar**,
 yang di Indonesia selalu tertangkap karena bujur kita di atas 90), dan **(0,0)**
 — itu keluaran khas GPS yang gagal mengunci, bukan lokasi.
+
+## 33. Impor katalog material dari workbook gudang (Fase 61) — PERLU HALAMAN
+
+Backend sudah siap. Yang belum ada: halamannya.
+
+**Server action** (di `src/app/(app)/inventory/actions.ts`):
+
+```ts
+previewCatalogImportAction(formData)   // { file, warehouseId } → ImportPlan
+applyCatalogImportAction(formData)     // { file, warehouseId } → ImportOutcome
+```
+
+Keduanya **mengembalikan nilai**, bukan redirect — hasil pratinjau adalah tabel
+yang harus dibaca dulu. Izin: `items.manage`. Penerapan juga butuh
+`stock.create` + `stock.post` bila ada saldo awal.
+
+**Penerapan mengunggah ULANG berkasnya.** Jangan kirim baris hasil pratinjau;
+kirim `File` yang sama. Kalau tidak, siapa pun yang bisa memanggil action ini
+bisa menulis katalog apa saja tanpa melewati satu pun pemeriksaan.
+
+### Bentuk `ImportPlan`
+
+| Bidang | Isi |
+|---|---|
+| `ok` | boolean — false bila ada satu saja `issues`. Tombol Terapkan harus mati. |
+| `warehouseName` | nama gudang tujuan saldo awal |
+| `categories[]`, `suppliers[]` | `{ code, name, action }` — `action` = `CREATE` \| `SKIP` |
+| `items[]` | `{ rowNumber, code, name, action, reason, changes[], notes[] }` |
+| `stock[]` | `{ itemCode, quantity, action, reason }` |
+| `issues[]` | `{ rowNumber, column, message }` |
+| `willCreateItems`, `willCompleteItems`, `willSkipItems` | angka ringkasan |
+| `willCreateCategories`, `willCreateSuppliers` | angka ringkasan |
+| `openingUnits` | total unit yang akan masuk sebagai saldo awal |
+| `skippedMovements` | baris pergerakan stok yang **sengaja** dilewati |
+| `ignoredSheets` | lembar yang judulnya tidak dikenali |
+
+`action` pada item ada tiga, sama seperti impor pegawai:
+
+- **CREATE** — kodenya belum ada, material baru dibuat.
+- **LENGKAPI** — kodenya sudah ada; hanya bidang **kosong** yang diisi. Isi
+  `changes[]` adalah daftar perubahannya. Nama, satuan, tracking type,
+  minStock, barcode, dan status aktif **tidak pernah** disentuh impor.
+- **SKIP** — sudah ada dan lengkap; `reason` menjelaskan.
+
+`notes[]` **tidak** menghalangi penerapan — tampilkan sebagai peringatan
+kuning, bukan merah. Contoh nyata dari data PerumNet: *"Harga beli hanya Rp102
+— periksa apakah kurang angka nol"*, *"Tanpa vendor"*, dan *"Nama di aplikasi
+'Bracket A' berbeda dari berkas 'Dead End' — tidak diubah"*.
+
+### Yang perlu ditonjolkan di layar
+
+1. **`issues` harus bisa ditunjuk.** Tiap masalah punya `rowNumber` dan
+   `column` — tampilkan keduanya, sebab admin gudang memperbaikinya di
+   spreadsheet, bukan di aplikasi.
+2. **`skippedMovements` perlu kalimat, bukan angka telanjang.** Berkas
+   PerumNet memuat 206 baris pergerakan stok yang sengaja tidak diimpor —
+   lognya hanya mencakup 59 dari 172 barang dan tidak rekonsiliasi dengan
+   saldo berjalan. Tanpa penjelasan, orang akan mengira datanya hilang.
+   Kalimat yang disarankan: *"206 baris riwayat pergerakan tidak diimpor —
+   lognya tidak lengkap. Saldo awal diambil dari lembar saldo."*
+3. **Pemilih gudang wajib**, dan namanya muncul lagi di ringkasan saldo awal.
+4. Kalau `openingUnits > 0`, sebutkan bahwa akan terbit satu dokumen
+   `GOODS_RECEIPT` — hasilnya ada di `ImportOutcome.openingTxNumber`.
+
+### Bentuk `ImportOutcome`
+
+```ts
+{
+  createdCategories: number;
+  createdSuppliers: number;
+  createdItems: { code, name }[];
+  completedItems: { code, fields: string[] }[];
+  skippedItems: number;
+  openingTxNumber: string | null;   // nomor dokumen saldo awal
+  openingUnits: number;
+}
+```
+
+### Kolom baru pada `Item`
+
+`supplierId`, `purchaseCost` (BigInt, rupiah penuh), `salePrice` (BigInt),
+`condition` (`GOOD` \| `SECOND` — kosakata yang sama dengan
+`SerializedDevice.condition`). Formulir item di `/inventory/items` sebaiknya
+ikut menampilkan keempatnya; kalau tidak, nilai hasil impor tidak akan pernah
+terlihat maupun bisa dikoreksi lewat aplikasi.
+
+**Model baru `Supplier`** — `code`, `name`, `phone`, `email`, `address`,
+`website`, `notes`, `isActive`. Belum ada halaman masternya sama sekali.

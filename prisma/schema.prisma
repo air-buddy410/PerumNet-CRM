@@ -744,7 +744,19 @@ model Item {
   trackingType String  @default("BULK") // SERIALIZED | BULK
   minStock     Int     @default(0)
   isActive     Boolean @default(true)
+  /// Fase 61 — pemasok utama. Opsional: katalog lama tidak selalu tahu dari
+  /// mana barangnya dibeli, dan menebaknya lebih buruk daripada mengosongkan.
+  supplierId   String?
+  /// Harga dalam rupiah penuh, bukan sen — mengikuti SerializedDevice.acquisitionCost.
+  /// Keduanya opsional: barang hibah dan barang yang tidak dijual ulang itu nyata.
+  purchaseCost BigInt?
+  salePrice    BigInt?
+  /// GOOD | SECOND — sama persis dengan SerializedDevice.condition supaya satu
+  /// kosakata dipakai di seluruh gudang. Barang bekas didaftarkan sebagai kode
+  /// item TERSENDIRI di katalog sumber, jadi ini memang sifat item, bukan stok.
+  condition    String  @default("GOOD")
 
+  supplier             Supplier?              @relation(fields: [supplierId], references: [id])
   category             Category?              @relation(fields: [categoryId], references: [id])
   stockLevels          StockLevel[]
   devices              SerializedDevice[]
@@ -758,6 +770,25 @@ model Item {
   materialRequestLines MaterialRequestLine[]
   slotAllocations      SlotAllocation[]
   slotLedger           SlotLedger[]
+}
+
+/// Fase 61 — pemasok material. Dipisahkan dari `NetworkDevice.vendor`, yang
+/// artinya MEREK perangkat (ZTE, Huawei) dan bukan pihak yang menjualnya.
+/// Satu nama toko bisa memasok belasan kategori barang; menyimpannya sebagai
+/// teks di setiap Item membuat nomor telepon yang sama ditulis ulang puluhan
+/// kali dan berubah di sebagian saja ketika vendornya pindah.
+model Supplier {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  phone    String?
+  email    String?
+  address  String?
+  website  String?
+  notes    String?
+  isActive Boolean @default(true)
+
+  items Item[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
