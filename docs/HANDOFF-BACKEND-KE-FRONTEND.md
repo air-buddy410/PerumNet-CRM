@@ -1542,3 +1542,64 @@ yang membedakan "tidak tahu" dari "hapus".
 
 Golongan darah adalah **data kesehatan** — tampilkan di detail pegawai
 (`hrd.view`) dan profil orangnya sendiri saja. Tidak di daftar, tidak di ekspor.
+
+---
+
+## 31. Alat geser potongan foto kartu (Fase 64) — PERLU HALAMAN
+
+HRD ingin memilih sendiri bidang potongnya, bukan menerima potongan mesin.
+Alasannya nyata: mesin tidak tahu wajah siapa yang penting di foto rombongan,
+dan potongan yang meleset berarti kartu plastik dicetak ulang.
+
+Backend sudah menerimanya. Yang perlu kamu buat: **kotak potong yang bisa
+digeser di atas pratinjau foto**, sebelum formulir dikirim.
+
+### Yang dikirim
+
+`uploadEmployeePhotoAction` sekarang membaca empat field tambahan pada form
+`multipart/form-data` yang sama:
+
+| Field | Isi |
+|---|---|
+| `cropX` | tepi kiri, **pecahan 0–1** |
+| `cropY` | tepi atas, pecahan 0–1 |
+| `cropWidth` | lebar, pecahan 0–1 |
+| `cropHeight` | tinggi, pecahan 0–1 |
+
+**Pecahan, bukan piksel.** Pratinjau di layar selalu diperkecil agar muat, dan
+ukurannya berbeda di tiap perangkat. Mengirim piksel berarti peramban harus
+tahu ukuran asli berkasnya dan menghitung skalanya sendiri — satu tempat lagi
+yang bisa salah, dan salahnya tidak terlihat sampai kartunya tercetak.
+
+**Keempatnya harus lengkap.** Kalau salah satu absen atau bukan angka, backend
+mengabaikan seluruhnya dan kembali memakai potongan mesin — bukan memotong
+setengah jadi.
+
+### Yang perlu diperhatikan
+
+**Kunci rasio kotaknya ke bentuk slot kartu.** Konstanta sudah diekspor di
+`@/lib/employee-card`:
+
+```ts
+import { cardPhotoAspect } from "@/lib/employee-card";
+const rasio = cardPhotoAspect();   // ≈ 0,7177 (lebar ÷ tinggi)
+```
+
+Jangan menuliskan angkanya sendiri — ia diturunkan dari `aspect-ratio` dan
+`inset` kartu di `globals.css`, dan ada tes yang gagal kalau keduanya berbeda.
+Kalau kotaknya tidak terkunci, backend tetap menyeragamkan hasilnya, tapi
+bagian yang dipilih HRD akan terpotong lagi — dan itu mengejutkan.
+
+**Batas minimum.** Bidang yang lebih kecil dari **450×627 piksel pada gambar
+asli** ditolak backend: hasilnya akan diperbesar untuk mengisi 900×1254 dan
+pecah justru di wajah orangnya. Tahan tombol kirim sebelum orang menunggu
+unggahan selesai hanya untuk ditolak. Konstantanya `CARD_CROP_MIN_WIDTH` dan
+`CARD_CROP_MIN_HEIGHT`.
+
+**Koordinat mengikuti apa yang TERLIHAT.** Peramban sudah memutar foto sesuai
+EXIF sebelum menampilkannya, dan backend melakukan hal yang sama sebelum
+memotong. Jadi kirim koordinat relatif terhadap gambar yang dilihat orangnya —
+jangan mencoba mengoreksi rotasi sendiri.
+
+**Tanpa alat ini pun tetap jalan.** Form yang tidak mengirim keempat field itu
+berperilaku persis seperti sekarang. Jadi ini bisa kamu kerjakan bertahap.

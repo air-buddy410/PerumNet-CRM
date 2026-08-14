@@ -252,3 +252,120 @@ describe("foto resmi dipotong ke bentuk slot kartu", () => {
     assert.match(r.ok ? "" : r.error, /tidak bisa dibaca|JPG atau PNG/i);
   });
 });
+
+// ── Potongan pilihan HRD (Fase 64) ──────────────────────────────
+//
+// Mesin tidak tahu wajah siapa yang penting di foto rombongan, dan potongan
+// otomatis yang meleset menghasilkan kartu yang harus dicetak ulang.
+
+describe("HRD memilih sendiri bidang potongnya", () => {
+  let employeeId: string;
+  let HRD2: ReturnType<typeof actor>;
+
+  before(async () => {
+    await ensureMasterData();
+    HRD2 = actor((await makeUser(tag("hrdcrop").toLowerCase(), "HRD")).id, "hrd");
+    const emp = await db.employee.create({
+      data: {
+        employeeNo: "10009401",
+        fullName: "Pemilik Foto Berpetak",
+        employeeType: "FULL_TIME",
+        joinedAt: new Date("2026-01-06"),
+      },
+    });
+    employeeId = emp.id;
+  });
+
+  /** Gambar dua warna: kiri MERAH, kanan BIRU. Dipakai untuk membuktikan bidang mana yang terambil. */
+  async function duaWarna(w: number, h: number, orientation?: number): Promise<File> {
+    const kiri = await sharp({ create: { width: w / 2, height: h, channels: 3, background: { r: 220, g: 20, b: 20 } } }).png().toBuffer();
+    const kanan = await sharp({ create: { width: w / 2, height: h, channels: 3, background: { r: 20, g: 20, b: 220 } } }).png().toBuffer();
+    let img = sharp({ create: { width: w, height: h, channels: 3, background: { r: 0, g: 0, b: 0 } } }).composite([
+      { input: kiri, left: 0, top: 0 },
+      { input: kanan, left: w / 2, top: 0 },
+    ]);
+    if (orientation) img = img.withMetadata({ orientation });
+    const buf = await img.jpeg().toBuffer();
+    return new File([new Uint8Array(buf)], "petak.jpg", { type: "image/jpeg" });
+  }
+
+  async function warnaTersimpan(): Promise<{ r: number; g: number; b: number }> {
+    const e = await db.employee.findUniqueOrThrow({ where: { id: employeeId } });
+    const att = await db.attachment.findUniqueOrThrow({ where: { id: e.photoAttachmentId! } });
+    const { readFile } = await import("node:fs/promises");
+    const path = await import("node:path");
+    const buf = await readFile(path.join(process.cwd(), "uploads", att.storedName));
+    const px = await sharp(buf).resize(1, 1, { fit: "fill" }).raw().toBuffer();
+    return { r: px[0], g: px[1], b: px[2] };
+  }
+
+  test("bidang KIRI yang dipilih menghasilkan sisi kiri, bukan tengah", async () => {
+    const r = await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(2000, 3000), {
+      x: 0, y: 0, width: 0.5, height: 1,
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const w = await warnaTersimpan();
+    assert.equal(w.r > 150 && w.b < 90, true, `harusnya merah, dapat ${JSON.stringify(w)}`);
+  });
+
+  test("bidang KANAN menghasilkan sisi kanan", async () => {
+    const r = await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(2000, 3000), {
+      x: 0.5, y: 0, width: 0.5, height: 1,
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const w = await warnaTersimpan();
+    assert.equal(w.b > 150 && w.r < 90, true, `harusnya biru, dapat ${JSON.stringify(w)}`);
+  });
+
+  test("ORIENTASI EXIF diterapkan SEBELUM dipotong", async () => {
+    // Jebakan paling halus di seluruh fitur ini. Koordinat berasal dari apa
+    // yang DILIHAT HRD di layar, dan peramban sudah memutar foto sesuai EXIF.
+    // Memotong sebelum diputar berarti mengambil bidang yang salah — pada foto
+    // ponsel yang terekam miring, potongannya meleset 90 derajat dan tidak ada
+    // yang tahu sampai kartunya tercetak.
+    //
+    // Sumber 1400×2800: kiri merah, kanan biru. Orientation 6 memutarnya 90°
+    // searah jarum jam saat ditampilkan, jadi yang TERLIHAT 2800×1400 dengan
+    // MERAH DI ATAS. Memilih separuh atas harus menghasilkan merah.
+    //
+    // Ukurannya sengaja besar: separuh dari 1400 masih di atas ambang cetak,
+    // jadi kalau tes ini gagal sebabnya benar-benar rotasi — bukan penolakan
+    // karena bidangnya kekecilan.
+    const r = await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(1400, 2800, 6), {
+      x: 0, y: 0, width: 1, height: 0.5,
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const w = await warnaTersimpan();
+    assert.equal(w.r > 150 && w.b < 90, true,
+      `separuh ATAS setelah diputar harusnya merah, dapat ${JSON.stringify(w)} — potongan terjadi sebelum rotasi`);
+  });
+
+  test("hasilnya tetap seukuran slot kartu, apa pun bidang yang dipilih", async () => {
+    await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(2000, 3000), {
+      x: 0.1, y: 0.1, width: 0.8, height: 0.4,
+    });
+    const e = await db.employee.findUniqueOrThrow({ where: { id: employeeId } });
+    const att = await db.attachment.findUniqueOrThrow({ where: { id: e.photoAttachmentId! } });
+    const { readFile } = await import("node:fs/promises");
+    const path = await import("node:path");
+    const meta = await sharp(await readFile(path.join(process.cwd(), "uploads", att.storedName))).metadata();
+    assert.equal(meta.width, cardPhotoWidth());
+    assert.equal(meta.height, CARD_PHOTO_HEIGHT);
+  });
+
+  test("bidang TERLALU KECIL ditolak dan foto lama tidak tergantikan", async () => {
+    const sebelum = (await db.employee.findUniqueOrThrow({ where: { id: employeeId } })).photoAttachmentId;
+    const r = await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(2000, 3000), {
+      x: 0, y: 0, width: 0.05, height: 0.05,
+    });
+    assert.equal(r.ok, false);
+    assert.match(r.ok ? "" : r.error, /terlalu kecil/i);
+    const sesudah = (await db.employee.findUniqueOrThrow({ where: { id: employeeId } })).photoAttachmentId;
+    assert.equal(sesudah, sebelum, "penolakan tidak boleh menyentuh foto yang sudah ada");
+  });
+
+  test("tanpa bidang pilihan, potongannya tetap ditentukan mesin seperti sebelumnya", async () => {
+    const r = await uploadEmployeePhoto(HRD2, employeeId, await duaWarna(2000, 3000));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+  });
+});
