@@ -1,7 +1,9 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { db, makeUser, tag, ensureMasterData, resetTransactionalData } from "./fixtures";
-import { loadEmployeeCards, newCardToken, cardAppUrl } from "@/lib/employee-card-service";
+import { db, makeUser, tag, actor, ensureMasterData, resetTransactionalData } from "./fixtures";
+import sharp from "sharp";
+import { loadEmployeeCards, newCardToken, cardAppUrl, uploadEmployeePhoto } from "@/lib/employee-card-service";
+import { cardPhotoWidth, CARD_PHOTO_HEIGHT } from "@/lib/employee-card";
 
 /** NODE_ENV bertipe hanya-baca di tipe Node; tesnya memang perlu menggesernya. */
 const env_ = (e: NodeJS.ProcessEnv) => e as Record<string, string | undefined>;
@@ -147,5 +149,106 @@ describe("QR kartu pegawai", () => {
       if (url === undefined) delete process.env.APP_URL;
       else process.env.APP_URL = url;
     }
+  });
+});
+
+// ── Foto kartu dipotong saat diunggah (Fase 63) ─────────────────
+//
+// Kartu sungguhan yang pertama diterbitkan menampilkan foto LANSKAP sebagai
+// pita tipis di tengah bidang tosca: slot memakai `object-fit: contain`, jadi
+// rasio yang berbeda menyisakan bidang kosong dan kartunya terlihat rusak.
+//
+// Meminta HRD memotong sendiri sebelum mengunggah berarti menaruh syarat yang
+// tidak terlihat di tempat yang tidak memeriksanya. Jadi dipotong di server.
+
+describe("foto resmi dipotong ke bentuk slot kartu", () => {
+  let employeeId: string;
+  let HRD: ReturnType<typeof actor>;
+
+  before(async () => {
+    await ensureMasterData();
+    HRD = actor((await makeUser(tag("hrdfoto").toLowerCase(), "HRD")).id, "hrd");
+    const emp = await db.employee.create({
+      data: {
+        employeeNo: "10009301",
+        fullName: "Pemilik Foto Lanskap",
+        employeeType: "FULL_TIME",
+        joinedAt: new Date("2026-01-06"),
+      },
+    });
+    employeeId = emp.id;
+  });
+
+  /** Gambar uji dengan rasio apa pun, dibuat di tempat — tanpa berkas contoh. */
+  async function gambar(w: number, h: number, mime = "image/jpeg"): Promise<File> {
+    const buf = await sharp({
+      create: { width: w, height: h, channels: 3, background: { r: 20, g: 160, b: 150 } },
+    })
+      [mime === "image/png" ? "png" : "jpeg"]()
+      .toBuffer();
+    return new File([new Uint8Array(buf)], mime === "image/png" ? "uji.png" : "uji.jpg", { type: mime });
+  }
+
+  async function fotoTersimpan(): Promise<Buffer> {
+    const e = await db.employee.findUniqueOrThrow({ where: { id: employeeId } });
+    const att = await db.attachment.findUniqueOrThrow({ where: { id: e.photoAttachmentId! } });
+    const { readFile } = await import("node:fs/promises");
+    const path = await import("node:path");
+    return readFile(path.join(process.cwd(), "uploads", att.storedName));
+  }
+
+  test("FOTO LANSKAP jadi tegak seukuran slot — bukan dikotaki", async () => {
+    const r = await uploadEmployeePhoto(HRD, employeeId, await gambar(3000, 1200));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const meta = await sharp(await fotoTersimpan()).metadata();
+    assert.equal(meta.width, cardPhotoWidth());
+    assert.equal(meta.height, CARD_PHOTO_HEIGHT);
+  });
+
+  test("foto TEGAK ekstrem juga diseragamkan", async () => {
+    const r = await uploadEmployeePhoto(HRD, employeeId, await gambar(600, 4000));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const meta = await sharp(await fotoTersimpan()).metadata();
+    assert.equal(meta.width, cardPhotoWidth());
+    assert.equal(meta.height, CARD_PHOTO_HEIGHT);
+  });
+
+  test("PNG diterima dan keluar sebagai JPEG — alur cetak menerima JPEG di mana pun", async () => {
+    const r = await uploadEmployeePhoto(HRD, employeeId, await gambar(2000, 2000, "image/png"));
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const meta = await sharp(await fotoTersimpan()).metadata();
+    assert.equal(meta.format, "jpeg");
+  });
+
+  test("METADATA HILANG — foto ini disajikan di URL publik", async () => {
+    // Foto langsung dari ponsel bisa membawa koordinat GPS tempat ia diambil,
+    // dan alamat kartunya bisa dipindai siapa pun.
+    const meta = await sharp(await fotoTersimpan()).metadata();
+    assert.equal(meta.exif, undefined, "EXIF tidak boleh ikut tersimpan");
+  });
+
+  test("hasilnya JAUH LEBIH RINGAN dari berkas kamera", async () => {
+    // Foto kamera 1,8 MB terkirim ulang setiap kali ada orang memindai kartu,
+    // sering lewat kuota, sambil berdiri di depan pintu.
+    await uploadEmployeePhoto(HRD, employeeId, await gambar(4000, 3000));
+    const bytes = (await fotoTersimpan()).length;
+    assert.equal(bytes < 900_000, true, `masih ${Math.round(bytes / 1024)} KB`);
+  });
+
+  test("berkas yang bukan gambar DITOLAK, tidak tersimpan", async () => {
+    const bukan = new File([new Uint8Array([1, 2, 3, 4])], "dok.pdf", { type: "application/pdf" });
+    const r = await uploadEmployeePhoto(HRD, employeeId, bukan);
+    assert.equal(r.ok, false);
+  });
+
+  test("gambar RUSAK ditolak dengan kalimat yang bisa dibaca orang", async () => {
+    // Galat pustaka menyebut jalur berkas dan versi — tidak menolong siapa pun
+    // yang sedang mengunggah foto.
+    const rusak = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])], "rusak.jpg", {
+      type: "image/jpeg",
+    });
+    const r = await uploadEmployeePhoto(HRD, employeeId, rusak);
+    assert.equal(r.ok, false);
+    assert.match(r.ok ? "" : r.error, /tidak bisa dibaca|JPG atau PNG/i);
   });
 });

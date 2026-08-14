@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import QRCode from "qrcode";
+import sharp from "sharp";
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { saveAttachment } from "@/lib/files";
@@ -11,6 +12,8 @@ import {
   publicVerification,
   verificationUrl,
   isCardValid,
+  cardPhotoWidth,
+  CARD_PHOTO_HEIGHT,
   type CardAction,
   type PublicVerification,
 } from "@/lib/employee-card";
@@ -44,6 +47,50 @@ export function newCardToken(): string {
 
 // ── Foto resmi pegawai ──────────────────────────────────────────
 
+export const CARD_PHOTO_INPUT_MIME = ["image/jpeg", "image/png", "image/webp"];
+
+/**
+ * Memotong foto agar PERSIS mengisi slot foto di muka kartu.
+ *
+ * Tiga hal didapat sekaligus, dan yang pertama alasan utamanya:
+ *
+ *   1. TIDAK ADA LAGI FOTO YANG DIKOTAKI. Slot memakai `object-fit: contain`,
+ *      jadi foto dengan rasio lain menyisakan bidang kosong dan kartunya
+ *      terlihat rusak. Setelah dipotong ke rasio yang sama, ia mengisi penuh.
+ *   2. EXIF HILANG. Foto pegawai disajikan di URL PUBLIK yang dipindai siapa
+ *      pun; foto langsung dari ponsel bisa membawa koordinat GPS tempat ia
+ *      diambil. Sharp membuang metadata kecuali diminta menyimpannya.
+ *   3. Ukurannya turun drastis. Foto kamera 1,8 MB terkirim ulang setiap kali
+ *      ada orang memindai kartu, sering lewat kuota, sambil berdiri di pintu.
+ *
+ * Hasilnya JPEG — kartu ini dicetak, dan JPEG diterima setiap alur cetak.
+ */
+async function potongFotoKartu(
+  file: File
+): Promise<{ ok: true; file: File } | { ok: false; error: string }> {
+  if (!CARD_PHOTO_INPUT_MIME.includes(file.type)) {
+    return { ok: false, error: "Foto harus berformat JPG, PNG, atau WebP." };
+  }
+  const masuk = Buffer.from(await file.arrayBuffer());
+  try {
+    const keluar = await sharp(masuk, { failOn: "error" })
+      .rotate() // menghormati orientasi EXIF SEBELUM metadatanya dibuang
+      .resize(cardPhotoWidth(), CARD_PHOTO_HEIGHT, { fit: "cover", position: "attention" })
+      .jpeg({ quality: 88 })
+      .toBuffer();
+    // Nama berkas dibangkitkan sendiri: nama dari pengunggah tidak pernah
+    // menyentuh path, dan ekstensinya harus cocok dengan isinya yang baru.
+    return {
+      ok: true,
+      file: new File([new Uint8Array(keluar)], "foto-kartu.jpg", { type: "image/jpeg" }),
+    };
+  } catch {
+    // Galat pustaka tidak diteruskan apa adanya — isinya menyebut jalur berkas
+    // dan versi, dan tidak menolong siapa pun yang sedang mengunggah foto.
+    return { ok: false, error: "Foto tidak bisa dibaca. Coba simpan ulang sebagai JPG atau PNG." };
+  }
+}
+
 /**
  * Mengunggah foto resmi pegawai. Hanya HRD (keputusan K5).
  *
@@ -65,7 +112,12 @@ export async function uploadEmployeePhoto(
   });
   if (!emp) return { ok: false, error: "Karyawan tidak ditemukan." };
 
-  const saved = await saveAttachment(file, EMPLOYEE_PHOTO_ENTITY, employeeId, user.id);
+  // Dipotong DI SINI, bukan diserahkan ke HRD. Lihat CARD_PHOTO_* di
+  // employee-card.ts untuk asal rasionya dan kenapa ini bukan kerapian.
+  const siap = await potongFotoKartu(file);
+  if (!siap.ok) return siap;
+
+  const saved = await saveAttachment(siap.file, EMPLOYEE_PHOTO_ENTITY, employeeId, user.id);
   if (!saved.ok) return saved;
 
   await db.employee.update({
