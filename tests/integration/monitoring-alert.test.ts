@@ -157,3 +157,116 @@ describe("alarm monitoring dari webhook", () => {
     assert.equal(n > 0, true);
   });
 });
+
+// ── Bahasa LibreNMS: status berupa ANGKA (Fase 67) ──────────────
+//
+// Templat LibreNMS memakai SimpleTemplate, yang HANYA mengganti variabel —
+// ia tidak bisa berlogika. Jadi mustahil menerjemahkan 0/1 menjadi
+// RESOLVED/FIRING di sisi sana; CRM yang harus mengerti bahasanya.
+//
+// Dan `deviceHostname` dari LibreNMS berisi ALAMAT IP, bukan nama — perangkat
+// dikenal di sana lewat alamatnya.
+
+describe("alarm dari LibreNMS: state angka & pencocokan alamat", () => {
+  let siteId: string;
+  let deviceId: string;
+  let token: string;
+  const KODE2 = "librenms-uji2";
+
+  before(async () => {
+    await ensureMasterData();
+    await db.integration.deleteMany({ where: { code: KODE2 } });
+    await db.networkDevice.deleteMany({ where: { hostname: "UJI_OLT_IP" } });
+    await db.networkSite.deleteMany({ where: { siteCode: "UJIIP" } });
+
+    const site = await db.networkSite.create({
+      data: { siteCode: "UJIIP", name: "Site Uji IP", type: "POP" },
+    });
+    siteId = site.id;
+    const dev = await db.networkDevice.create({
+      data: {
+        hostname: "UJI_OLT_IP",
+        deviceType: "OLT",
+        siteId: site.id,
+        managementIp: "192.168.199.60",
+      },
+    });
+    deviceId = dev.id;
+    token = tag("tok2");
+    await db.integration.create({
+      data: {
+        code: KODE2, name: "LibreNMS Uji 2", category: "NETWORK", provider: "LIBRENMS",
+        webhookToken: token, isEnabled: true,
+      },
+    });
+  });
+
+  after(async () => {
+    await db.networkAlarm.deleteMany({ where: { source: KODE2 } });
+    await db.integrationEvent.deleteMany({ where: { integration: { code: KODE2 } } });
+    await db.integration.deleteMany({ where: { code: KODE2 } });
+    await db.networkDevice.deleteMany({ where: { id: deviceId } });
+    await db.networkSite.deleteMany({ where: { id: siteId } });
+    await db.$disconnect();
+  });
+
+  const kirim = (over: Record<string, unknown>) =>
+    ingestMonitoringAlert(KODE2, token, { message: "Perangkat tidak terjangkau", ...over } as never);
+
+  test("PERANGKAT DICOCOKKAN LEWAT ALAMAT saat namanya tidak ketemu", async () => {
+    // LibreNMS mengirim "192.168.199.60"; CRM menyimpannya sebagai
+    // managementIp, bukan hostname. Tanpa jembatan ini alarmnya terbit tanpa
+    // tertaut ke apa pun.
+    const r = await kirim({ deviceHostname: "192.168.199.60", state: "1", dedupKey: tag("ip1") });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const alarm = await db.networkAlarm.findFirst({ where: { source: KODE2 }, orderBy: { createdAt: "desc" } });
+    assert.equal(alarm?.deviceId, deviceId, "alarm tidak tertaut lewat alamat manajemen");
+  });
+
+  test("nama tetap didahulukan bila cocok", async () => {
+    const r = await kirim({ deviceHostname: "uji_olt_ip", state: "1", dedupKey: tag("ip2") });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const alarm = await db.networkAlarm.findFirst({ where: { source: KODE2 }, orderBy: { createdAt: "desc" } });
+    assert.equal(alarm?.deviceId, deviceId);
+  });
+
+  test("STATE 0 berarti PULIH — alarmnya menutup sendiri", async () => {
+    const kunci = tag("st");
+    await kirim({ deviceHostname: "192.168.199.60", state: "1", dedupKey: kunci });
+    const aktif = await db.networkAlarm.findFirstOrThrow({ where: { dedupKey: kunci } });
+    assert.equal(aktif.clearedAt, null);
+
+    const r = await kirim({ state: "0", dedupKey: kunci });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const sesudah = await db.networkAlarm.findFirstOrThrow({ where: { dedupKey: kunci } });
+    assert.notEqual(sesudah.clearedAt, null, "state 0 harus menutup alarmnya");
+  });
+
+  test("state selain 0 berarti MASIH BERMASALAH", async () => {
+    for (const s of ["1", "2", 3, "4"]) {
+      const kunci = tag("s" + s);
+      await kirim({ deviceHostname: "192.168.199.60", state: s, dedupKey: kunci });
+      const a = await db.networkAlarm.findFirstOrThrow({ where: { dedupKey: kunci } });
+      assert.equal(a.clearedAt, null, `state ${s} tidak boleh dianggap pulih`);
+    }
+  });
+
+  test("ANGKA TAK TERBACA tidak dianggap pulih", async () => {
+    // Menutup alarm karena salah baca menyembunyikan gangguan yang sedang
+    // berlangsung. Membiarkannya terbuka hanya mengganggu mata.
+    const kunci = tag("ngawur");
+    await kirim({ deviceHostname: "192.168.199.60", state: "entah", dedupKey: kunci });
+    const a = await db.networkAlarm.findFirstOrThrow({ where: { dedupKey: kunci } });
+    assert.equal(a.clearedAt, null);
+  });
+
+  test("status TEKS tetap menang atas state angka", async () => {
+    // Sistem lain (Zabbix, Prometheus) mengirim teks. Keduanya harus bisa
+    // hidup berdampingan tanpa saling menimpa.
+    const kunci = tag("teks");
+    await kirim({ deviceHostname: "192.168.199.60", state: "1", dedupKey: kunci });
+    await kirim({ status: "RESOLVED", state: "1", dedupKey: kunci });
+    const a = await db.networkAlarm.findFirstOrThrow({ where: { dedupKey: kunci } });
+    assert.notEqual(a.clearedAt, null, "status teks harus didahulukan");
+  });
+});

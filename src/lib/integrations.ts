@@ -125,11 +125,47 @@ export async function regenerateWebhookToken(user: CurrentUser, id: string): Pro
 // Payload generik yang dipetakan dari Zabbix/LibreNMS/Prometheus/MikroTik dll.
 export interface MonitoringAlert {
   status?: string; // FIRING (default) | RESOLVED
+  /**
+   * Bentuk ANGKA dari status, dipakai LibreNMS (Fase 67).
+   *
+   * Templat LibreNMS memakai SimpleTemplate, yang HANYA mengganti variabel —
+   * ia tidak bisa berlogika, jadi mustahil menerjemahkan 0/1 menjadi
+   * RESOLVED/FIRING di sisi sana. Menuntutnya berarti menuntut sesuatu yang
+   * tidak bisa diberikan alatnya.
+   *
+   * 0 = pulih. Selain itu = sedang bermasalah.
+   */
+  state?: string | number;
   severity?: string; // dipetakan ke ALARM_SEVERITIES, default WARNING
   message?: string;
-  deviceHostname?: string; // dicocokkan ke NetworkDevice.hostname
+  /**
+   * Nama ATAU alamat manajemen perangkat.
+   *
+   * Sistem monitoring mengenal perangkat lewat alamatnya sama seringnya dengan
+   * lewat namanya — LibreNMS mengirimkan alamat IP di sini. Keduanya dicoba;
+   * lihat pencocokan di bawah.
+   */
+  deviceHostname?: string;
   siteCode?: string; // dicocokkan ke NetworkSite.siteCode
   dedupKey?: string; // default: kombinasi integrasi+device+message
+}
+
+/**
+ * Status akhir sebuah alarm: FIRING atau RESOLVED.
+ *
+ * `status` teks didahulukan bila ada. Bila tidak, `state` angka dibaca —
+ * itulah satu-satunya bentuk yang bisa dikirim LibreNMS.
+ */
+export function alertStatus(alert: Pick<MonitoringAlert, "status" | "state">): string {
+  const teks = alert.status?.trim();
+  if (teks) return teks.toUpperCase();
+  if (alert.state === undefined || alert.state === null || alert.state === "") return "FIRING";
+  const n = Number(alert.state);
+  // Angka yang tidak terbaca TIDAK dianggap pulih. Menutup alarm karena salah
+  // baca jauh lebih berbahaya daripada membiarkannya terbuka: yang satu
+  // menyembunyikan gangguan, yang lain hanya mengganggu mata.
+  if (!Number.isFinite(n)) return "FIRING";
+  return n === 0 ? "RESOLVED" : "FIRING";
 }
 
 async function logEvent(
@@ -218,10 +254,18 @@ export async function ingestMonitoringAlert(
   // RouterOS otomatis huruf kecil). Menuntut keduanya sama persis berarti
   // menaruh syarat yang tak terlihat di antara dua sistem yang tidak saling
   // mengetahui aturan penamaan masing-masing.
-  const device = alert.deviceHostname
-    ? await db.networkDevice.findFirst({
-        where: { hostname: { equals: alert.deviceHostname.trim(), mode: "insensitive" } },
-      })
+  // Dicocokkan lewat NAMA dulu, lalu ALAMAT MANAJEMEN. LibreNMS mengirim
+  // alamat IP di kolom ini — perangkat dikenal di sana lewat alamatnya. Kalau
+  // hanya nama yang dicoba, seluruh alarmnya terbit tanpa tertaut ke apa pun,
+  // dan pertanyaan "pelanggan mana yang terdampak" dijawab kosong.
+  const namaPerangkat = alert.deviceHostname?.trim();
+  const device = namaPerangkat
+    ? ((await db.networkDevice.findFirst({
+        where: { hostname: { equals: namaPerangkat, mode: "insensitive" } },
+      })) ??
+      (await db.networkDevice.findFirst({
+        where: { managementIp: namaPerangkat },
+      })))
     : null;
   const site = alert.siteCode
     ? await db.networkSite.findFirst({
@@ -231,7 +275,7 @@ export async function ingestMonitoringAlert(
   const dedupKey =
     alert.dedupKey?.trim() ||
     `${integration.code}|${device?.hostname ?? alert.deviceHostname ?? "-"}|${message}`;
-  const status = (alert.status ?? "FIRING").toUpperCase();
+  const status = alertStatus(alert);
 
   // RESOLVED → auto-clear alarm aktif yang cocok.
   if (status === "RESOLVED") {
