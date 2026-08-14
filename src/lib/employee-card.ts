@@ -189,10 +189,12 @@ export function publicVerification(
 // Slot fotonya berarti 0,76 lebar × 0,75 tinggi kartu, jadi rasionya
 // 0,76 ÷ (0,75 × 353/250) ≈ 0,718 — lebih ramping daripada kartunya sendiri.
 //
-// Foto yang rasionya berbeda akan DIKOTAKI: `object-fit: contain` menyisakan
-// bidang kosong di kiri-kanan atau atas-bawah. Itu bukan kemungkinan teoretis —
-// kartu sungguhan yang pertama diterbitkan menampilkan foto lanskap sebagai
-// pita tipis di tengah bidang tosca, dan kartunya terlihat rusak.
+// Foto yang rasionya berbeda akan MERUSAK TAMPILAN. Waktu slotnya masih
+// memakai `object-fit: contain`, foto lanskap muncul sebagai pita tipis di
+// tengah bidang tosca — itu terjadi pada kartu sungguhan yang pertama
+// diterbitkan. Slotnya kini `cover`, jadi yang terjadi bukan lagi dikotaki
+// melainkan dipotong sembarang oleh peramban, di bagian yang tidak dipilih
+// siapa pun.
 //
 // Memotongnya SAAT DIUNGGAH membuat keadaan itu tidak mungkin tercapai, bukan
 // sekadar jarang. Meminta HRD memotong sendiri sebelum mengunggah berarti

@@ -57,9 +57,10 @@ export const CARD_PHOTO_INPUT_MIME = ["image/jpeg", "image/png", "image/webp"];
  *
  * Tiga hal didapat sekaligus, dan yang pertama alasan utamanya:
  *
- *   1. TIDAK ADA LAGI FOTO YANG DIKOTAKI. Slot memakai `object-fit: contain`,
- *      jadi foto dengan rasio lain menyisakan bidang kosong dan kartunya
- *      terlihat rusak. Setelah dipotong ke rasio yang sama, ia mengisi penuh.
+ *   1. BENTUKNYA SELALU PAS. Slot kartu memakai `object-fit: cover`, jadi foto
+ *      dengan rasio lain akan dipotong sembarang oleh peramban — di bagian
+ *      yang tidak dipilih siapa pun. Dipotong lebih dulu di sini berarti yang
+ *      tampil adalah bidang yang memang dimaksudkan.
  *   2. EXIF HILANG. Foto pegawai disajikan di URL PUBLIK yang dipindai siapa
  *      pun; foto langsung dari ponsel bisa membawa koordinat GPS tempat ia
  *      diambil. Sharp membuang metadata kecuali diminta menyimpannya.
