@@ -786,8 +786,10 @@ menjadi susunan field yang dapat dibaca pada layar sempit.
 ## 32. Handoff Opus — Data Diri, Foto Profil, dan Ulang Tahun
 
 Frontend mengonsumsi field profile dan loader HRD yang sudah tersedia dari Opus.
-Perubahan ini tetap frontend-only: tidak mengubah action penyimpanan HRD,
-`src/lib/**`, API, database, auth, RBAC, middleware, atau business rule.
+Form HRD meneruskan lima field pegawai melalui wrapper action yang sudah ada;
+validasi, audit, dan persistence tetap ditegakkan oleh service HRD dari Opus.
+Tidak ada perubahan pada `src/lib/**`, API, database, auth, RBAC, middleware,
+atau business rule.
 
 ### Data diri pegawai
 
@@ -801,9 +803,13 @@ Perubahan ini tetap frontend-only: tidak mengubah action penyimpanan HRD,
 - Tanggal lahir tidak menjadi filter daftar pegawai dan umur tidak ditampilkan.
 - Golongan darah adalah data kesehatan: tidak ditampilkan pada daftar pegawai,
   ekspor, kartu pegawai, atau verifikasi kartu publik.
-- Form edit HRD belum menampilkan input baru sampai `saveEmployeeAction`
-  meneruskan dan memvalidasi empat field tersebut. Frontend tidak membuat
-  persistence semu atau mengirim field ke action yang belum menerimanya.
+- Form create/edit HRD menyediakan `divisionId`, `birthPlace`, `birthDate`,
+  `education`, dan `bloodType`. Pilihan pendidikan dan golongan darah memakai
+  konstanta resmi; nilai kosong berarti tidak diisi, bukan tebakan.
+- Divisi dimuat dari master divisi resmi, termasuk divisi nonaktif yang masih
+  terpasang pada data lama agar penyimpanan ulang tidak menghilangkan pilihan.
+- Golongan darah tetap hanya terlihat pada form/detail HRD dan profil pegawai;
+  tidak tampil di daftar, ekspor, kartu pegawai, atau verifikasi publik.
 
 ### Foto profil aplikasi
 
@@ -826,7 +832,5 @@ Perubahan ini tetap frontend-only: tidak mengubah action penyimpanan HRD,
 - Tampilan kartu ulang tahun menggunakan grid responsif dan wrapping aman pada
   1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
 
-Status handoff: field profile, avatar action, dan birthday loader siap dipakai;
-konfirmasi apakah empat field data diri juga harus diedit melalui form pegawai
-masih dicatat di `docs/PERMINTAAN-FRONTEND-KE-BACKEND.md` karena action saat ini
-belum meneruskannya.
+Status handoff: field profile, avatar action, birthday loader, dan form pegawai
+lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.

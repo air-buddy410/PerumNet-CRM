@@ -62,7 +62,7 @@ export default async function EmployeeDetailPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [employee, employees, users] = await Promise.all([
+  const [employee, employees, users, divisions] = await Promise.all([
     db.employee.findUnique({
       where: { id },
       include: {
@@ -90,6 +90,7 @@ export default async function EmployeeDetailPage({
     }),
     db.employee.findMany({ orderBy: { employeeNo: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    db.division.findMany({ orderBy: { name: "asc" } }),
   ]);
 
   if (!employee) notFound();
@@ -134,6 +135,11 @@ export default async function EmployeeDetailPage({
     joinedAt: iso(employee.joinedAt)!,
     isActive: employee.isActive,
     address: employee.address,
+    divisionId: employee.divisionId,
+    birthPlace: employee.birthPlace,
+    birthDate: iso(employee.birthDate),
+    education: employee.education,
+    bloodType: employee.bloodType,
     workPattern: employee.workPattern,
     jobLevel: employee.jobLevel,
     contractStartAt: iso(employee.contractStartAt),
@@ -281,6 +287,7 @@ export default async function EmployeeDetailPage({
                 editRow={formRow}
                 employees={employees.map((item) => ({ id: item.id, fullName: item.fullName }))}
                 users={users.map((item) => ({ id: item.id, username: item.username, name: item.name }))}
+                divisions={divisions}
               />
               <Link href="/hrd/employees" className="mt-3 inline-block text-xs text-slate-500 hover:underline">Kembali tanpa mengubah</Link>
             </section>

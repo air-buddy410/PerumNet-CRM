@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { EMPLOYEE_TYPES, WORK_PATTERNS, JOB_LEVELS, CONTRACTED_EMPLOYEE_TYPES } from "@/lib/constants";
+import {
+  BLOOD_TYPES,
+  CONTRACTED_EMPLOYEE_TYPES,
+  EDUCATION_LEVELS,
+  EMPLOYEE_TYPES,
+  JOB_LEVELS,
+  WORK_PATTERNS,
+} from "@/lib/constants";
 import { saveEmployeeAction } from "../actions";
 
 // Blok masa kontrak MUNCUL DAN HILANG mengikuti jenis kepegawaian — bukan
@@ -24,6 +31,11 @@ export interface EmployeeFormRow {
   joinedAt: string; // yyyy-mm-dd
   isActive: boolean;
   address: string | null;
+  divisionId: string | null;
+  birthPlace: string | null;
+  birthDate: string | null;
+  education: string | null;
+  bloodType: string | null;
   workPattern: string;
   jobLevel: string;
   contractStartAt: string | null; // yyyy-mm-dd
@@ -34,13 +46,17 @@ export function EmployeeForm({
   editRow,
   employees,
   users,
+  divisions,
 }: {
   editRow: EmployeeFormRow | null;
   employees: { id: string; fullName: string }[];
   users: { id: string; username: string; name: string }[];
+  divisions: { id: string; code: string; name: string; isActive: boolean }[];
 }) {
   const [employeeType, setEmployeeType] = useState(editRow?.employeeType ?? "FULL_TIME");
   const showContract = (CONTRACTED_EMPLOYEE_TYPES as readonly string[]).includes(employeeType);
+  const knownEducationCodes = new Set<string>(EDUCATION_LEVELS.map(([code]) => code));
+  const knownBloodTypeCodes = new Set<string>(BLOOD_TYPES.map(([code]) => code));
 
   return (
     <form action={saveEmployeeAction} className="space-y-3">
@@ -78,6 +94,17 @@ export function EmployeeForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
+          <label className="label" htmlFor="divisionId">Divisi</label>
+          <select id="divisionId" name="divisionId" className="input" defaultValue={editRow?.divisionId ?? ""}>
+            <option value="">— belum ditetapkan —</option>
+            {divisions.map((division) => (
+              <option key={division.id} value={division.id}>
+                {division.name} ({division.code}){division.isActive ? "" : " · Nonaktif"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="label" htmlFor="jobLevel">Jenjang Jabatan</label>
           <select id="jobLevel" name="jobLevel" className="input" defaultValue={editRow?.jobLevel ?? "STAFF"}>
             {JOB_LEVELS.map(([v, l]) => (
@@ -94,6 +121,49 @@ export function EmployeeForm({
           </select>
         </div>
       </div>
+
+      <section className="rounded-lg border border-slate-200 bg-slate-50/60 p-3" aria-labelledby="employee-personal-data-title">
+        <h3 id="employee-personal-data-title" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Data diri pegawai
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label" htmlFor="birthPlace">Tempat lahir</label>
+            <input id="birthPlace" name="birthPlace" className="input" defaultValue={editRow?.birthPlace ?? ""} />
+          </div>
+          <div>
+            <label className="label" htmlFor="birthDate">Tanggal lahir</label>
+            <input id="birthDate" name="birthDate" type="date" className="input" defaultValue={editRow?.birthDate ?? ""} />
+          </div>
+          <div>
+            <label className="label" htmlFor="education">Pendidikan terakhir</label>
+            <select id="education" name="education" className="input" defaultValue={editRow?.education ?? ""}>
+              <option value="">— belum diisi —</option>
+              {editRow?.education && !knownEducationCodes.has(editRow.education) && (
+                <option value={editRow.education}>{editRow.education}</option>
+              )}
+              {EDUCATION_LEVELS.map(([code, label]) => (
+                <option key={code} value={code}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="bloodType">Golongan darah</label>
+            <select id="bloodType" name="bloodType" className="input" defaultValue={editRow?.bloodType ?? ""}>
+              <option value="">— belum diisi —</option>
+              {editRow?.bloodType && !knownBloodTypeCodes.has(editRow.bloodType) && (
+                <option value={editRow.bloodType}>{editRow.bloodType}</option>
+              )}
+              {BLOOD_TYPES.map(([code, label]) => (
+                <option key={code} value={code}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          Isi berdasarkan dokumen kepegawaian. Golongan darah hanya terlihat di detail HRD dan profil pegawai.
+        </p>
+      </section>
 
       <div>
         <label className="label" htmlFor="address">Alamat</label>

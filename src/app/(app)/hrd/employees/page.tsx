@@ -80,7 +80,7 @@ export default async function EmployeesPage({
         ? [{ jobLevel: table.direction }, { id: "asc" }]
         : [{ employeeNo: table.direction }, { id: "asc" }];
 
-  const [employees, total, users, editRow] = await Promise.all([
+  const [employees, total, users, divisions, editRow] = await Promise.all([
     db.employee.findMany({
       include: {
         user: { select: { id: true, username: true, isActive: true, frozenAt: true, freezeReason: true } },
@@ -93,6 +93,7 @@ export default async function EmployeesPage({
     }),
     db.employee.count(),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    db.division.findMany({ orderBy: { name: "asc" } }),
     table.query.edit
       ? db.employee.findUnique({
           where: { id: table.query.edit },
@@ -113,6 +114,11 @@ export default async function EmployeesPage({
         joinedAt: iso(editRow.joinedAt)!,
         isActive: editRow.isActive,
         address: editRow.address,
+        divisionId: editRow.divisionId,
+        birthPlace: editRow.birthPlace,
+        birthDate: iso(editRow.birthDate),
+        education: editRow.education,
+        bloodType: editRow.bloodType,
         workPattern: editRow.workPattern,
         jobLevel: editRow.jobLevel,
         contractStartAt: iso(editRow.contractStartAt),
@@ -247,6 +253,7 @@ export default async function EmployeesPage({
               editRow={formRow}
               employees={employees.map((e) => ({ id: e.id, fullName: e.fullName }))}
               users={users.map((u) => ({ id: u.id, username: u.username, name: u.name }))}
+              divisions={divisions}
             />
             {editRow && (
               <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
