@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/rbac";
+import { getCurrentUser, type CurrentUser } from "@/lib/rbac";
+import { redactCustomers } from "@/lib/customer-pii";
 import { PERMISSIONS } from "@/lib/constants";
 import { toCsv, csvResponse, type CsvColumn } from "@/lib/export-csv";
 
@@ -18,7 +19,10 @@ const MAX_ROWS = 20_000;
 interface Dataset {
   permission: string;
   filename: string;
-  run: () => Promise<{ rows: unknown[]; columns: CsvColumn<never>[] }>;
+  /// `user` diteruskan supaya dataset yang memuat data pribadi bisa
+  /// menyamarkannya sesuai izin pengunduhnya. Dataset yang tidak
+  /// membutuhkannya cukup mengabaikan parameternya.
+  run: (user: CurrentUser) => Promise<{ rows: unknown[]; columns: CsvColumn<never>[] }>;
 }
 
 const DATASETS: Record<string, Dataset> = {
@@ -191,12 +195,18 @@ const DATASETS: Record<string, Dataset> = {
   customers: {
     permission: PERMISSIONS.CUSTOMERS_VIEW,
     filename: "pelanggan",
-    run: async () => {
-      const rows = await db.customer.findMany({
-        include: { area: true, subscriptions: { include: { package: true } } },
-        orderBy: { customerNumber: "asc" },
-        take: MAX_ROWS,
-      });
+    run: async (user) => {
+      // Ekspor adalah pintu keluar yang paling mudah terlupakan: berkasnya
+      // meninggalkan aplikasi dan tidak pernah kembali. Penyamaran yang sama
+      // dengan yang di layar berlaku di sini juga.
+      const rows = redactCustomers(
+        await db.customer.findMany({
+          include: { area: true, subscriptions: { include: { package: true } } },
+          orderBy: { customerNumber: "asc" },
+          take: MAX_ROWS,
+        }),
+        user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW)
+      );
       type Row = (typeof rows)[number];
       return {
         rows,
@@ -323,7 +333,7 @@ export async function GET(
     return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
   }
 
-  const { rows, columns } = await config.run();
+  const { rows, columns } = await config.run(user);
   const csv = toCsv(rows as never[], columns);
   // Bila menyentuh batas, katakan di nama berkasnya — jangan diam-diam memotong.
   const name =

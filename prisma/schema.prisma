@@ -597,26 +597,32 @@ model Quotation {
 }
 
 model Customer {
-  id             String   @id @default(cuid())
-  customerNumber String   @unique // CST-#####
+  id             String    @id @default(cuid())
+  customerNumber String    @unique // CST-#####
   name           String
   company        String?
   phone          String
   email          String?
+  /// Fase 66 — NIK. Unik: satu orang satu nomor, dan impor massal harus
+  /// menabrak duplikat alih-alih membuat pelanggan kembar diam-diam.
+  identityNumber String?   @unique
+  /// Enam digit tengah NIK memuat tanggal lahir; keduanya disamarkan bersama
+  /// lewat redactCustomer(). Lihat src/lib/customer-pii.ts.
+  birthDate      DateTime? @db.Date
   address        String
   latitude       Float?
   longitude      Float?
-  customerType   String   @default("RESIDENTIAL")
-  notifyChannel  String   @default("NONE") // NONE|WHATSAPP|EMAIL|APP
+  customerType   String    @default("RESIDENTIAL")
+  notifyChannel  String    @default("NONE") // NONE|WHATSAPP|EMAIL|APP
   areaId         String?
   salesOwnerId   String?
   source         String?
-  leadId         String?  @unique
-  status         String   @default("ACTIVE") // ACTIVE|INACTIVE
+  leadId         String?   @unique
+  status         String    @default("ACTIVE") // ACTIVE|INACTIVE
   notes          String?
   createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   area             Area?                 @relation(fields: [areaId], references: [id])
   salesOwner       User?                 @relation("CustomerOwner", fields: [salesOwnerId], references: [id])

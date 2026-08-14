@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { redactCustomers } from "@/lib/customer-pii";
 import { PERMISSIONS, statusLabel } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState, Flash } from "@/components/ui";
 import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
@@ -19,7 +20,7 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<TableSearchParams>;
 }) {
-  await requirePermission(PERMISSIONS.CUSTOMERS_VIEW);
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_VIEW);
   const sp = await searchParams;
   const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
   const where: Prisma.CustomerWhereInput | undefined = table.query.q
@@ -39,7 +40,7 @@ export default async function CustomersPage({
         ? [{ status: table.direction }, { id: "asc" }]
         : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const [customers, total] = await Promise.all([
+  const [rawCustomers, total] = await Promise.all([
     db.customer.findMany({
       where,
       include: { area: true, salesOwner: true, _count: { select: { subscriptions: true } } },
@@ -49,6 +50,11 @@ export default async function CustomersPage({
     }),
     db.customer.count({ where }),
   ]);
+
+  // Penyamaran di JALUR DATA, bukan di JSX. Bentuknya tidak berubah, jadi
+  // tabel di bawah tidak perlu tahu apa pun soal izin PII — dan kolom baru
+  // yang ditambahkan nanti ikut aman tanpa ada yang perlu mengingatnya.
+  const customers = redactCustomers(rawCustomers, user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW));
 
   return (
     <div>

@@ -154,6 +154,8 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   // Phase 15 — Kanal Pelanggan
   { code: "channels.view", module: "channels", action: "view", description: "Melihat template pesan, antrian kirim, dan pengumuman" },
   { code: "channels.manage", module: "channels", action: "manage", description: "Mengelola template, blast pesan, pengumuman, dan antrian" },
+  // Phase 66 — Data pribadi pelanggan
+  { code: "customers.pii_view", module: "crm", action: "view", description: "Melihat NIK, telepon, email, dan tanggal lahir pelanggan tanpa samaran" },
   // Phase 47 — Arsip terpadu
   { code: "archive.view", module: "archive", action: "view", description: "Melihat arsip lintas modul beserta alasan pengarsipannya" },
   { code: "archive.restore", module: "archive", action: "restore", description: "Memulihkan baris yang sudah diarsipkan" },
@@ -183,7 +185,12 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate", "archive.view", "archive.restore"],
+  // customers.pii_view sengaja TIDAK masuk CRM_VIEW: seluruh divisi yang
+  // melihat daftar pelanggan tidak perlu melihat NIK-nya. Sales menutup
+  // penjualan tanpa itu, teknisi memasang tanpa itu. Yang butuh nomor utuh
+  // hanya yang menangani sengketa identitas — dan itu keputusan sadar,
+  // bukan efek samping punya akses CRM.
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", "customers.pii_view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate", "archive.view", "archive.restore"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   // Fase 22: noc_manager + noc_engineer dilebur. Permission = gabungan keduanya.

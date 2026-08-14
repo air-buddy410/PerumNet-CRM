@@ -53,6 +53,9 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_CREATE: "customers.create",
   CUSTOMERS_EDIT: "customers.edit",
+  /// Fase 66 — melihat NIK, telepon, email, dan tanggal lahir TANPA samaran.
+  /// Tanpa izin ini pelanggan tetap terbaca, hanya data pribadinya tersamar.
+  CUSTOMERS_PII_VIEW: "customers.pii_view",
   SUBSCRIPTIONS_VIEW: "subscriptions.view",
   SUBSCRIPTIONS_CREATE: "subscriptions.create",
   SUBSCRIPTIONS_EDIT: "subscriptions.edit",

@@ -1728,3 +1728,73 @@ terlihat maupun bisa dikoreksi lewat aplikasi.
 
 **Model baru `Supplier`** — `code`, `name`, `phone`, `email`, `address`,
 `website`, `notes`, `isActive`. Belum ada halaman masternya sama sekali.
+
+## 34. Data pribadi pelanggan kini tersamar otomatis (Fase 66)
+
+Mengikuti aplikasi pembanding — tapi penjaganya diletakkan di tempat berbeda,
+dan bedanya penting untukmu.
+
+**Kamu tidak perlu melakukan apa pun untuk halaman yang sudah ada.**
+
+`Customer` bertambah dua kolom: `identityNumber` (NIK, unik) dan `birthDate`.
+Keduanya, bersama `phone` dan `email`, disamarkan **di jalur data** —
+`src/lib/customer-pii.ts` — bukan di JSX. Baris yang sampai ke halaman sudah
+tersamar, **dengan bentuk yang persis sama** seperti sebelumnya. Tidak ada
+tipe baru, tidak ada percabangan `{boleh ? x : mask(x)}` yang harus ditulis
+di tiap kolom.
+
+Sudah dipasang di tiga pintu keluar:
+
+| Pintu | Berkas |
+|---|---|
+| Daftar pelanggan | `crm/customers/page.tsx` |
+| Detail pelanggan | `crm/customers/[id]/page.tsx` |
+| Ekspor CSV | `api/export/[dataset]/route.ts` |
+
+### Kenapa begini, bukan seperti aplikasi pembanding
+
+Di sana `maskIdentity()` dipanggil di dalam JSX tiap halaman. Akibatnya bisa
+ditebak, dan memang terjadi di kode mereka: fungsinya **terdefinisi di dua
+tempat** dengan karakter bintang berbeda, dan **satu halaman menampilkan NIK
+tanpa samaran** karena penulisnya lupa memanggilnya. Masking yang bergantung
+pada ingatan akan gagal, cepat atau lambat.
+
+### Kalau kamu membuat halaman BARU yang menampilkan pelanggan
+
+Satu aturan: **jangan panggil `db.customer` langsung**. Bungkus hasilnya:
+
+```ts
+import { redactCustomer, redactCustomers } from "@/lib/customer-pii";
+
+const boleh = user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW);
+const rows = redactCustomers(await db.customer.findMany({ ... }), boleh);
+```
+
+Izin barunya `customers.pii_view`, dipegang **hanya** `super_admin` dan
+`management`. Sales, CS, teknisi, dan gudang tetap melihat pelanggannya —
+hanya data pribadinya tersamar. Itu disengaja: sales menutup penjualan tanpa
+perlu NIK, teknisi memasang tanpa perlu NIK.
+
+### Bentuk samarannya
+
+| Bidang | Contoh tersamar |
+|---|---|
+| `identityNumber` | `5107••••••••0001` |
+| `phone` | `••••••••3387` |
+| `email` | `k••••••@gmail.com` |
+| `birthDate` | `null` |
+
+Empat digit awal & akhir NIK sengaja dibiarkan supaya petugas masih bisa
+mencocokkan sekilas. Yang disembunyikan adalah **enam digit tengah** — dan itu
+bukan pilihan sembarangan: enam digit itu **tanggal lahir** pemiliknya (hari
++40 untuk perempuan). Karena itu `birthDate` ikut dikosongkan; menyamarkan
+tanggal lahir di dalam NIK lalu menampilkannya utuh di kolom sebelahnya
+membatalkan seluruh gunanya. Ini satu langkah lebih jauh dari aplikasi
+pembanding, yang menampilkan `birthDate` apa adanya.
+
+### Yang belum ada
+
+Formulir pelanggan belum punya input untuk `identityNumber` dan `birthDate`.
+Selama belum ada, keduanya hanya bisa terisi lewat impor — dan tidak akan
+pernah bisa dikoreksi lewat aplikasi. Menambahkannya ke form
+`/crm/customers` bagian dari pekerjaan ini.
