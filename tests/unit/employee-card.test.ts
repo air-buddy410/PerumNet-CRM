@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   cardNumberFor,
   tokenRejection,
@@ -9,6 +10,11 @@ import {
   publicVerification,
   verificationUrl,
   CARD_STATUS_LABELS,
+  CARD_FACE_RATIO,
+  CARD_PHOTO_INSET,
+  CARD_PHOTO_HEIGHT,
+  cardPhotoAspect,
+  cardPhotoWidth,
 } from "@/lib/employee-card";
 
 const NOW = new Date("2026-08-13T10:00:00");
@@ -171,5 +177,52 @@ describe("verificationUrl", () => {
 
   test("garis miring berlebih di appUrl tidak menghasilkan alamat ganda", () => {
     assert.equal(verificationUrl("https://crm.perumnet.id/", "tok123"), "https://crm.perumnet.id/verify/tok123");
+  });
+});
+
+describe("ukuran foto kartu mengikuti tata letaknya (Fase 63)", () => {
+  // Kartu sungguhan yang pertama diterbitkan menampilkan foto lanskap sebagai
+  // pita tipis di tengah bidang tosca — slot memakai `object-fit: contain`,
+  // jadi rasio yang berbeda menyisakan bidang kosong dan kartunya terlihat
+  // rusak. Foto kini dipotong saat diunggah.
+  //
+  // Yang dijaga di sini BUKAN angkanya, melainkan bahwa angka di kode masih
+  // sama dengan yang benar-benar dipakai CSS. Menggeser tata letak tanpa
+  // menyesuaikan potongan akan mengembalikan bug yang sama, diam-diam.
+  const css = readFileSync("src/app/globals.css", "utf8");
+
+  test("rasio muka kartu di kode = yang dipakai CSS", () => {
+    const m = /\.employee-card-perspective\s*\{[^}]*aspect-ratio:\s*(\d+)\s*\/\s*(\d+)/.exec(css);
+    assert.notEqual(m, null, "aspect-ratio muka kartu tidak ketemu di globals.css");
+    assert.equal(Number(m![1]), CARD_FACE_RATIO.width);
+    assert.equal(Number(m![2]), CARD_FACE_RATIO.height);
+  });
+
+  test("inset slot foto di kode = yang dipakai CSS", () => {
+    const m = /\.employee-card-portrait-wrap\s*\{[^}]*inset:\s*0\s+(\d+)%?\s+(\d+)%\s+(\d+)%/.exec(css);
+    assert.notEqual(m, null, "inset slot foto tidak ketemu di globals.css");
+    assert.equal(Number(m![1]) / 100, CARD_PHOTO_INSET.right);
+    assert.equal(Number(m![2]) / 100, CARD_PHOTO_INSET.bottom);
+    assert.equal(Number(m![3]) / 100, CARD_PHOTO_INSET.left);
+  });
+
+  test("ukuran simpan benar-benar berbentuk slot itu", () => {
+    // Kalau ini meleset, foto tetap dikotaki meski sudah dipotong.
+    const seharusnya = cardPhotoWidth() / CARD_PHOTO_HEIGHT;
+    assert.equal(Math.abs(seharusnya - cardPhotoAspect()) < 0.001, true,
+      `ukuran ${cardPhotoWidth()}x${CARD_PHOTO_HEIGHT} tidak sebentuk slot (${cardPhotoAspect().toFixed(4)})`);
+  });
+
+  test("fotonya TEGAK, bukan lanskap", () => {
+    // Slotnya lebih tinggi daripada lebar. Nilai yang terbalik akan lolos
+    // pemeriksaan rasio di atas tetapi menghasilkan foto yang salah bentuk.
+    assert.equal(cardPhotoAspect() < 1, true);
+    assert.equal(cardPhotoWidth() < CARD_PHOTO_HEIGHT, true);
+  });
+
+  test("cukup padat untuk dicetak", () => {
+    // Pada kartu selebar 85 mm, foto sekitar 65 mm. Di bawah 1000 piksel sisi
+    // tinggi, hasil cetaknya mulai terlihat pecah.
+    assert.equal(CARD_PHOTO_HEIGHT >= 1000, true);
   });
 });

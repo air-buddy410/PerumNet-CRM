@@ -179,6 +179,48 @@ export function publicVerification(
 }
 
 /** Alamat halaman verifikasi untuk sebuah token — inilah isi QR-nya. */
+// ── Ukuran foto resmi pegawai (Fase 63) ─────────────────────────
+//
+// Angka di sini MENCERMINKAN tata letak kartu di `globals.css`:
+//
+//   .employee-card-perspective   { aspect-ratio: 250 / 353; }  ← seri ISO B
+//   .employee-card-portrait-wrap { inset: 0 0 25% 24%; }       ← 76% × 75%
+//
+// Slot fotonya berarti 0,76 lebar × 0,75 tinggi kartu, jadi rasionya
+// 0,76 ÷ (0,75 × 353/250) ≈ 0,718 — lebih ramping daripada kartunya sendiri.
+//
+// Foto yang rasionya berbeda akan DIKOTAKI: `object-fit: contain` menyisakan
+// bidang kosong di kiri-kanan atau atas-bawah. Itu bukan kemungkinan teoretis —
+// kartu sungguhan yang pertama diterbitkan menampilkan foto lanskap sebagai
+// pita tipis di tengah bidang tosca, dan kartunya terlihat rusak.
+//
+// Memotongnya SAAT DIUNGGAH membuat keadaan itu tidak mungkin tercapai, bukan
+// sekadar jarang. Meminta HRD memotong sendiri sebelum mengunggah berarti
+// menaruh syarat yang tidak terlihat di tempat yang tidak memeriksanya.
+//
+// Dijaga tes: tests/unit/employee-card.test.ts membaca globals.css dan gagal
+// bila salah satu angka di atas bergeser tanpa nilai di sini ikut disesuaikan.
+export const CARD_FACE_RATIO = { width: 250, height: 353 } as const;
+export const CARD_PHOTO_INSET = { top: 0, right: 0, bottom: 0.25, left: 0.24 } as const;
+
+/** Rasio lebar terhadap tinggi slot foto pada muka kartu. */
+export function cardPhotoAspect(): number {
+  const lebar = 1 - CARD_PHOTO_INSET.left - CARD_PHOTO_INSET.right;
+  const tinggi = 1 - CARD_PHOTO_INSET.top - CARD_PHOTO_INSET.bottom;
+  return lebar / (tinggi * (CARD_FACE_RATIO.height / CARD_FACE_RATIO.width));
+}
+
+/**
+ * Tinggi simpan. Pada kartu selebar 85 mm, fotonya sekitar 65 mm — 1254 piksel
+ * di sisi tinggi memberi kepadatan di atas 300 dpi, cukup untuk dicetak tanpa
+ * terlihat pecah, dan masih jauh lebih ringan daripada berkas kamera aslinya.
+ */
+export const CARD_PHOTO_HEIGHT = 1254;
+
+export function cardPhotoWidth(): number {
+  return Math.round(CARD_PHOTO_HEIGHT * cardPhotoAspect());
+}
+
 export function verificationPath(publicToken: string): string {
   return `/verify/${publicToken}`;
 }
