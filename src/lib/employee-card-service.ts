@@ -14,6 +14,9 @@ import {
   isCardValid,
   cardPhotoWidth,
   CARD_PHOTO_HEIGHT,
+  cropRejection,
+  cropToPixels,
+  type CardPhotoCrop,
   type CardAction,
   type PublicVerification,
 } from "@/lib/employee-card";
@@ -66,16 +69,38 @@ export const CARD_PHOTO_INPUT_MIME = ["image/jpeg", "image/png", "image/webp"];
  * Hasilnya JPEG — kartu ini dicetak, dan JPEG diterima setiap alur cetak.
  */
 async function potongFotoKartu(
-  file: File
+  file: File,
+  crop?: CardPhotoCrop | null
 ): Promise<{ ok: true; file: File } | { ok: false; error: string }> {
   if (!CARD_PHOTO_INPUT_MIME.includes(file.type)) {
     return { ok: false, error: "Foto harus berformat JPG, PNG, atau WebP." };
   }
   const masuk = Buffer.from(await file.arrayBuffer());
   try {
-    const keluar = await sharp(masuk, { failOn: "error" })
-      .rotate() // menghormati orientasi EXIF SEBELUM metadatanya dibuang
-      .resize(cardPhotoWidth(), CARD_PHOTO_HEIGHT, { fit: "cover", position: "attention" })
+    // Orientasi EXIF diterapkan LEBIH DULU, lalu hasilnya dijadikan gambar
+    // sumber tersendiri. Ini bukan langkah tambahan yang bisa dihemat:
+    // koordinat potong berasal dari apa yang DILIHAT HRD di layar, dan
+    // peramban sudah menampilkan foto dalam orientasi tegaknya. Memotong
+    // sebelum diputar berarti memotong bagian yang salah — pada foto ponsel
+    // yang terekam miring, potongannya meleset 90 derajat.
+    const tegak = await sharp(masuk, { failOn: "error" }).rotate().toBuffer();
+    const sumber = await sharp(tegak).metadata();
+
+    let pipa = sharp(tegak, { failOn: "error" });
+    if (crop) {
+      const alasan = cropRejection(crop, { width: sumber.width ?? 0, height: sumber.height ?? 0 });
+      if (alasan) return { ok: false, error: alasan };
+      pipa = pipa.extract(cropToPixels(crop, { width: sumber.width ?? 0, height: sumber.height ?? 0 }));
+    }
+
+    const keluar = await pipa
+      // Tetap `cover` meski sudah dipotong: bidang pilihan HRD boleh meleset
+      // sedikit dari rasio kartu, dan keluarannya HARUS selalu berbentuk slot.
+      // Tanpa ini, satu piksel selisih membuat fotonya dikotaki lagi.
+      .resize(cardPhotoWidth(), CARD_PHOTO_HEIGHT, {
+        fit: "cover",
+        position: crop ? "centre" : "attention",
+      })
       .jpeg({ quality: 88 })
       .toBuffer();
     // Nama berkas dibangkitkan sendiri: nama dari pengunggah tidak pernah
@@ -101,7 +126,9 @@ async function potongFotoKartu(
 export async function uploadEmployeePhoto(
   user: CurrentUser,
   employeeId: string,
-  file: File
+  file: File,
+  /** Bidang potong pilihan HRD. Tanpa ini, potongannya ditentukan mesin. */
+  crop?: CardPhotoCrop | null
 ): Promise<Result> {
   if (!user.permissions.has(PERMISSIONS.HRD_MANAGE)) {
     return { ok: false, error: "Hanya HRD yang boleh mengunggah foto pegawai." };
@@ -114,7 +141,7 @@ export async function uploadEmployeePhoto(
 
   // Dipotong DI SINI, bukan diserahkan ke HRD. Lihat CARD_PHOTO_* di
   // employee-card.ts untuk asal rasionya dan kenapa ini bukan kerapian.
-  const siap = await potongFotoKartu(file);
+  const siap = await potongFotoKartu(file, crop);
   if (!siap.ok) return siap;
 
   const saved = await saveAttachment(siap.file, EMPLOYEE_PHOTO_ENTITY, employeeId, user.id);

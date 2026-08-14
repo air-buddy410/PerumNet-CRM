@@ -15,6 +15,8 @@ import {
   CARD_PHOTO_HEIGHT,
   cardPhotoAspect,
   cardPhotoWidth,
+  cropRejection,
+  cropToPixels,
 } from "@/lib/employee-card";
 
 const NOW = new Date("2026-08-13T10:00:00");
@@ -224,5 +226,62 @@ describe("ukuran foto kartu mengikuti tata letaknya (Fase 63)", () => {
     // Pada kartu selebar 85 mm, foto sekitar 65 mm. Di bawah 1000 piksel sisi
     // tinggi, hasil cetaknya mulai terlihat pecah.
     assert.equal(CARD_PHOTO_HEIGHT >= 1000, true);
+  });
+});
+
+describe("bidang potong pilihan HRD (Fase 64)", () => {
+  const sumber = { width: 3000, height: 4000 };
+  const utuh = { x: 0, y: 0, width: 1, height: 1 };
+
+  test("bidang wajar diterima", () => {
+    assert.equal(cropRejection({ x: 0.1, y: 0.05, width: 0.5, height: 0.7 }, sumber), null);
+    assert.equal(cropRejection(utuh, sumber), null);
+  });
+
+  test("keluar dari foto DITOLAK", () => {
+    for (const c of [
+      { x: 0.6, y: 0, width: 0.5, height: 0.5 },
+      { x: 0, y: 0.8, width: 0.5, height: 0.5 },
+      { x: -0.1, y: 0, width: 0.5, height: 0.5 },
+    ]) {
+      assert.notEqual(cropRejection(c, sumber), null, JSON.stringify(c));
+    }
+  });
+
+  test("pembulatan pecahan peramban tidak dianggap keluar", () => {
+    // 1.0000000000000002 muncul sendiri dari pembagian di JavaScript, dan
+    // menolaknya hanya membuat orang bingung tanpa melindungi apa pun.
+    assert.equal(cropRejection({ x: 0, y: 0, width: 1.00000000000000022, height: 1 }, sumber), null);
+  });
+
+  test("bidang kosong atau angka ngawur DITOLAK", () => {
+    for (const c of [
+      { x: 0, y: 0, width: 0, height: 0.5 },
+      { x: 0, y: 0, width: 0.5, height: -0.2 },
+      { x: NaN, y: 0, width: 0.5, height: 0.5 },
+      { x: 0, y: 0, width: Infinity, height: 0.5 },
+    ]) {
+      assert.notEqual(cropRejection(c as never, sumber), null, JSON.stringify(c));
+    }
+  });
+
+  test("bidang TERLALU KECIL ditolak, dan pesannya menyebut angkanya", () => {
+    // Bidang kecil akan diperbesar untuk mengisi 900×1254, dan pecahnya justru
+    // di wajah orangnya — baru ketahuan setelah kartunya dicetak dan dibagikan.
+    const r = cropRejection({ x: 0, y: 0, width: 0.05, height: 0.05 }, sumber);
+    assert.notEqual(r, null);
+    assert.match(r!, /terlalu kecil/i);
+    assert.match(r!, /150×200/);
+  });
+
+  test("piksel dihitung dari pecahan, dan tidak pernah melewati tepi", () => {
+    assert.deepEqual(cropToPixels({ x: 0.5, y: 0.25, width: 0.5, height: 0.5 }, sumber), {
+      left: 1500, top: 1000, width: 1500, height: 2000,
+    });
+    // Pembulatan bisa membuat left+width melewati sisi kanan satu piksel, dan
+    // pemroses gambar menolaknya dengan galat yang tidak bisa dipahami siapa pun.
+    const p = cropToPixels({ x: 0, y: 0, width: 1.00000000000000022, height: 1 }, sumber);
+    assert.equal(p.left + p.width <= sumber.width, true);
+    assert.equal(p.top + p.height <= sumber.height, true);
   });
 });

@@ -22,6 +22,7 @@ import {
   markCardLost,
   revokeCard,
 } from "@/lib/employee-card-service";
+import type { CardPhotoCrop } from "@/lib/employee-card";
 import { previewEmployeeImport, applyEmployeeImport } from "@/lib/employee-import-service";
 
 function num(v: FormDataEntryValue | null): number {
@@ -225,7 +226,31 @@ function backToEmployee(employeeId: string, result: { ok: true } | { ok: false; 
   );
 }
 
-/** field: employeeId, photo — form encType="multipart/form-data" */
+/**
+ * Bidang potong dari formulir, atau null bila HRD tidak menggesernya.
+ *
+ * Keempatnya harus ADA dan berupa angka. Sebagian saja berarti formulirnya
+ * belum selesai mengirim — dan menerima potongan setengah jadi akan memotong
+ * bagian yang salah tanpa ada yang menyadarinya. Yang tidak lengkap
+ * dikembalikan sebagai null, sehingga potongannya ditentukan mesin seperti
+ * sebelum fitur ini ada.
+ */
+function cropDariForm(formData: FormData): CardPhotoCrop | null {
+  const ambil = (k: string) => {
+    const v = formData.get(k);
+    if (v === null || String(v).trim() === "") return null;
+    const n = Number(String(v));
+    return Number.isFinite(n) ? n : null;
+  };
+  const x = ambil("cropX");
+  const y = ambil("cropY");
+  const width = ambil("cropWidth");
+  const height = ambil("cropHeight");
+  if (x === null || y === null || width === null || height === null) return null;
+  return { x, y, width, height };
+}
+
+/** field: employeeId, photo, cropX?, cropY?, cropWidth?, cropHeight? — encType="multipart/form-data" */
 export async function uploadEmployeePhotoAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.HRD_MANAGE);
   const employeeId = String(formData.get("employeeId") ?? "");
@@ -233,7 +258,7 @@ export async function uploadEmployeePhotoAction(formData: FormData): Promise<voi
   if (!(file instanceof File) || file.size === 0) {
     backToEmployee(employeeId, { ok: false, error: "Pilih berkas foto terlebih dahulu." }, "");
   }
-  const result = await uploadEmployeePhoto(user, employeeId, file as File);
+  const result = await uploadEmployeePhoto(user, employeeId, file as File, cropDariForm(formData));
   revalidatePath(`/hrd/employees/${employeeId}`);
   backToEmployee(employeeId, result, "Foto resmi tersimpan.");
 }

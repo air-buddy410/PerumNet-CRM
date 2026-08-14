@@ -221,6 +221,81 @@ export function cardPhotoWidth(): number {
   return Math.round(CARD_PHOTO_HEIGHT * cardPhotoAspect());
 }
 
+// ── Potongan pilihan pengguna (Fase 64) ─────────────────────────
+//
+// HRD menggeser sendiri bidang potongnya, karena mesin tidak tahu wajah siapa
+// yang penting di foto rombongan — dan pemotongan otomatis yang meleset
+// menghasilkan kartu yang harus dicetak ulang.
+//
+// Koordinatnya PECAHAN 0..1 terhadap gambar sumber, bukan piksel. Pratinjau di
+// layar selalu diperkecil agar muat, dan ukurannya berbeda di tiap perangkat;
+// mengirim piksel berarti peramban harus tahu ukuran asli berkasnya dan
+// menghitung skalanya sendiri — satu tempat lagi yang bisa salah, dan salahnya
+// tidak terlihat sampai kartunya tercetak.
+
+export interface CardPhotoCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Sisi terpendek yang masih layak cetak, dalam piksel gambar SUMBER.
+ *
+ * Bidang yang lebih kecil dari ini akan diperbesar untuk mengisi 900×1254, dan
+ * hasilnya pecah justru di wajah orangnya. Ditolak di sini, bukan dibiarkan —
+ * kartu yang buram baru ketahuan setelah dicetak dan dibagikan.
+ */
+export const CARD_CROP_MIN_WIDTH = 450;
+export const CARD_CROP_MIN_HEIGHT = 627;
+
+/** Alasan potongan ditolak, atau null bila boleh dipakai. */
+export function cropRejection(
+  c: CardPhotoCrop,
+  sumber: { width: number; height: number }
+): string | null {
+  const nilai = [c.x, c.y, c.width, c.height];
+  if (nilai.some((n) => typeof n !== "number" || !Number.isFinite(n))) {
+    return "Area potong tidak terbaca. Geser ulang kotaknya.";
+  }
+  if (c.width <= 0 || c.height <= 0) return "Area potong kosong. Geser ulang kotaknya.";
+  if (c.x < 0 || c.y < 0) return "Area potong keluar dari foto.";
+  // Toleransi kecil: pembulatan pecahan di peramban sering menghasilkan
+  // 1.0000000000000002, dan menolaknya hanya membuat orang bingung.
+  if (c.x + c.width > 1.0001 || c.y + c.height > 1.0001) {
+    return "Area potong keluar dari foto.";
+  }
+  const lebar = Math.round(c.width * sumber.width);
+  const tinggi = Math.round(c.height * sumber.height);
+  if (lebar < CARD_CROP_MIN_WIDTH || tinggi < CARD_CROP_MIN_HEIGHT) {
+    return (
+      `Area potong terlalu kecil (${lebar}×${tinggi} piksel). ` +
+      `Perbesar kotaknya, minimal ${CARD_CROP_MIN_WIDTH}×${CARD_CROP_MIN_HEIGHT} — ` +
+      "kalau lebih kecil, wajahnya pecah saat kartunya dicetak."
+    );
+  }
+  return null;
+}
+
+/** Bidang potong dalam PIKSEL gambar sumber, siap diberikan ke pemroses gambar. */
+export function cropToPixels(
+  c: CardPhotoCrop,
+  sumber: { width: number; height: number }
+): { left: number; top: number; width: number; height: number } {
+  const left = Math.round(c.x * sumber.width);
+  const top = Math.round(c.y * sumber.height);
+  // Dijepit ke tepi gambar: pembulatan bisa membuat left+width melewati sisi
+  // kanan satu piksel, dan pemroses gambar menolaknya dengan galat yang tidak
+  // bisa dipahami siapa pun.
+  return {
+    left,
+    top,
+    width: Math.min(Math.round(c.width * sumber.width), sumber.width - left),
+    height: Math.min(Math.round(c.height * sumber.height), sumber.height - top),
+  };
+}
+
 export function verificationPath(publicToken: string): string {
   return `/verify/${publicToken}`;
 }
