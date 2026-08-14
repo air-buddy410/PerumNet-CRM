@@ -10,6 +10,7 @@ import {
   statusChangeRejection,
   publicVerification,
   verificationUrl,
+  isCardValid,
   type CardAction,
   type PublicVerification,
 } from "@/lib/employee-card";
@@ -281,8 +282,38 @@ export async function replaceCard(
 
 // ── Pembacaan ───────────────────────────────────────────────────
 
+/**
+ * Alamat publik yang dipakai untuk isi QR, atau null bila belum jelas.
+ *
+ * Mengembalikan null di PRODUKSI saat APP_URL belum diisi, dan itu bukan
+ * kerewelan: QR dicetak ke kartu plastik. Alamat yang salah tidak bisa
+ * diperbaiki dengan menyunting apa pun — kartunya harus dicetak ulang satu per
+ * satu. Lebih baik tombol Print mati dengan alasan yang jelas daripada 23
+ * kartu yang QR-nya menunjuk ke localhost.
+ *
+ * Di luar produksi, localhost memang jawaban yang benar untuk mencoba.
+ */
+export function cardAppUrl(): string | null {
+  const raw = process.env.APP_URL?.trim();
+  if (raw) return raw.replace(/\/+$/, "");
+  return process.env.NODE_ENV === "production" ? null : "http://localhost:3300";
+}
+
+/**
+ * Kartu milik seorang pegawai, LENGKAP DENGAN QR-nya (Fase 61).
+ *
+ * `publicToken` sengaja tidak ikut keluar. Yang keluar hanya GAMBAR QR yang
+ * sudah jadi: token itu kunci verifikasi publik, dan begitu ia sampai ke
+ * peramban ia akan muncul di riwayat, ekstensi, dan tangkapan layar. Membuat
+ * QR-nya di server berarti kuncinya tidak pernah meninggalkan server.
+ *
+ * QR hanya terbit untuk kartu yang BENAR-BENAR BERLAKU. Kartu yang dicabut
+ * atau kedaluwarsa tidak diberi QR sama sekali — memberi gambar QR pada kartu
+ * mati mengundang orang mencetaknya, dan hasilnya kartu yang terlihat resmi
+ * tetapi gagal saat dipindai pelanggan di depan pintunya.
+ */
 export async function loadEmployeeCards(employeeId: string) {
-  return db.employeeCard.findMany({
+  const cards = await db.employeeCard.findMany({
     where: { employeeId },
     select: {
       id: true,
@@ -293,11 +324,45 @@ export async function loadEmployeeCards(employeeId: string) {
       nfcUid: true,
       revokedAt: true,
       revokeReason: true,
+      publicToken: true,
       issuedBy: { select: { name: true } },
       revokedBy: { select: { name: true } },
     },
     orderBy: { issuedAt: "desc" },
   });
+
+  const employee = await db.employee.findUnique({
+    where: { id: employeeId },
+    select: { isActive: true, user: { select: { frozenAt: true, isActive: true } } },
+  });
+
+  const appUrl = cardAppUrl();
+  const now = new Date();
+
+  return Promise.all(
+    cards.map(async ({ publicToken, ...card }) => {
+      const berlaku =
+        employee !== null &&
+        isCardValid(
+          {
+            status: card.status,
+            expiresAt: card.expiresAt,
+            employeeActive: employee.isActive,
+            userFrozenAt: employee.user?.frozenAt ?? null,
+            // Tanpa akun sistem BUKAN berarti diarsipkan — banyak pegawai
+            // lapangan memang tidak punya akun CRM. Sama persis dengan
+            // verifyCardToken() di bawah; dua jawaban berbeda untuk kartu
+            // yang sama akan membuat QR terbit padahal pemindaiannya gagal.
+            userArchived: employee.user ? !employee.user.isActive : false,
+          },
+          now
+        );
+      return {
+        ...card,
+        qrSvg: appUrl && berlaku ? await cardQrSvg(appUrl, publicToken) : null,
+      };
+    })
+  );
 }
 
 /**
