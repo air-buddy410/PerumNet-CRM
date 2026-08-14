@@ -768,6 +768,7 @@ menjadi susunan field yang dapat dibaca pada layar sempit.
 - Standar ukuran dikunci ke ISO B4 portrait: 250×353 mm. Preview layar mempertahankan rasio 250:353; print menghasilkan sisi depan dan belakang pada dua halaman B4 yang siap dicetak duplex sisi panjang.
 - Preview dapat dibalik manual dengan tombol yang keyboard-accessible. Animasi `rotateY` dihentikan saat `prefers-reduced-motion` aktif.
 - Sisi depan menampilkan logo, foto resmi, nama, jabatan, divisi, nomor pegawai pada mode HRD, dan nomor kartu. Sisi belakang menampilkan pola brand, Perum Network, website, nomor kartu, serta QR verifikasi resmi bila tersedia.
+- Foto resmi pada sisi depan mempertahankan seluruh gambar tanpa crop menggunakan renderer yang sama pada detail HRD, hasil scan publik, dan print; ruang sisa mengikuti latar teal kartu.
 - QR tidak boleh dibuat dari NIK, nama, atau data lain di browser. Bila loader belum menyediakan `qrSvg` server-side, UI menampilkan `QR belum tersedia` dan menahan print fisik.
 - Halaman scan hanya memakai `PublicVerification`: nama, jabatan, foto, dan nomor kartu. Kartu tidak berlaku tidak menampilkan identitas pegawai.
 - Foto gagal dimuat memiliki fallback initials; teks panjang dibatasi agar tidak melewati kartu. Preview dan print wajib bebas horizontal overflow pada desktop, tablet, dan mobile.
