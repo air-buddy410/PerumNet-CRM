@@ -204,11 +204,29 @@ export async function ingestMonitoringAlert(
     return { ok: false, error: "Field message wajib diisi." };
   }
 
+  // Pencocokan TIDAK MEMBEDAKAN BESAR-KECIL HURUF, dan itu bukan kelonggaran
+  // yang manis-manis saja.
+  //
+  // Sebelumnya hostname dikecilkan lalu dicari persis. Perangkat di CRM
+  // didaftarkan apa adanya — `PRM_NAGABASUKIH_D` — jadi pencarian huruf kecil
+  // TIDAK PERNAH menemukannya. Alarmnya tetap terbit, hanya tanpa perangkat dan
+  // tanpa site, sehingga pertanyaan yang paling penting saat jaringan bermasalah
+  // — "pelanggan mana yang terdampak" — dijawab kosong. Tidak ada galat, tidak
+  // ada yang curiga.
+  //
+  // Nama perangkat datang dari sistem lain (LibreNMS memakai sysName, yang di
+  // RouterOS otomatis huruf kecil). Menuntut keduanya sama persis berarti
+  // menaruh syarat yang tak terlihat di antara dua sistem yang tidak saling
+  // mengetahui aturan penamaan masing-masing.
   const device = alert.deviceHostname
-    ? await db.networkDevice.findUnique({ where: { hostname: alert.deviceHostname.toLowerCase() } })
+    ? await db.networkDevice.findFirst({
+        where: { hostname: { equals: alert.deviceHostname.trim(), mode: "insensitive" } },
+      })
     : null;
   const site = alert.siteCode
-    ? await db.networkSite.findUnique({ where: { siteCode: alert.siteCode.toUpperCase() } })
+    ? await db.networkSite.findFirst({
+        where: { siteCode: { equals: alert.siteCode.trim(), mode: "insensitive" } },
+      })
     : null;
   const dedupKey =
     alert.dedupKey?.trim() ||
