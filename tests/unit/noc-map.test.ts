@@ -1,5 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { occupancyOf, projector } from "@/lib/noc-map";
 
 describe("occupancyOf", () => {
