@@ -874,3 +874,55 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Opus memastikan provisioning password default, termasuk jalur Mailcow,
   mengaktifkan `mustChangePassword`, login pertama tidak menghapusnya, dan hanya
   perubahan password yang berhasil yang boleh menonaktifkannya.
+
+## 34. Handoff Opus — Koordinat Site dan Impor Katalog Material
+
+### Koordinat site NOC
+
+- `/noc/sites` menampilkan `FtthCoordinatePicker` dengan nilai latitude dan
+  longitude yang sudah tersimpan.
+- User dapat memilih titik dari peta internal atau mengisi kedua nilai secara
+  manual. Saat form edit dibuka, koordinat lama dipertahankan sampai user
+  mengubahnya.
+- Jika hanya satu nilai diisi, UI memberi peringatan agar pasangan koordinat
+  dilengkapi. Mengosongkan keduanya adalah tindakan sadar untuk menghapus
+  lokasi; rentang, urutan, dan `(0,0)` tetap divalidasi oleh backend.
+- Peta internal boleh gagal dimuat tanpa menghilangkan input manual. Layout
+  harus tetap terbaca dan tidak membuat form melebar pada enam viewport CRM.
+
+### Impor katalog material
+
+- `/inventory/items/import` hanya tersedia untuk `items.manage` dan hanya
+  menampilkan gudang aktif. File `.xlsx` asli disimpan di state client dan
+  dikirim ulang untuk preview serta apply.
+- Preview membedakan `CREATE`, `LENGKAPI`, dan `SKIP` untuk kategori, vendor,
+  dan material. `notes` adalah peringatan operasional yang ditampilkan per
+  baris; `issues` menampilkan nomor baris dan nama kolom serta menahan tombol
+  penerapan.
+- Preview merangkum jumlah kategori, vendor, material, dan saldo awal. Riwayat
+  pergerakan yang tidak lengkap ditampilkan sebagai dilewati, bukan dianggap
+  sebagai saldo baru. Saldo awal dijelaskan sebagai dokumen `GOODS_RECEIPT`
+  pada gudang yang dipilih.
+- Hasil penerapan merangkum kategori/vendor yang dibuat, material baru,
+  material yang dilengkapi, material yang dilewati, nomor dokumen saldo awal,
+  dan jumlah unit saldo awal. Tidak ada tabel preview yang dikirim kembali
+  sebagai sumber penerapan.
+
+### Item Master
+
+- `/inventory/items` menampilkan vendor utama, harga beli, harga jual, dan
+  kondisi material. Nilai kondisi `GOOD` ditampilkan sebagai “Baik” dan
+  `SECOND` sebagai “Layak pakai ulang”; nilai rupiah memakai `formatRupiah`.
+- Empat field katalog tersebut masih read-only karena action Item Master belum
+  menerima perubahan resminya. UI tidak menampilkan input yang seolah-olah
+  dapat disimpan.
+- Tabel memakai horizontal scroll terkontrol, wrapping berdasarkan kata, dan
+  kolom tambahan tidak boleh membuat card atau viewport melebar.
+
+### Acceptance responsive
+
+- QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan
+  360×800.
+- Tidak boleh ada koordinat yang hilang saat edit, warning parsial yang tidak
+  terlihat, preview impor keluar card, status pecah satu huruf per baris,
+  tombol apply aktif ketika ada issue, atau horizontal overflow.

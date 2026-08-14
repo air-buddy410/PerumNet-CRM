@@ -65,6 +65,11 @@ stock.
 - **Butuh:** setiap akun yang menerima password default dari IT, termasuk jalur provisioning Mailcow, harus disimpan dengan `mustChangePassword = true`. Login pertama tidak boleh menghapus flag; reset password oleh admin harus mengaktifkannya kembali; hanya perubahan password yang berhasil yang boleh mengubahnya menjadi `false`.
 - **Kenapa tidak bisa di sisi frontend:** frontend hanya dapat menampilkan peringatan berdasarkan `CurrentUser.mustChangePassword`. Frontend tidak menerima password, hash, atau riwayat password, dan tidak dapat menentukan apakah password yang digunakan masih default. Data lama dengan flag yang salah perlu diperbaiki oleh backend/data maintenance.
 
+### Item Master perlu action untuk field katalog
+- **Layar:** `/inventory/items`
+- **Butuh:** `saveItemAction` atau kontrak action resmi yang menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
+- **Kenapa tidak bisa di sisi frontend:** action saat ini hanya menerima field master dasar. Frontend menampilkan empat nilai hasil impor secara read-only dan sengaja tidak mengirim field yang belum didukung agar UI tidak memberi kesan perubahan tersimpan padahal diabaikan.
+
 ---
 
 ## Selesai

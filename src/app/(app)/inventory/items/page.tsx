@@ -6,6 +6,8 @@ import {
   PERMISSIONS,
   TRACKING_TYPES,
   ITEM_UNITS,
+  DEVICE_CONDITIONS,
+  formatRupiah,
   statusLabel,
 } from "@/lib/constants";
 import { PageHeader, Flash, Badge, ActiveBadge, EmptyState } from "@/components/ui";
@@ -25,6 +27,8 @@ const sortOptions: readonly TableSortOption[] = [
   { value: "name", label: "Nama" },
   { value: "minStock", label: "Minimum stock" },
 ];
+
+const CONDITION_LABELS = Object.fromEntries(DEVICE_CONDITIONS) as Record<string, string>;
 
 export default async function ItemsPage({
   searchParams,
@@ -51,6 +55,7 @@ export default async function ItemsPage({
       where,
       include: {
         category: true,
+        supplier: true,
         stockLevels: true,
         _count: { select: { devices: true } },
       },
@@ -63,7 +68,7 @@ export default async function ItemsPage({
     table.query.edit
       ? db.item.findUnique({
           where: { id: table.query.edit },
-          include: { category: true, stockLevels: true, _count: { select: { devices: true } } },
+          include: { category: true, supplier: true, stockLevels: true, _count: { select: { devices: true } } },
         })
       : Promise.resolve(null),
   ]);
@@ -88,6 +93,10 @@ export default async function ItemsPage({
                   <th className="th"><SortableTableHeader basePath="/inventory/items" currentDirection={table.direction} currentSort={table.sort} label="Kode" query={table.query} sortKey="code" /></th>
                   <th className="th"><SortableTableHeader basePath="/inventory/items" currentDirection={table.direction} currentSort={table.sort} label="Nama" query={table.query} sortKey="name" /></th>
                   <th className="th">Tracking</th>
+                  <th className="th">Vendor utama</th>
+                  <th className="th">Harga beli</th>
+                  <th className="th">Harga jual</th>
+                  <th className="th">Kondisi</th>
                   <th className="th">Total Stock</th>
                   <th className="th">Min</th>
                   <th className="th">Status</th>
@@ -111,6 +120,10 @@ export default async function ItemsPage({
                       <td className="td">
                         <Badge value={item.trackingType} label={statusLabel(item.trackingType)} />
                       </td>
+                      <td className="td max-w-[220px] break-words">{item.supplier?.name ?? "—"}</td>
+                      <td className="td whitespace-nowrap">{formatRupiah(item.purchaseCost)}</td>
+                      <td className="td whitespace-nowrap">{formatRupiah(item.salePrice)}</td>
+                      <td className="td whitespace-nowrap">{CONDITION_LABELS[item.condition] ?? item.condition}</td>
                       <td className="td whitespace-nowrap">
                         <span className={low ? "font-bold text-red-600" : ""}>
                           {total} {item.unit}
@@ -213,6 +226,30 @@ export default async function ItemsPage({
                 <p className="mt-1 text-xs text-slate-500">
                   Tracking type terkunci setelah item memiliki transaksi.
                 </p>
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                <h3 className="text-xs font-semibold text-slate-700">Data katalog hasil impor</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  Data ini ditampilkan read-only. Perubahan vendor, harga, dan kondisi menunggu dukungan resmi pada action Item Master.
+                </p>
+                <dl className="mt-3 grid min-w-0 gap-x-4 gap-y-3 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Vendor utama</dt>
+                    <dd className="mt-1 break-words text-xs text-slate-700">{editRow?.supplier?.name ?? "—"}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Kondisi</dt>
+                    <dd className="mt-1 break-words text-xs text-slate-700">{editRow ? CONDITION_LABELS[editRow.condition] ?? editRow.condition : "—"}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Harga beli</dt>
+                    <dd className="mt-1 break-words text-xs text-slate-700">{formatRupiah(editRow?.purchaseCost)}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Harga jual</dt>
+                    <dd className="mt-1 break-words text-xs text-slate-700">{formatRupiah(editRow?.salePrice)}</dd>
+                  </div>
+                </dl>
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="btn-primary">{editRow ? "Simpan" : "Tambah"}</button>

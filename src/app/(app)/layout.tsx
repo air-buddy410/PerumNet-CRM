@@ -84,6 +84,8 @@ export default async function AppLayout({
       { href: "/inventory/opname", label: "Stock Opname" }
     );
   }
+  if (can(PERMISSIONS.ITEMS_MANAGE))
+    inventoryItems.push({ href: "/inventory/items/import", label: "Impor Katalog" });
   if (can(PERMISSIONS.CUSTODY_VIEW))
     inventoryItems.push({ href: "/inventory/custody", label: "Custody Teknisi" });
   if (inventoryItems.length)

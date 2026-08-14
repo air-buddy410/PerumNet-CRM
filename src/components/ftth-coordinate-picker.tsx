@@ -18,6 +18,9 @@ export function FtthCoordinatePicker({
   const [latitude, setLatitude] = useState(initialLatitude?.toString() ?? "");
   const [longitude, setLongitude] = useState(initialLongitude?.toString() ?? "");
   const [mapState, setMapState] = useState<"loading" | "ready" | "unavailable">("loading");
+  const hasLatitude = latitude.trim() !== "";
+  const hasLongitude = longitude.trim() !== "";
+  const hasPartialCoordinate = hasLatitude !== hasLongitude;
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +137,11 @@ export function FtthCoordinatePicker({
           />
         </div>
       </div>
+      {hasPartialCoordinate && (
+        <p className="crm-coordinate-picker-warning" role="alert">
+          Isi latitude dan longitude bersama-sama. Kosongkan keduanya jika site memang tidak memiliki lokasi.
+        </p>
+      )}
     </fieldset>
   );
 }
