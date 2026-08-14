@@ -60,6 +60,11 @@ stock.
 - **Butuh:** `loadAuthentikIntegration()` mengembalikan `notes` bila catatan konfigurasi memang dapat diedit dari halaman tersebut. Saat ini `saveAuthentikAction` menerima dan menyimpan field `notes`, tetapi loader hanya mengembalikan alamat, credential reference, status, dan waktu aktivitas terakhir.
 - **Kenapa tidak bisa di sisi frontend:** frontend tidak boleh menebak catatan lama atau mengisi ulang nilai yang tidak dikembalikan DTO. Tanpa field tersebut, menyimpan ulang konfigurasi dari UI dapat mengosongkan catatan sebelumnya.
 
+### Password default wajib ditinjau saat login pertama
+- **Layar:** `/login`, shell aplikasi, dropdown notifikasi, dan `/profile`
+- **Butuh:** setiap akun yang menerima password default dari IT, termasuk jalur provisioning Mailcow, harus disimpan dengan `mustChangePassword = true`. Login pertama tidak boleh menghapus flag; reset password oleh admin harus mengaktifkannya kembali; hanya perubahan password yang berhasil yang boleh mengubahnya menjadi `false`.
+- **Kenapa tidak bisa di sisi frontend:** frontend hanya dapat menampilkan peringatan berdasarkan `CurrentUser.mustChangePassword`. Frontend tidak menerima password, hash, atau riwayat password, dan tidak dapat menentukan apakah password yang digunakan masih default. Data lama dengan flag yang salah perlu diperbaiki oleh backend/data maintenance.
+
 ---
 
 ## Selesai

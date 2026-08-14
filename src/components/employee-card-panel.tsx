@@ -8,6 +8,7 @@ import {
   uploadEmployeePhotoAction,
 } from "@/app/(app)/hrd/actions";
 import { EmployeeCardPreview, type EmployeeCardPreviewData } from "@/components/employee-card-preview";
+import { EmployeePhotoCropper } from "@/components/employee-photo-cropper";
 import { formatUiDate } from "@/components/ui-formatters";
 
 export type EmployeeCardView = {
@@ -92,24 +93,9 @@ export function EmployeeCardPanel({
             )}
           </div>
           {canManage && (
-            <form action={uploadEmployeePhotoAction} encType="multipart/form-data" className="mt-3 space-y-2">
-              <input type="hidden" name="employeeId" value={employeeId} />
-              <label className="label" htmlFor={`employee-photo-${employeeId}`}>
-                {photoAttachmentId ? "Ganti foto resmi" : "Unggah foto resmi"}
-              </label>
-              <input
-                id={`employee-photo-${employeeId}`}
-                name="photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                capture="user"
-                required
-                className="block min-w-0 max-w-full text-xs text-slate-500"
-              />
-              <button type="submit" className="btn-secondary w-full justify-center text-xs">
-                Simpan foto
-              </button>
-            </form>
+            <p className="employee-card-photo-note">
+              Gunakan panel crop di bawah untuk memilih bidang foto kartu.
+            </p>
           )}
         </div>
 
@@ -166,6 +152,16 @@ export function EmployeeCardPanel({
           )}
         </div>
       </div>
+
+      {canManage && (
+        <div className="employee-photo-cropper-panel mt-5 border-t border-slate-100 pt-5">
+          <EmployeePhotoCropper
+            employeeId={employeeId}
+            action={uploadEmployeePhotoAction}
+            currentPhoto={Boolean(photoAttachmentId)}
+          />
+        </div>
+      )}
 
       {previewData && previewCard && (
         <div className="employee-card-preview-panel mt-6 border-t border-slate-100 pt-5">

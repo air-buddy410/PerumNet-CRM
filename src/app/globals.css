@@ -202,6 +202,14 @@
 .crm-notification-state strong { color: #526767; font-size: 12px; }
 .crm-notification-state span { max-width: 260px; font-size: 10px; line-height: 1.45; }
 .crm-notification-state.is-error > svg { color: #d17c31; }
+.crm-notification-security { display: flex; align-items: flex-start; gap: 9px; padding: 13px 16px; color: #765a2f; background: #fffaf1; border-bottom: 1px solid #f1dfbd; }
+.crm-notification-security-icon { display: grid; flex: 0 0 auto; place-items: center; width: 27px; height: 27px; color: #c88320; background: #fff0d3; border-radius: 8px; }
+.crm-notification-security-icon svg { width: 15px; height: 15px; }
+.crm-notification-security-copy { display: grid; min-width: 0; flex: 1 1 auto; gap: 4px; }
+.crm-notification-security-copy > strong { color: #65491f; font-size: 12px; line-height: 1.3; }
+.crm-notification-security-copy > span:not(.crm-notification-item-meta) { color: #8a6b38; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.crm-notification-security-copy > a { width: fit-content; max-width: 100%; color: #9d6817; font-size: 10px; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; text-decoration: none; }
+.crm-notification-security-copy > a:hover { text-decoration: underline; }
 .crm-notification-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 8px 12px 8px 16px; background: #fbfdfd; border-top: 1px solid #edf3f1; }
 .crm-notification-mark-all, .crm-notification-all { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 6px; color: #008d85; background: transparent; border: 0; border-radius: 6px; font-size: 10px; font-weight: 800; text-decoration: none; }
 .crm-notification-mark-all:hover, .crm-notification-all:hover { background: #eaf7f5; }
@@ -214,8 +222,8 @@
 .crm-profile-menu-rule { height: 1px; margin: 5px 2px; background: #e8efed; }
 .crm-signout-button { color: #bb4a43; }
 .crm-signout-button:hover { color: #a33d37; background: #fff3f2; }
-.crm-password-notice { display: flex; align-items: center; gap: 9px; padding: 10px clamp(20px, 3.2vw, 46px); color: #74572f; background: #fffaf3; border-bottom: 1px solid #f1d9c0; font-size: 12px; }
-.crm-password-notice svg { width: 17px; color: #e68a20; }
+.crm-password-notice { display: flex; align-items: flex-start; gap: 9px; padding: 10px clamp(20px, 3.2vw, 46px); color: #74572f; background: #fffaf3; border-bottom: 1px solid #f1d9c0; font-size: 12px; line-height: 1.5; }
+.crm-password-notice svg { flex: 0 0 auto; width: 17px; margin-top: 1px; color: #e68a20; }
 .crm-password-notice a { color: #9d6817; font-weight: 800; }
 .crm-page { flex: 1; min-width: 0; padding: clamp(23px, 3.2vw, 44px); }
 .crm-page-header { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 0 0 25px; }
@@ -585,6 +593,40 @@
 .employee-card-photo-frame { display: grid; width: 9rem; height: 11rem; max-width: 100%; place-items: center; overflow: hidden; background: linear-gradient(145deg, #e4f7f5, #f7faf9); border: 1px solid #dceae7; border-radius: 14px; }
 .employee-card-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
 .employee-card-photo-placeholder { display: grid; place-items: center; width: 58px; height: 58px; color: #007e76; background: #d7f2ee; border-radius: 16px; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: 20px; font-weight: 800; }
+.employee-card-photo-note { max-width: 9rem; margin: 10px 0 0; color: #8a9b98; font-size: 10px; line-height: 1.45; }
+.employee-photo-cropper-panel { min-width: 0; }
+.employee-photo-cropper { display: grid; min-width: 0; gap: 14px; }
+.employee-photo-cropper-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
+.employee-photo-cropper-heading h3 { margin: 0; color: #3e5152; font-size: 14px; font-weight: 800; }
+.employee-photo-cropper-heading p { max-width: 680px; margin: 5px 0 0; color: #718582; font-size: 11px; line-height: 1.5; }
+.employee-photo-cropper-heading > svg { flex: 0 0 auto; width: 19px; height: 19px; color: #08aaa0; }
+.employee-photo-cropper-grid { display: grid; grid-template-columns: minmax(210px, .42fr) minmax(0, 1fr); gap: 18px; min-width: 0; }
+.employee-photo-cropper-input, .employee-photo-cropper-stage-column { min-width: 0; }
+.employee-photo-file-input { display: block; width: 100%; max-width: 100%; min-height: 38px; padding: 9px; color: #607573; background: #fbfdfd; border: 1px solid #dceae7; border-radius: 8px; font-size: 11px; }
+.employee-photo-file-input:focus-visible { outline: 3px solid #04a99f3d; outline-offset: 2px; border-color: #08aaa0; }
+.employee-photo-cropper-help, .employee-photo-selected { margin: 7px 0 0; color: #8a9b98; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.employee-photo-selected { color: #526767; font-weight: 700; }
+.employee-photo-cropper-stage-column { display: grid; align-content: start; gap: 10px; }
+.employee-photo-cropper-stage { position: relative; width: min(100%, 34rem); overflow: hidden; background: #d8efec; border: 1px solid #c7e1dd; border-radius: 12px; box-shadow: 0 10px 24px #25444312; }
+.employee-photo-cropper-stage > img { display: block; width: 100%; height: 100%; object-fit: fill; }
+.employee-photo-crop-box { position: absolute; z-index: 1; min-width: 18px; min-height: 18px; border: 2px solid #fff; border-radius: 7px; box-shadow: 0 0 0 9999px #071817a6, 0 0 0 1px #08aaa0; cursor: grab; outline: none; touch-action: none; }
+.employee-photo-crop-box:hover, .employee-photo-crop-box:focus-visible { border-color: #9ff8f1; box-shadow: 0 0 0 9999px #071817a6, 0 0 0 2px #08aaa0; }
+.employee-photo-crop-box.is-dragging { cursor: grabbing; }
+.employee-photo-crop-box-label { position: absolute; top: 7px; left: 50%; display: inline-flex; max-width: calc(100% - 12px); align-items: center; gap: 4px; padding: 4px 7px; color: #fff; background: #071817bd; border-radius: 5px; font-size: 9px; font-weight: 800; line-height: 1.2; transform: translateX(-50%); white-space: nowrap; }
+.employee-photo-crop-box-label svg { flex: 0 0 auto; width: 12px; height: 12px; }
+.employee-photo-cropper-empty { display: grid; width: min(100%, 34rem); min-height: 190px; place-items: center; gap: 8px; padding: 24px; color: #8a9b98; background: #f7fbfa; border: 1px dashed #c7e1dd; border-radius: 12px; font-size: 11px; text-align: center; }
+.employee-photo-cropper-empty svg { width: 25px; height: 25px; color: #08aaa0; }
+.employee-photo-cropper-controls { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px auto; align-items: center; gap: 8px; width: min(100%, 34rem); }
+.employee-photo-cropper-icon-button { display: grid; width: 38px; height: 38px; place-items: center; padding: 0; }
+.employee-photo-cropper-icon-button svg, .employee-photo-cropper-reset svg { width: 15px; height: 15px; }
+.employee-photo-zoom-control { display: grid; min-width: 0; gap: 3px; color: #718582; font-size: 10px; font-weight: 750; }
+.employee-photo-zoom-control input { width: 100%; accent-color: #08aaa0; }
+.employee-photo-cropper-reset { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 0 10px; font-size: 10px; }
+.employee-photo-cropper-status, .employee-photo-cropper-error { margin: 0; font-size: 10px; line-height: 1.45; }
+.employee-photo-cropper-status { color: #18814c; }
+.employee-photo-cropper-error { padding: 9px 11px; color: #b84740; background: #fff7f6; border: 1px solid #f0ccc8; border-radius: 8px; }
+.employee-photo-cropper-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.employee-photo-cropper-actions button { min-height: 38px; }
 .crm-list-column { display: grid; align-content: start; gap: 14px; width: 100%; min-width: 0; }
 .crm-list-column > .card { width: 100%; min-width: 0; }
 .crm-list-column > .crm-table-controls { width: 100%; margin-top: 0; }
@@ -606,7 +648,7 @@
 .crm-sortable-header svg { flex: 0 0 auto; width: 13px; height: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .crm-sidebar, .crm-nav-group-toggle svg, .crm-nav-list.is-collapsible, .crm-nav-link, .crm-metric-card, .crm-topbar-profile, .crm-profile-menu-link, .crm-signout-button, .crm-login-form .input, .crm-login-form .btn-primary, .crm-global-search, .crm-search-input, .crm-search-result, .crm-notification-button, .crm-notification-item, .crm-network-map-canvas { animation: none; transition-duration: .01ms; }
+  .crm-sidebar, .crm-nav-group-toggle svg, .crm-nav-list.is-collapsible, .crm-nav-link, .crm-metric-card, .crm-topbar-profile, .crm-profile-menu-link, .crm-signout-button, .crm-login-form .input, .crm-login-form .btn-primary, .crm-global-search, .crm-search-input, .crm-search-result, .crm-notification-button, .crm-notification-item, .crm-network-map-canvas, .employee-photo-crop-box { animation: none; transition-duration: .01ms; }
 }
 
 /* Existing CRM pages use Tailwind slate utilities. These scoped aliases keep all
@@ -726,6 +768,8 @@
   .crm-profile-password-body { align-items: stretch; flex-direction: column; }
   .crm-profile-password-body .btn-secondary { align-self: flex-start; }
   .crm-profile-password-fields { grid-template-columns: 1fr; }
+  .employee-photo-cropper-grid { grid-template-columns: 1fr; }
+  .employee-photo-cropper-stage, .employee-photo-cropper-empty, .employee-photo-cropper-controls { width: 100%; }
 }
 @media (max-width: 580px) {
   .crm-topbar { gap: 8px; padding: 0 12px; }
@@ -769,6 +813,11 @@
   .crm-profile-avatar-controls > form:first-child { align-items: stretch; }
   .crm-profile-avatar-picker { flex: 1 1 150px; }
   .crm-profile-avatar-controls .btn-primary, .crm-profile-avatar-controls .btn-secondary { justify-content: center; }
+  .employee-photo-cropper-heading { align-items: flex-start; }
+  .employee-photo-cropper-controls { grid-template-columns: 38px minmax(0, 1fr) 38px; }
+  .employee-photo-cropper-reset { grid-column: 1 / -1; justify-content: center; }
+  .employee-photo-cropper-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .employee-photo-cropper-actions button { justify-content: center; }
   .crm-document-signature-panel { padding: 16px; }
   .crm-document-signature-row { grid-template-columns: 1fr; gap: 12px; padding: 12px; }
   .crm-page form .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr); }

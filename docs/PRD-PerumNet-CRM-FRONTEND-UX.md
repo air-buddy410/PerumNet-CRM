@@ -835,3 +835,42 @@ atau business rule.
 
 Status handoff: field profile, avatar action, birthday loader, dan form pegawai
 lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
+
+## 33. Crop foto kartu dan pengingat password awal
+
+### Crop foto kartu pegawai (§31)
+
+- Panel HRD menyediakan crop foto dengan rasio kartu dari `cardPhotoAspect()`.
+- Area crop dapat digeser melalui pointer/touch atau tombol panah keyboard, serta
+  diperbesar, diperkecil, dan direset tanpa mengubah rasio kartu.
+- Form mengirim `cropX`, `cropY`, `cropWidth`, dan `cropHeight` dalam nilai
+  ternormalisasi yang dipakai action upload resmi.
+- Validasi memakai `cropRejection`, `CARD_CROP_MIN_WIDTH`, dan
+  `CARD_CROP_MIN_HEIGHT`; foto JPG, PNG, WebP, dan kamera mobile didukung.
+- Crop yang melewati batas foto atau tidak memenuhi resolusi minimum tidak dapat
+  disimpan. Pemrosesan foto dan aturan bisnis tetap berada di backend.
+- Tampilan crop harus responsif, tidak overflow, memiliki focus state, dan
+  menghormati `prefers-reduced-motion`.
+
+### Password awal dari tim IT
+
+- `mustChangePassword` adalah sumber kebenaran dari server.
+- Saat flag aktif, login tetap diizinkan tetapi banner dan item keamanan pada
+  lonceng terus mengarahkan user ke `/profile#password-title`.
+- Peringatan keamanan tidak dapat dihapus melalui `Tandai semua dibaca` dan
+  bukan baris `Notification` palsu di database.
+- Banner dan item keamanan hilang setelah revalidasi membaca flag `false` dari
+  server setelah perubahan password berhasil.
+- UI tidak menerima atau menyimpan password, hash, maupun riwayat password.
+- Provider `LOCAL`, `MAILSERVER`, dan `OIDC` tetap mengikuti kontrak profil dan
+  kebijakan password masing-masing.
+
+### Acceptance tambahan
+
+- Crop foto diuji pada foto portrait, landscape, grup, resolusi kecil, dan file
+  invalid pada enam viewport CRM.
+- Banner dan notifikasi tetap terlihat saat notifikasi biasa telah dibaca dan
+  tidak mengganggu dropdown, profile menu, atau layout mobile.
+- Opus memastikan provisioning password default, termasuk jalur Mailcow,
+  mengaktifkan `mustChangePassword`, login pertama tidak menghapusnya, dan hanya
+  perubahan password yang berhasil yang boleh menonaktifkannya.
