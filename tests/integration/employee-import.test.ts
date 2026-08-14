@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { db, actor, makeUser, tag, ensureMasterData, resetTransactionalData } from "./fixtures";
 import { xlsxFile } from "./_xlsx-write";
 import { previewEmployeeImport, applyEmployeeImport } from "@/lib/employee-import-service";
+import { saveEmployee } from "@/lib/hrd";
 import { PERMISSIONS } from "@/lib/constants";
 
 // Seluruh berkas ini menempuh jalur yang SAMA dengan HRD: berkas xlsx nyata →
@@ -510,5 +511,125 @@ describe("melengkapi data diri lewat impor ulang", () => {
     assert.notEqual(log, null);
     assert.equal(log!.userId, PETUGAS.id);
     assert.match(log!.description, /Golongan Darah|Pendidikan|Tempat Lahir/);
+  });
+});
+
+// ── Menyimpan formulir tidak boleh MENGHAPUS yang tidak disebutnya ──
+//
+// Kejadian nyata 14 Agustus 2026: satu menit setelah impor 23 pegawai
+// berhasil, satu penyimpanan formulir pegawai mengosongkan divisi, tempat &
+// tanggal lahir, pendidikan, dan golongan darah seorang pegawai. Tanpa satu
+// pun galat.
+//
+// Sebabnya payload saveEmployee() dibangun tanpa syarat, sementara formulir
+// HRD memang tidak punya input untuk kelima kolom itu. Kolom yang tidak
+// dikirim menjadi null — terhapus diam-diam.
+
+describe("saveEmployee: yang TIDAK DISEBUT tidak boleh hilang", () => {
+  let PETUGAS: ReturnType<typeof actor>;
+  let id: string;
+
+  before(async () => {
+    await ensureMasterData();
+    await db.division.upsert({ where: { code: "NOC" }, update: {}, create: { code: "NOC", name: "NOC" } });
+    PETUGAS = actor((await makeUser(tag("hrdsave").toLowerCase(), "HRD")).id, "hrd");
+    const noc = await db.division.findFirstOrThrow({ where: { code: "NOC" } });
+    const r = await saveEmployee(PETUGAS, {
+      employeeNo: "10009201",
+      fullName: "Lengkap Sejak Awal",
+      employeeType: "FULL_TIME",
+      joinedAt: new Date("2026-01-06"),
+      jobTitle: "Teknisi",
+      address: "Jl. Uji 1",
+      divisionId: noc.id,
+      birthPlace: "Denpasar",
+      birthDate: new Date("1990-06-05"),
+      education: "S1",
+      bloodType: "O_POS",
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    id = r.id!;
+  });
+
+  test("MENGUBAH NAMA SAJA tidak menghapus divisi dan data diri", async () => {
+    // Ini persis bentuk panggilan formulir HRD: ia tidak mengirim divisionId
+    // maupun keempat kolom data diri sama sekali.
+    const r = await saveEmployee(PETUGAS, {
+      id,
+      employeeNo: "10009201",
+      fullName: "Nama Sudah Diperbaiki",
+      employeeType: "FULL_TIME",
+      joinedAt: new Date("2026-01-06"),
+      jobTitle: "Teknisi",
+      isActive: true,
+      address: "Jl. Uji 1",
+      supervisorId: null,
+      userId: null,
+      contractStartAt: null,
+      contractEndAt: null,
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+
+    const e = await db.employee.findUniqueOrThrow({ where: { id } });
+    assert.equal(e.fullName, "Nama Sudah Diperbaiki", "yang disebut memang berubah");
+    assert.notEqual(e.divisionId, null, "DIVISI hilang — inilah bug-nya");
+    assert.equal(e.birthPlace, "Denpasar");
+    assert.equal(e.birthDate?.toISOString().slice(0, 10), "1990-06-05");
+    assert.equal(e.education, "S1");
+    assert.equal(e.bloodType, "O_POS");
+  });
+
+  test("MENGIRIM null memang mengosongkan — 'tidak tahu' beda dari 'hapus'", async () => {
+    const r = await saveEmployee(PETUGAS, {
+      id,
+      employeeNo: "10009201",
+      fullName: "Nama Sudah Diperbaiki",
+      employeeType: "FULL_TIME",
+      joinedAt: new Date("2026-01-06"),
+      bloodType: null,
+    });
+    assert.equal(r.ok, true, r.ok ? "" : r.error);
+    const e = await db.employee.findUniqueOrThrow({ where: { id } });
+    assert.equal(e.bloodType, null, "null yang dikirim sengaja harus menghapus");
+    assert.equal(e.birthPlace, "Denpasar", "yang lain tetap tidak tersentuh");
+  });
+
+  test("isActive yang tidak disebut TIDAK menghidupkan kembali orang yang keluar", async () => {
+    await db.employee.update({ where: { id }, data: { isActive: false } });
+    await saveEmployee(PETUGAS, {
+      id,
+      employeeNo: "10009201",
+      fullName: "Nama Sudah Diperbaiki",
+      employeeType: "FULL_TIME",
+      joinedAt: new Date("2026-01-06"),
+    });
+    const e = await db.employee.findUniqueOrThrow({ where: { id } });
+    assert.equal(e.isActive, false, "satu penyimpanan tanpa kotak centang tidak boleh menghidupkannya");
+  });
+
+  test("aturan kontrak diperiksa terhadap HASIL AKHIR, bukan hanya masukan", async () => {
+    // Kalau hanya masukan yang diperiksa, mengubah jenis karyawan menjadi
+    // Tetap tanpa menyebut tanggal kontrak akan lolos — dan tanggal lama
+    // tertinggal di barisnya. Penyapu Fase 42 kemudian membekukan orang yang
+    // masih bekerja, berdasarkan tanggal yang seharusnya sudah tidak ada.
+    const k = await saveEmployee(PETUGAS, {
+      employeeNo: "10009202",
+      fullName: "Karyawan Kontrak Uji",
+      employeeType: "CONTRACT",
+      joinedAt: new Date("2026-01-06"),
+      contractStartAt: new Date("2026-01-06"),
+      contractEndAt: new Date("2026-12-31"),
+    });
+    assert.equal(k.ok, true, k.ok ? "" : k.error);
+
+    const ubah = await saveEmployee(PETUGAS, {
+      id: k.id!,
+      employeeNo: "10009202",
+      fullName: "Karyawan Kontrak Uji",
+      employeeType: "FULL_TIME", // jadi karyawan tetap, tanggal tidak disebut
+      joinedAt: new Date("2026-01-06"),
+    });
+    assert.equal(ubah.ok, false, "harus ditolak: tanggal kontrak lama masih menempel");
+    assert.match(ubah.ok ? "" : ubah.error, /kontrak/i);
   });
 });

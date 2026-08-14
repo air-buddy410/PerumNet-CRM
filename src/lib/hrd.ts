@@ -169,10 +169,25 @@ export async function saveEmployee(
   // Fase 41 — masa kontrak. Ditolak di sini, bukan di form: penyapu Fase 42
   // membekukan akun berdasarkan contractEndAt, jadi tanggal yang tertinggal
   // pada karyawan tetap akan membekukan orang yang masih bekerja.
+  //
+  // Saat MENGUBAH, aturannya diperiksa terhadap KEADAAN HASIL AKHIR — gabungan
+  // yang dikirim pemanggil dengan yang sudah tersimpan. Memeriksa masukan saja
+  // akan meloloskan perubahan jenis karyawan yang meninggalkan tanggal kontrak
+  // lama di barisnya, dan penyapu itulah yang kemudian membekukan orangnya.
+  const tersimpan = data.id
+    ? await db.employee.findUnique({
+        where: { id: data.id },
+        select: { contractStartAt: true, contractEndAt: true },
+      })
+    : null;
+  const contractStartAt =
+    data.contractStartAt === undefined ? (tersimpan?.contractStartAt ?? null) : data.contractStartAt;
+  const contractEndAt =
+    data.contractEndAt === undefined ? (tersimpan?.contractEndAt ?? null) : data.contractEndAt;
   const contractError = contractRejection({
     employeeType: data.employeeType,
-    contractStartAt: data.contractStartAt ?? null,
-    contractEndAt: data.contractEndAt ?? null,
+    contractStartAt,
+    contractEndAt,
   });
   if (contractError) return { ok: false, error: contractError };
   const dup = await db.employee.findFirst({
@@ -205,25 +220,45 @@ export async function saveEmployee(
       }
     }
   }
+  // ── Payload ───────────────────────────────────────────────────
+  //
+  // `undefined` dari pemanggil berarti "TIDAK DISEBUT". Saat MENGUBAH, itu
+  // artinya BIARKAN APA ADANYA — bukan kosongkan. Prisma mengabaikan kunci
+  // bernilai undefined pada update, jadi kolomnya tidak tersentuh; pada create
+  // ia jatuh ke null seperti sebelumnya.
+  //
+  // Ini bukan kerapian, dan bukan kehati-hatian teoretis. Sebelum ini payloadnya
+  // dibangun tanpa syarat, sehingga formulir pegawai — yang memang tidak punya
+  // input untuk divisi maupun data diri — MENGHAPUS kelimanya setiap kali
+  // disimpan. Terjadi sungguhan pada 14 Agustus 2026: satu menit setelah impor
+  // 23 pegawai berhasil, satu penyimpanan formulir mengosongkan divisi, tempat
+  // & tanggal lahir, pendidikan, dan golongan darah seorang pegawai. Tanpa satu
+  // pun galat, dan tidak ada yang akan menyadarinya sampai data itu dibutuhkan.
+  //
+  // Kalau memang bermaksud mengosongkan, kirim `null` — bukan tidak mengirim
+  // apa-apa. Perbedaan itulah yang membedakan "tidak tahu" dari "hapus".
   const payload = {
-    userId: data.userId || null,
     employeeNo,
     fullName: data.fullName,
-    jobTitle: data.jobTitle || null,
     employeeType: data.employeeType,
-    supervisorId: data.supervisorId || null,
     joinedAt: data.joinedAt,
-    isActive: data.isActive ?? true,
-    address: data.address?.trim() || null,
     workPattern,
     jobLevel,
-    divisionId: data.divisionId || null,
-    birthPlace: data.birthPlace?.trim() || null,
-    birthDate: data.birthDate ?? null,
-    education: data.education || null,
-    bloodType: data.bloodType || null,
-    contractStartAt: data.contractStartAt ?? null,
-    contractEndAt: data.contractEndAt ?? null,
+    contractStartAt,
+    contractEndAt,
+    userId: data.userId === undefined ? undefined : data.userId || null,
+    jobTitle: data.jobTitle === undefined ? undefined : data.jobTitle || null,
+    supervisorId: data.supervisorId === undefined ? undefined : data.supervisorId || null,
+    // Pada pembuatan tetap aktif; pada perubahan, absennya berarti biarkan —
+    // kalau tidak, satu penyimpanan tanpa kotak centang menghidupkan kembali
+    // orang yang sudah keluar.
+    isActive: data.isActive === undefined ? (data.id ? undefined : true) : data.isActive,
+    address: data.address === undefined ? undefined : data.address?.trim() || null,
+    divisionId: data.divisionId === undefined ? undefined : data.divisionId || null,
+    birthPlace: data.birthPlace === undefined ? undefined : data.birthPlace?.trim() || null,
+    birthDate: data.birthDate === undefined ? undefined : data.birthDate,
+    education: data.education === undefined ? undefined : data.education || null,
+    bloodType: data.bloodType === undefined ? undefined : data.bloodType || null,
   };
   const emp = data.id
     ? await db.employee.update({ where: { id: data.id }, data: payload })

@@ -51,7 +51,12 @@ function CardFace({ data, side, mode, ariaHidden = false }: CardFaceProps) {
           <p className="employee-card-back-caption">Kartu identitas resmi</p>
 
           <div className="employee-card-qr-frame">
-            {data.qrSvg ? (
+            {mode === "public" ? (
+              <div className="employee-card-qr-missing">
+                <ShieldCheck aria-hidden="true" />
+                <span>Verifikasi dibuka melalui QR resmi</span>
+              </div>
+            ) : data.qrSvg ? (
               <div
                 className="employee-card-qr"
                 role="img"

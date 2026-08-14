@@ -1502,3 +1502,43 @@ dilengkapi" jauh lebih menenangkan daripada "12 dibuat" saja.
 layar itu, katakan ini terang-terangan: mengosongkan sel berarti "tidak ada
 keterangan", bukan "hapus". Orang mengosongkan sel karena tidak tahu jauh lebih
 sering daripada karena ingin menghapus.
+
+---
+
+## 30. ⚠️ Formulir pegawai kehilangan lima kolom (Fase 62)
+
+`employee-form.tsx` **tidak punya input sama sekali** untuk:
+
+| Kolom | Akibatnya |
+|---|---|
+| `divisionId` | HRD tidak bisa menetapkan divisi dari formulir |
+| `birthPlace`, `birthDate` | data diri hanya bisa masuk lewat impor Excel |
+| `education`, `bloodType` | sama |
+
+Sampai 14 Agustus 2026 ini bukan sekadar kolom yang absen: karena payload
+`saveEmployee()` dibangun tanpa syarat, **menyimpan formulir MENGHAPUS
+kelimanya.** Terjadi sungguhan — satu menit setelah impor 23 pegawai berhasil,
+satu penyimpanan formulir mengosongkan divisi dan seluruh data diri seorang
+pegawai, tanpa satu pun galat.
+
+Sisi backend sudah diperbaiki: kolom yang **tidak dikirim** kini dibiarkan apa
+adanya. Jadi formulir yang ada sekarang aman — ia tidak lagi merusak apa pun.
+
+**Yang perlu kamu kerjakan:** tambahkan kelima input itu, supaya HRD bisa
+mengisinya tanpa harus lewat Excel.
+
+- **Divisi** — `select`, ambil dari tabel `Division` yang `isActive`. Ini bukan
+  hak akses; ia menentukan pelabelan kotak surat dan kelompok, bukan izin.
+- **Tempat & Tanggal Lahir** — teks dan tanggal biasa.
+- **Pendidikan Terakhir** — `select` dari `EDUCATION_LEVELS`.
+- **Golongan Darah** — `select` dari `BLOOD_TYPES`. Sertakan
+  **"Tidak diketahui"**; memaksa memilih membuat orang menebak, dan golongan
+  darah yang salah lebih berbahaya daripada yang kosong.
+
+**Kosong ≠ hapus.** Kalau kamu mengirim string kosong untuk kolom yang memang
+belum diisi, backend membacanya sebagai `null` dan mengosongkannya. Untuk
+"biarkan apa adanya", **jangan kirim field-nya sama sekali**. Perbedaan itulah
+yang membedakan "tidak tahu" dari "hapus".
+
+Golongan darah adalah **data kesehatan** — tampilkan di detail pegawai
+(`hrd.view`) dan profil orangnya sendiri saja. Tidak di daftar, tidak di ekspor.
