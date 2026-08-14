@@ -1603,3 +1603,40 @@ jangan mencoba mengoreksi rotasi sendiri.
 
 **Tanpa alat ini pun tetap jalan.** Form yang tidak mengirim keempat field itu
 berperilaku persis seperti sekarang. Jadi ini bisa kamu kerjakan bertahap.
+
+---
+
+## 32. Formulir site NOC butuh input koordinat (Fase 65)
+
+`/noc/sites` tidak punya input lintang/bujur, padahal `NetworkSite` menyimpannya
+dan **peta membacanya**: `loadNetworkMap()` menyaring `latitude: { not: null }`.
+Selama inputnya tidak ada, POP dan MINI_POP mustahil muncul di peta — apa pun
+yang dilakukan orang.
+
+Sisi backend sudah siap: `saveSiteAction` kini menerima `latitude` dan
+`longitude`.
+
+**Yang perlu kamu tambahkan:** dua input pada formulir site. Sudah ada
+`src/components/ftth-coordinate-picker.tsx` yang dipakai halaman FTTH — pakai
+itu supaya cara memasukkan koordinat sama di seluruh aplikasi.
+
+Tiga hal yang membedakan perilakunya, dan bedanya penting:
+
+| Yang dikirim | Artinya |
+|---|---|
+| field **tidak ada** | kolomnya **tidak disentuh** |
+| field ada, **kosong** | koordinatnya **sengaja dihapus** |
+| field ada, terisi | disimpan setelah lolos pemeriksaan |
+
+Jadi begitu kamu menambahkan inputnya, mengosongkannya berarti menghapus.
+Itu memang yang diinginkan — tapi pastikan formulir selalu mengisinya kembali
+dari data yang ada saat dibuka, kalau tidak membuka lalu menyimpan akan
+menghapus titik yang sudah susah payah diambil di lapangan.
+
+**Mengisi satu saja ditolak.** Site berlintang tanpa bujur tidak akan pernah
+muncul di peta, dan orangnya mengira sudah memasukkannya. Tahan tombol simpan
+kalau baru satu yang terisi.
+
+Yang ditolak backend: di luar jangkauan (termasuk lintang & bujur **tertukar**,
+yang di Indonesia selalu tertangkap karena bujur kita di atas 90), dan **(0,0)**
+— itu keluaran khas GPS yang gagal mengunci, bukan lokasi.

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
+import { koordinatDariForm } from "@/lib/noc-site";
 import {
   PERMISSIONS,
   SITE_TYPES,
@@ -47,7 +48,25 @@ export async function saveSiteAction(formData: FormData): Promise<void> {
   });
   if (dup) redirect("/noc/sites?error=" + encodeURIComponent(`Kode "${siteCode}" sudah dipakai.`));
 
+  // ── Koordinat (Fase 65) ───────────────────────────────────────
+  //
+  // Kolomnya sudah ada di skema sejak lama dan dibaca peta, tetapi tidak
+  // pernah ada jalur yang MENULISNYA: skema di atas tidak memuatnya, formnya
+  // tidak punya inputnya, dan payload di bawah melewatinya. Akibatnya POP dan
+  // MINI_POP tidak mungkin muncul di peta — `loadNetworkMap()` menyaring
+  // `latitude: { not: null }`, dan tidak ada satu pun yang bisa terisi.
+  //
+  // Field yang TIDAK DIKIRIM dibiarkan apa adanya; yang dikirim KOSONG berarti
+  // sengaja dihapus. Perbedaan itu penting persis seperti pada data pegawai:
+  // form lama yang belum punya inputnya tidak boleh menghapus koordinat yang
+  // sudah susah payah diambil di lapangan.
+  const koordinat = koordinatDariForm(formData);
+  if (!koordinat.ok) {
+    redirect("/noc/sites?error=" + encodeURIComponent(koordinat.error));
+  }
+
   const data = {
+    ...koordinat.data,
     siteCode,
     name: d.name,
     type: d.type,

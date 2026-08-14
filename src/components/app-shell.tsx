@@ -221,6 +221,7 @@ export default function CrmAppShell({
             <NotificationMenu
               data={notificationData}
               error={notificationError}
+              passwordChangeRequired={mustChangePassword}
               openNotificationAction={openNotificationAction}
               markAllReadAction={markAllReadAction}
             />
@@ -251,10 +252,10 @@ export default function CrmAppShell({
           </div>
         </header>
         {mustChangePassword && (
-          <div className="crm-password-notice">
+          <div className="crm-password-notice" role="alert" aria-live="polite">
             <ShieldCheck aria-hidden="true" />
             <span>
-              Akun ini memiliki status password yang perlu ditinjau. <Link href="/profile">Lihat pengaturan akun</Link>.
+              Password akun Anda masih perlu diganti. <Link href="/profile#password-title">Buka pengaturan password</Link>.
             </span>
           </div>
         )}
