@@ -3,7 +3,8 @@ import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/constants";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-rules";
 import { readSheetRows, XlsxError } from "@/lib/xlsx-read";
-import { parseCustomerSheet, type CustomerRow, type RowIssue } from "@/lib/customer-import";
+import { parseCustomerSheet, priceFromPlan, type CustomerRow, type RowIssue } from "@/lib/customer-import";
+import { codeFromName } from "@/lib/item-import-service";
 import type { CurrentUser } from "@/lib/rbac";
 
 // ── Impor pelanggan & langganan: pratinjau & penerapan (Fase 68) ─
@@ -68,11 +69,14 @@ export interface ImportPlan {
   willCreateSubscriptions: number;
   /** Paket pada berkas yang tidak ada padanannya di master. */
   unknownPackages: string[];
+  /** Paket yang akan DIBUAT dari nama di berkas; harga dari angka di dalamnya. */
+  newPackages: { plan: string; code: string; price: number; customers: number }[];
   /** Nama sales pada berkas yang tidak ada padanannya di tabel User. */
   unknownSales: string[];
 }
 
 export interface ImportOutcome {
+  createdPackages: string[];
   createdOdps: string[];
   createdCustomers: { cid: string; customerNumber: string; name: string }[];
   completedCustomers: { cid: string; fields: string[] }[];
@@ -180,7 +184,17 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
       paket.set(nama, cocokNama.id);
       continue;
     }
-    const m = /(\d+)\s*k/i.exec(nama);
+    // `Paket-Berdua(225000)` — harga ada di dalam kurung. Dicocokkan ke
+    // paket yang harganya sama HANYA bila namanya juga mengandung nama paket
+    // itu; kalau tidak, `Paket-Hemat(175000)` akan diam-diam menjadi
+    // "Personal" padahal itu paket yang berbeda dengan harga kebetulan sama.
+    const harga = priceFromPlan(nama);
+    const cocokHarga = harga === null ? undefined : paketDb.find((p) => Number(p.monthlyPrice) === harga);
+    if (cocokHarga && nama.toLowerCase().includes(cocokHarga.name.toLowerCase())) {
+      paket.set(nama, cocokHarga.id);
+      continue;
+    }
+    const m = /(\d+)\s*k$/i.exec(nama.trim());
     const id = m ? perHarga.get(Number(m[1]) * 1000) : undefined;
     if (id) paket.set(nama, id);
     else unknownPackages.push(nama);
@@ -216,7 +230,15 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
   }
 
   const byIdentity = new Map(customerDb.filter((c) => c.identityNumber).map((c) => [c.identityNumber!, c]));
-  const byPhone = new Map(customerDb.map((c) => [c.phone, c]));
+  const byPhone = new Map(customerDb.filter((c) => c.phone).map((c) => [c.phone, c]));
+  // Nomor layanan adalah jangkar KETIGA, dan pada ekspor sistem tagihan ia
+  // satu-satunya yang tersedia: di sana tidak ada kolom telepon maupun NIK.
+  const byService = new Map(
+    (await db.subscription.findMany({ select: { serviceNumber: true, customerId: true } })).map((x) => [
+      x.serviceNumber,
+      x.customerId,
+    ])
+  );
   const odpAda = new Set(odpDb.map((o) => o.code));
 
   const customers: CustomerPlan[] = [];
@@ -225,7 +247,11 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
     // Dicocokkan lewat NIK dulu, lalu telepon. NIK unik menurut skema, jadi
     // ia jangkar yang paling kuat; telepon menyusul karena pelanggan lama
     // dari Wifinetbill belum tentu punya NIK tercatat.
-    const lama = (r.identityNumber ? byIdentity.get(r.identityNumber) : undefined) ?? byPhone.get(r.phone);
+    const viaService = byService.get(r.cid);
+    const lama =
+      (r.identityNumber ? byIdentity.get(r.identityNumber) : undefined) ??
+      (r.phone ? byPhone.get(r.phone) : undefined) ??
+      (viaService ? customerDb.find((c) => c.id === viaService) : undefined);
     if (!lama) {
       customers.push({
         rowNumber: r.rowNumber, cid: r.cid, name: r.name,
@@ -256,12 +282,31 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
     customers,
   }));
 
+  // Paket yang belum ada DIBUAT dari namanya sendiri, sebab sistem sumber
+  // menaruh harganya di dalam nama dan tidak menyediakan kolom harga. Yang
+  // TIDAK ada di mana pun adalah kecepatannya — dan itu dibiarkan nol, bukan
+  // ditebak dari harga: dua paket berharga sama di sumber ini terbukti punya
+  // kecepatan berbeda, dan angka karangan pada kolom kecepatan akan dipakai
+  // orang untuk menjanjikan sesuatu kepada pelanggan.
   const issues = [...parsed.issues];
-  for (const p of unknownPackages) {
-    issues.push({
-      rowNumber: 0, column: "Paket",
-      message: `Paket "${p}" tidak ada padanannya di master. Buat paketnya dulu, atau samakan namanya.`,
-    });
+  const jumlahPerPaket = new Map<string, number>();
+  for (const r of parsed.rows) jumlahPerPaket.set(r.packageRef, (jumlahPerPaket.get(r.packageRef) ?? 0) + 1);
+  const dipakaiKode = new Set(paketDb.map((p) => p.code));
+  const newPackages: ImportPlan["newPackages"] = [];
+  for (const nama of unknownPackages) {
+    const harga = priceFromPlan(nama);
+    if (harga === null) {
+      issues.push({
+        rowNumber: 0, column: "Paket",
+        message: `Paket "${nama}" tidak memuat harga di namanya dan tidak ada padanannya di master.`,
+      });
+      continue;
+    }
+    let code = codeFromName(nama.replace(/\s*\([^)]*\)\s*$/, ""));
+    let n = 2;
+    while (dipakaiKode.has(code)) code = `${codeFromName(nama.replace(/\s*\([^)]*\)\s*$/, "")).slice(0, 20)}_${n++}`;
+    dipakaiKode.add(code);
+    newPackages.push({ plan: nama, code, price: harga, customers: jumlahPerPaket.get(nama) ?? 0 });
   }
 
   return {
@@ -278,7 +323,8 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
         willSkipCustomers: customers.filter((c) => c.action === "SKIP").length,
         willCreateOdps: odps.filter((o) => o.action === "CREATE").length,
         willCreateSubscriptions,
-        unknownPackages,
+        unknownPackages: unknownPackages.filter((n) => !newPackages.some((x) => x.plan === n)),
+        newPackages,
         // Sales yang tidak dikenali BUKAN masalah yang menahan: pelanggannya
         // tetap sah, hanya pemiliknya kosong dan bisa ditetapkan belakangan.
         unknownSales,
@@ -320,9 +366,8 @@ export async function applyCustomerImport(
   if (!rencana.ok) return rencana;
   const { plan, rows, paket, sales } = rencana.data;
 
-  // Paket yang tidak dikenal TETAP menahan, bahkan pada penerapan sebagian:
-  // tanpa paket tidak ada harga, dan langganan tanpa harga adalah baris yang
-  // tampak sah tetapi tidak bisa ditagih.
+  // Paket yang tidak dikenal DAN tidak bisa dibuat tetap menahan: tanpa harga,
+  // langganan adalah baris yang tampak sah tetapi tidak bisa ditagih.
   if (plan.unknownPackages.length) {
     return {
       ok: false,
@@ -337,7 +382,7 @@ export async function applyCustomerImport(
   }
 
   const outcome: ImportOutcome = {
-    createdOdps: [], createdCustomers: [], completedCustomers: [],
+    createdPackages: [], createdOdps: [], createdCustomers: [], completedCustomers: [],
     createdSubscriptions: 0, linkedOdpPorts: 0, skipped: plan.willSkipCustomers,
     skippedIssues: plan.ok ? [] : plan.issues,
   };
@@ -370,7 +415,9 @@ export async function applyCustomerImport(
           data: {
             customerNumber: nomor,
             name: r.name,
-            phone: r.phone,
+            // Pelanggan tanpa telepon tetap dibuat; kolomnya wajib di skema,
+            // jadi diisi penanda yang jelas TIDAK menyerupai nomor asli.
+            phone: r.phone ?? "-",
             email: r.email,
             identityNumber: r.identityNumber,
             birthDate: r.birthDate,
@@ -386,7 +433,11 @@ export async function applyCustomerImport(
         outcome.createdCustomers.push({ cid: r.cid, customerNumber: nomor, name: r.name });
       } else {
         const lama = await prisma.customer.findFirst({
-          where: r.identityNumber ? { identityNumber: r.identityNumber } : { phone: r.phone },
+          where: r.identityNumber
+            ? { identityNumber: r.identityNumber }
+            : r.phone
+              ? { phone: r.phone }
+              : { subscriptions: { some: { serviceNumber: r.cid } } },
           select: { id: true },
         });
         if (!lama) continue;
@@ -431,7 +482,7 @@ export async function applyCustomerImport(
           pppoeUsername: r.pppoeUsername,
           billingCycleDay: r.billingStartAt ? r.billingStartAt.getUTCDate() : 1,
           activatedAt: r.billingStartAt,
-          status: "ACTIVE",
+          status: r.status,
           createdById: user.id,
         },
       });
@@ -469,7 +520,7 @@ export async function applyCustomerImport(
     description:
       `Impor pelanggan: ${outcome.createdCustomers.length} pelanggan baru, ` +
       `${outcome.completedCustomers.length} dilengkapi, ${outcome.createdSubscriptions} langganan, ` +
-      `${outcome.createdOdps.length} ODP dibuat, ${outcome.linkedOdpPorts} port tertaut.` +
+      `${outcome.createdPackages.length} paket & ${outcome.createdOdps.length} ODP dibuat, ${outcome.linkedOdpPorts} port tertaut.` +
       (outcome.skippedIssues.length ? ` DITERAPKAN SEBAGIAN — ${outcome.skippedIssues.length} baris bermasalah dilewati.` : ""),
     metadata: {
       pelangganDibuat: outcome.createdCustomers.length,

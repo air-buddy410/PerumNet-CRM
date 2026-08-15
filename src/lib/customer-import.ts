@@ -33,7 +33,8 @@ export interface CustomerRow {
   identityNumber: string | null;
   /** Diambil dari NIK bila kolomnya cocok; lihat birthDateFromNik(). */
   birthDate: Date | null;
-  phone: string;
+  /** Kosong bila sumbernya memang tidak mencatat nomor. */
+  phone: string | null;
   email: string | null;
   address: string;
   latitude: number | null;
@@ -47,6 +48,10 @@ export interface CustomerRow {
   /** Username PPPoE. Password TIDAK pernah ikut. */
   pppoeUsername: string | null;
   billingStartAt: Date | null;
+  /** Cabang/merchant apa adanya; dicocokkan ke Area saat penerapan. */
+  branchRef: string | null;
+  /** Status di sistem sumber, sudah diseragamkan. */
+  status: string;
   notes: string[];
 }
 
@@ -71,18 +76,20 @@ function normalizeHeader(s: string): string {
  */
 const ALIAS: Record<keyof typeof FIELD_LABEL, readonly string[]> = {
   cid: ["customer id (cid)", "cid", "customer id", "id pelanggan", "no pelanggan"],
-  name: ["nama", "nama pelanggan", "customer name", "nama kapital"],
+  name: ["nama", "name", "nama pelanggan", "customer name", "nama kapital"],
   identityNumber: ["id card no ktp", "no ktp", "ktp", "nik"],
   phone: ["phone no", "no hp", "whatsapp", "telepon", "phone", "no telepon"],
   birthDate: ["date of birth", "tanggal lahir", "dob"],
   email: ["email", "e-mail", "alamat email"],
-  address: ["customer address", "alamat", "alamat pelanggan"],
+  address: ["customer address", "address", "alamat", "alamat pelanggan"],
   coordinate: ["kordinat client", "koordinat client", "koordinat", "kordinat"],
-  packageRef: ["paket", "packet", "package", "paket internet"],
+  packageRef: ["paket", "packet", "package", "paket internet", "plan"],
   salesRef: ["sales", "nama sales", "sales person"],
   odpRef: ["distribution point (odp)", "kode odp", "odp", "distribution point"],
   pppoeUsername: ["pppoe user", "pppoe username", "username pppoe", "pppoe cid"],
   billingStartAt: ["billing start tanggal pemasangan", "billing start", "tanggal pemasangan", "tanggal pasang"],
+  branchRef: ["merchant", "cabang", "branch"],
+  statusRef: ["status"],
 } as const;
 
 /** Judul yang ditampilkan pada pesan masalah. */
@@ -100,6 +107,8 @@ const FIELD_LABEL = {
   odpRef: "Distribution Point (ODP)",
   pppoeUsername: "PPPOE User",
   billingStartAt: "Billing Start",
+  branchRef: "Merchant",
+  statusRef: "Status",
 } as const;
 
 type Field = keyof typeof FIELD_LABEL;
@@ -202,6 +211,38 @@ export function parseCoordinatePair(raw: string): { latitude: number; longitude:
  */
 export function normalizeOdpCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Status pelanggan di sistem sumber menjadi kosakata kita.
+ *
+ * `Block` BUKAN sama dengan tidak aktif: pelanggan terblokir masih pelanggan,
+ * layanannya saja yang dihentikan sementara karena tagihan. Membacanya sebagai
+ * INACTIVE akan menghapus 92 orang dari hitungan pelanggan hidup.
+ */
+export function statusFromLabel(raw: string): string {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (!s) return "ACTIVE";
+  if (s === "active" || s === "aktif") return "ACTIVE";
+  if (s === "block" || s === "blocked" || s === "isolir") return "ISOLATED";
+  if (s === "inactive" || s === "nonaktif") return "INACTIVE";
+  if (s === "potensial" || s === "prospect") return "PROSPECT";
+  // Company_Properti dan sejenisnya: pelanggan sungguhan dengan penggolongan
+  // khusus. Diperlakukan aktif; penggolongannya bukan urusan status layanan.
+  return "ACTIVE";
+}
+
+/**
+ * Harga bulanan yang tertulis di dalam nama paket: `Paket-Berdua(225000)`.
+ *
+ * Sistem sumber menaruhnya di sana dan tidak menyediakan kolom harga
+ * tersendiri, jadi kurung itulah satu-satunya sumber harga yang ada.
+ */
+export function priceFromPlan(plan: string): number | null {
+  const m = /\((\d[\d.,]*)\)\s*$/.exec((plan ?? "").trim());
+  if (!m) return null;
+  const n = Number(m[1].replace(/[.,]/g, ""));
+  return Number.isSafeInteger(n) && n >= 0 ? n : null;
 }
 
 // ── Pembacaan ───────────────────────────────────────────────────
@@ -330,14 +371,22 @@ export function parseCustomerSheet(rows: string[][], tahunIni = new Date().getFu
     }
 
     // ── Telepon ──
-    const phone = normalizePhone(cell(r, head.index.phone));
-    if (!phone) {
-      push("phone", `${cid} tanpa nomor telepon.`);
-      continue;
-    }
-    if (!PHONE_RE.test(phone)) {
-      push("phone", `Nomor "${phone}" bukan nomor Indonesia yang sah.`);
-      continue;
+    //
+    // OPSIONAL, dan itu perubahan yang disengaja. Semula wajib, sebab
+    // pelanggan tanpa cara dihubungi memang setengah berguna. Tetapi ekspor
+    // sistem tagihan yang memuat 1.711 pelanggan sungguhan sama sekali tidak
+    // punya kolom telepon — menolak semuanya demi aturan itu berarti menukar
+    // seluruh basis pelanggan dengan sebuah prinsip.
+    const phoneRaw = cell(r, head.index.phone);
+    let phone: string | null = null;
+    if (phoneRaw) {
+      phone = normalizePhone(phoneRaw);
+      if (!PHONE_RE.test(phone)) {
+        push("phone", `Nomor "${phone}" bukan nomor Indonesia yang sah.`);
+        continue;
+      }
+    } else {
+      notes.push("Tanpa nomor telepon — pelanggan tidak bisa dihubungi dari aplikasi.");
     }
 
     // ── Koordinat ──
@@ -388,6 +437,8 @@ export function parseCustomerSheet(rows: string[][], tahunIni = new Date().getFu
     const email = cell(r, head.index.email) || null;
     const address = cell(r, head.index.address);
     if (!address) notes.push("Tanpa alamat.");
+    const branchRef = cell(r, head.index.branchRef) || null;
+    const status = statusFromLabel(cell(r, head.index.statusRef));
 
     seen.set(cid.toUpperCase(), rowNumber);
     out.rows.push({
@@ -406,6 +457,8 @@ export function parseCustomerSheet(rows: string[][], tahunIni = new Date().getFu
       odpRef,
       pppoeUsername,
       billingStartAt,
+      branchRef,
+      status,
       notes,
     });
   }
