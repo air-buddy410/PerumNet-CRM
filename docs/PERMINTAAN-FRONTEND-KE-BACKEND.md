@@ -75,6 +75,11 @@ stock.
 - **Butuh:** `updateCustomerAction` menerima `identityNumber` dan `birthDate` secara opsional. Field yang tidak dikirim harus dipertahankan; nilai kosong hanya menghapus data bila user memang sengaja mengosongkannya. Backend perlu memvalidasi NIK tepat 16 digit, keunikan NIK, dan tanggal lahir yang valid.
 - **Kenapa tidak bisa di sisi frontend:** data raw hanya boleh dibaca dan ditulis oleh user yang memiliki izin edit customer serta `customers.pii_view`, dengan audit log perubahan. User tanpa izin PII tidak boleh menerima nilai raw atau mengirim kembali nomor telepon/email yang sudah dimasking dari form. Frontend tidak menambahkan input NIK/tanggal lahir sampai loader dan action resmi siap.
 
+### Master Supplier memerlukan action resmi
+- **Layar:** `/inventory/suppliers`
+- **Butuh:** loader pemasok permission-scoped serta action resmi untuk membuat, mengubah, dan mengaktifkan/menonaktifkan Supplier dengan field `code`, `name`, `phone`, `email`, `address`, `website`, `notes`, dan `isActive`. Gunakan permission existing `items.manage`, validasi kode unik, dan audit log untuk perubahan master.
+- **Kenapa belum dibuat form:** backend saat ini baru membuat Supplier melalui Impor Katalog dan belum menyediakan `saveSupplierAction`. Frontend hanya menampilkan daftar read-only agar tidak memberi kesan perubahan tersimpan padahal action belum ada.
+
 ---
 
 ## Selesai

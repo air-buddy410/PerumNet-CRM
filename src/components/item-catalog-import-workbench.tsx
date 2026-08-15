@@ -155,6 +155,7 @@ export function ItemCatalogImportWorkbench({
   const [file, setFile] = useState<File | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  const [allowPartial, setAllowPartial] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -166,11 +167,13 @@ export function ItemCatalogImportWorkbench({
 
   function handleWarehouseChange(event: ChangeEvent<HTMLSelectElement>) {
     setWarehouseId(event.target.value);
+    setAllowPartial(false);
     resetResult();
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setFile(event.target.files?.[0] ?? null);
+    setAllowPartial(false);
     resetResult();
   }
 
@@ -189,6 +192,7 @@ export function ItemCatalogImportWorkbench({
     formData.append("warehouseId", warehouseId);
     setError(null);
     setOutcome(null);
+    setAllowPartial(false);
     startTransition(async () => {
       try {
         const result = await previewCatalogImportAction(formData);
@@ -206,11 +210,14 @@ export function ItemCatalogImportWorkbench({
   }
 
   function apply() {
-    if (!file || !warehouseId || !plan?.ok) return;
+    if (!file || !warehouseId || !plan) return;
+    const canApply = plan.ok || (plan.issues.length > 0 && allowPartial);
+    if (!canApply) return;
 
     const formData = new FormData();
     formData.append("file", file);
     formData.append("warehouseId", warehouseId);
+    if (!plan.ok && allowPartial) formData.append("allowPartial", "1");
     setError(null);
     startTransition(async () => {
       try {
@@ -227,6 +234,9 @@ export function ItemCatalogImportWorkbench({
   }
 
   const openingBalanceBlocked = Boolean(plan?.openingUnits && !canPostOpeningBalance);
+  const canApply = Boolean(
+    plan && file && warehouseId && !isPending && (plan.ok || (plan.issues.length > 0 && allowPartial)) && !openingBalanceBlocked,
+  );
 
   return (
     <div className="space-y-6">
@@ -318,6 +328,22 @@ export function ItemCatalogImportWorkbench({
             </div>
           )}
 
+          {plan.issues.length > 0 && (
+            <label className="mt-4 flex min-w-0 items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-xs leading-relaxed text-amber-900">
+              <input
+                type="checkbox"
+                checked={allowPartial}
+                onChange={(event) => setAllowPartial(event.target.checked)}
+                disabled={isPending}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span>
+                <span className="font-semibold">Terapkan sebagian — lewati {plan.issues.length} baris bermasalah</span>
+                <span className="mt-1 block">Bawaan tetap mati. Keputusan ini dicatat dan baris yang dilewati akan ditampilkan pada hasil penerapan.</span>
+              </span>
+            </label>
+          )}
+
           <div className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2">
             <MasterPlanTable title="Kategori" rows={plan.categories} />
             <MasterPlanTable title="Vendor" rows={plan.suppliers} />
@@ -360,15 +386,15 @@ export function ItemCatalogImportWorkbench({
 
           <div className="mt-5 flex min-w-0 flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="min-w-0 text-xs leading-relaxed text-slate-600">
-              Penerapan membaca ulang berkas asli yang sama. Satu masalah akan menahan seluruh impor.
+              Penerapan membaca ulang berkas asli yang sama. Menjalankan ulang berkas yang sama aman karena pencocokan katalog memakai kode yang stabil.
             </p>
             <button
               type="button"
               className="btn-primary shrink-0 justify-center whitespace-nowrap"
               onClick={apply}
-              disabled={!plan.ok || !file || !warehouseId || isPending || openingBalanceBlocked}
+              disabled={!canApply}
             >
-              {isPending ? "Menerapkan…" : "Terapkan impor"}
+              {isPending ? "Menerapkan…" : plan.ok ? "Terapkan impor" : "Terapkan sebagian"}
             </button>
           </div>
         </section>
@@ -389,6 +415,19 @@ export function ItemCatalogImportWorkbench({
           {outcome.openingTxNumber && (
             <div className="crm-flash is-success mt-4" role="status">
               Dokumen saldo awal: <strong>{outcome.openingTxNumber}</strong> · {outcome.openingUnits} unit.
+            </div>
+          )}
+
+          {outcome.skippedIssues.length > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50/70 p-4" role="status">
+              <h3 className="text-sm font-semibold text-amber-900">Baris yang dilewati saat penerapan sebagian</h3>
+              <ul className="mt-2 space-y-1 text-xs leading-relaxed text-amber-900">
+                {outcome.skippedIssues.map((issue, index) => (
+                  <li key={`${issue.rowNumber}-${issue.column}-${index}`}>
+                    {issue.rowNumber > 0 ? `Baris ${issue.rowNumber}` : "Validasi berkas"} · {issue.column}: {issue.message}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

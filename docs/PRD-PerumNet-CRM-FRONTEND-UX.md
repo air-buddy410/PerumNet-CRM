@@ -950,3 +950,73 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - File tepat 5 MB diterima oleh guard; file di atas 5 MB ditolak sebelum action dikirim. File invalid tetap ditangani oleh validasi backend secara aman tanpa blank page.
 - Semua route upload operasional diaudit pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
 - Bukti QA mencakup static scan input file, pesan error inline, focus state, tidak ada teks keluar card, tidak ada tombol tertutup, dan tidak ada horizontal overflow.
+
+## 36. Impor pelanggan dan penerapan sebagian
+
+### Impor pelanggan, subscription, dan ODP
+
+- `/crm/customers/import` hanya tampil untuk user yang memiliki `customers.create`
+  dan `subscriptions.create`.
+- Satu file `.xlsx` dipakai ulang untuk preview dan apply; frontend tidak pernah
+  mengirim tabel hasil preview sebagai sumber perubahan.
+- Preview menjelaskan bahwa satu unggahan dapat membuat ODP, pelanggan, dan
+  subscription sekaligus, lalu menampilkan ringkasan jumlah pelanggan baru,
+  pelanggan yang dilengkapi, pelanggan yang dilewati, ODP, subscription, dan
+  baris kosong.
+- Tabel pelanggan membedakan `CREATE`, `LENGKAPI`, dan `SKIP`, serta menampilkan
+  perubahan, alasan, dan `notes` per baris.
+- `unknownSales` ditampilkan sebagai informasi karena tidak menahan penerapan.
+  Paket yang tidak memiliki padanan master ditampilkan sebagai blocker dan tetap
+  menggagalkan penerapan sebagian.
+- ODP baru selalu diberi peringatan bahwa kapasitas 8 port adalah dugaan yang
+  harus diverifikasi di lapangan.
+- Hasil penerapan menampilkan ODP yang dibuat, pelanggan baru, pelanggan yang
+  dilengkapi, jumlah subscription, port ODP tertaut, dan baris bermasalah yang
+  benar-benar dilewati.
+
+### Penerapan sebagian
+
+- Impor katalog dan impor pelanggan menyediakan checkbox penerapan sebagian
+  yang bawaan-nya tidak aktif.
+- Saat ada `issues`, operator dapat memilih “Terapkan sebagian — lewati N baris
+  bermasalah”; pilihan tersebut dikirim sebagai `allowPartial=1` dan tercatat
+  oleh backend.
+- Paket customer yang belum memiliki padanan master tetap memblokir penerapan,
+  meskipun mode sebagian dipilih.
+- `skippedIssues` wajib terlihat setelah penerapan; baris yang dilewati tidak
+  boleh disembunyikan dari operator.
+- UI menjelaskan bahwa menjalankan ulang berkas yang sama aman karena pencocokan
+  memakai kode atau identifier yang stabil.
+
+### Acceptance responsive
+
+- QA route impor dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024,
+  390×844, dan 360×800.
+- Tabel preview menggunakan horizontal scroll terkontrol, notes dan issues
+  membungkus berdasarkan kata, checkbox partial tetap dapat disentuh, dan tidak
+  ada tombol yang keluar card atau viewport.
+
+## 37. Supplier dan port perangkat NOC
+
+### Master pemasok
+
+- `/inventory/suppliers` tersedia untuk user dengan `items.manage` dan menampilkan Supplier secara read-only dengan pagination serta sorting server-side.
+- Daftar menampilkan kode, nama, kontak, website, alamat/catatan, jumlah item terhubung, dan status aktif. Teks panjang tetap membungkus di dalam cell atau dapat digeser melalui wrapper tabel.
+- Pemasok pada tahap ini berasal dari Impor Katalog. Tombol tambah, ubah, dan nonaktifkan tidak ditampilkan sebelum action master Supplier resmi tersedia.
+
+### Panel port perangkat
+
+- `/noc/devices` menyediakan panel port pada perangkat yang dipilih tanpa membuat route detail baru.
+- Ringkasan memisahkan PON, Ethernet, ONU, VLAN, PPP, dan port lainnya. Tampilan awal hanya merender PON dan Ethernet; ONU serta kelompok port lain dibuka melalui tautan terkontrol agar daftar ONU tidak memenuhi halaman.
+- Setiap port menampilkan nama, alias operator bila tersedia, jenis, status operasional, status admin, kecepatan Mbps/Gbps, dan waktu sinkronisasi terakhir.
+- Panel bersifat read-only dan mengikuti permission `noc.view`. Data perangkat atau port yang kosong/tidak tersedia ditampilkan sebagai state informatif.
+
+### Dependency Customer PII
+
+- NIK dan tanggal lahir customer tetap ditunda sampai loader raw PII dan `updateCustomerAction` resmi tersedia dengan permission scope, validasi, serta audit log.
+
+### Acceptance responsive §37
+
+- QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+- Halaman Pemasok dan panel port tidak boleh menyebabkan horizontal overflow, teks keluar card, status pecah satu huruf per baris, atau kontrol tabel menyempit vertikal.
+- Daftar port default tidak menampilkan seluruh ONU sekaligus; filter ONU dan port lainnya tetap dapat dibuka dan ditutup tanpa kehilangan query tabel utama.

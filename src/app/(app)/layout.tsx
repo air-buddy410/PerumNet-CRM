@@ -67,6 +67,8 @@ export default async function AppLayout({
     crmItems.push({ href: "/crm/subscriptions", label: "Subscriptions" });
   if (can(PERMISSIONS.TERMINATION_VIEW))
     crmItems.push({ href: "/crm/terminations", label: "Terminasi" });
+  if (can(PERMISSIONS.CUSTOMERS_CREATE) && can(PERMISSIONS.SUBSCRIPTIONS_CREATE))
+    crmItems.push({ href: "/crm/customers/import", label: "Impor Pelanggan" });
   if (crmItems.length) groups.push({ title: "CRM", items: crmItems });
 
   const inventoryItems = [];
@@ -85,7 +87,10 @@ export default async function AppLayout({
     );
   }
   if (can(PERMISSIONS.ITEMS_MANAGE))
-    inventoryItems.push({ href: "/inventory/items/import", label: "Impor Katalog" });
+    inventoryItems.push(
+      { href: "/inventory/items/import", label: "Impor Katalog" },
+      { href: "/inventory/suppliers", label: "Pemasok" },
+    );
   if (can(PERMISSIONS.CUSTODY_VIEW))
     inventoryItems.push({ href: "/inventory/custody", label: "Custody Teknisi" });
   if (inventoryItems.length)
