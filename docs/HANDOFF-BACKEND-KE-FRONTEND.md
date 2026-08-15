@@ -2295,3 +2295,16 @@ apa adanya.** Formulir item yang tidak menampilkan harga tidak akan menghapus
 harga hasil impor.
 
 Kosongkan nilainya secara sengaja (kirim string kosong) untuk menghapus.
+
+### 41.5 `loadRingkasanPort` menerima deviceId
+
+Halaman detail perangkat hanya butuh satu ringkasan. `loadRingkasanPort()`
+tanpa argumen membaca seluruh 818 baris untuk memakai belasan di antaranya —
+kirimkan `deviceId` supaya yang dibaca hanya milik perangkat itu:
+
+```ts
+loadRingkasanPort(table.query.device)   // bukan loadRingkasanPort()
+```
+
+Bentuk kembaliannya tetap array, jadi `.find(...)` yang sudah ada tetap
+bekerja tanpa diubah.
