@@ -33,9 +33,16 @@ export interface BarisPort {
   lastSyncAt: Date;
 }
 
-/** Ringkasan per perangkat — dipakai untuk kartu angka di atas tabel. */
-export async function loadRingkasanPort(): Promise<RingkasanPort[]> {
+/**
+ * Ringkasan per perangkat — dipakai untuk kartu angka di atas tabel.
+ *
+ * @param deviceId Bila diisi, hanya perangkat itu yang dibaca. Halaman detail
+ *   perangkat memerlukan satu ringkasan saja, dan tanpa penyaring ini ia
+ *   menarik seluruh 818 baris untuk memakai belasan di antaranya.
+ */
+export async function loadRingkasanPort(deviceId?: string): Promise<RingkasanPort[]> {
   const ports = await db.networkPort.findMany({
+    where: deviceId ? { deviceId } : undefined,
     select: {
       deviceId: true,
       ifName: true,
