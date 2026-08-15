@@ -62,6 +62,10 @@ export interface StockRow {
   rowNumber: number;
   itemCode: string;
   quantity: number;
+  /** Nama barang menurut lembar saldo; dipakai untuk memastikan resolusi kode. */
+  sourceName: string;
+  /** Terisi bila kodenya semula rusak lalu berhasil dipulihkan. */
+  resolvedFrom?: string;
 }
 
 export interface ParsedCatalog {
@@ -254,6 +258,10 @@ function readSuppliers(rows: string[][], head: number, header: string[], out: Pa
 function readStock(rows: string[][], head: number, header: string[], out: ParsedCatalog): void {
   const cCode = columnOf(header, "kode material");
   const cQty = columnOf(header, "stok");
+  // Nama barang berada tepat di antara kode dan jumlah pada lembar saldo.
+  // Ia bukan hiasan: nama itulah sinyal kedua yang memutuskan apakah kode
+  // rusak boleh dipulihkan. Lihat resolveCode() di bawah.
+  const cName = cCode >= 0 && cQty > cCode + 1 ? cCode + 1 : -1;
   for (let i = head + 1; i < rows.length; i++) {
     const rowNumber = i + 1;
     const raw = cell(rows[i], cCode);
@@ -261,10 +269,6 @@ function readStock(rows: string[][], head: number, header: string[], out: Parsed
     if (!raw && !qtyRaw) continue;
     if (!raw) continue; // blok bantu lain di lembar yang sama
     const itemCode = normalizeItemCode(raw);
-    if (!ITEM_CODE_RE.test(itemCode)) {
-      out.issues.push({ rowNumber, column: "Item ID", message: `Kode "${raw}" tidak berbentuk PREFIKS-0000.` });
-      continue;
-    }
     const qty = Number(qtyRaw.replace(/[.,\s]/g, ""));
     if (!Number.isInteger(qty) || qty < 0) {
       out.issues.push({
@@ -274,7 +278,9 @@ function readStock(rows: string[][], head: number, header: string[], out: Parsed
       });
       continue;
     }
-    out.stock.push({ rowNumber, itemCode, quantity: qty });
+    // Kode rusak TIDAK ditolak di sini. Pemulihannya membutuhkan katalog
+    // lengkap, jadi diputuskan pada crossCheck() ketika keduanya sudah ada.
+    out.stock.push({ rowNumber, itemCode, quantity: qty, sourceName: cell(rows[i], cName) });
   }
 }
 
@@ -308,19 +314,22 @@ function readItems(rows: string[][], head: number, header: string[], out: Parsed
     }
 
     const rawCond = cell(rows[i], cCond);
-    const condition = conditionFromLabel(rawCond);
-    if (condition === null) {
-      out.issues.push({
-        rowNumber,
-        column: "Description",
-        message: rawCond
-          ? `Kondisi "${rawCond}" tidak dikenal — isi Available atau Second.`
-          : "Kondisi kosong — isi Available atau Second.",
-      });
-      continue;
-    }
-
+    const dikenal = conditionFromLabel(rawCond);
     const notes: string[] = [];
+    // Kondisi yang tidak dikenal TIDAK menahan barangnya. Tiga baris di
+    // sumber berisi jenis barang ("Kabel", "Stiker", "Cable") — jelas kolom
+    // yang salah diisi, dan tak satu pun menyiratkan barang bekas. GOOD
+    // adalah kondisi yang benar untuk ketiganya, dan menahan seluruh berkas
+    // demi tiga sel salah ketik menukar risiko kecil dengan biaya besar.
+    // Catatannya tetap muncul supaya tetap ada yang memperbaikinya.
+    const condition = dikenal ?? "GOOD";
+    if (dikenal === null) {
+      notes.push(
+        rawCond
+          ? `Kondisi tertulis "${rawCond}" — tidak dikenal, dianggap GOOD. Perbaiki jadi Available atau Second.`
+          : "Kondisi kosong — dianggap GOOD."
+      );
+    }
     const purchaseCost = parseRupiah(cell(rows[i], cBuy));
     const salePrice = parseRupiah(cell(rows[i], cSell));
     const rawBuy = cell(rows[i], cBuy);
@@ -379,6 +388,45 @@ function readItems(rows: string[][], head: number, header: string[], out: Parsed
  * barang menumpuk di satu kelompok "lain-lain" yang tidak pernah dirapikan
  * lagi, dan itu justru kerja yang paling mahal untuk dibereskan belakangan.
  */
+/**
+ * Membandingkan dua nama barang setelah diseragamkan.
+ *
+ * Dipakai sebagai SINYAL KEDUA saat memulihkan kode yang rusak. Nomor saja
+ * tidak cukup: `PAT-000009` di lembar saldo bernama "Pigtail Tipe ST",
+ * sedangkan `PAT-0009` di katalog adalah "Patch Core LC UPC" — dua barang
+ * berbeda dengan nomor yang kebetulan berdekatan. Tanpa pemeriksaan nama,
+ * pemulihan otomatis akan memindahkan saldo ke barang yang salah.
+ */
+function namaMenguatkan(a: string, b: string): boolean {
+  const n = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const x = n(a);
+  const y = n(b);
+  if (!x || !y) return false;
+  return x === y || x.startsWith(y) || y.startsWith(x);
+}
+
+/**
+ * Memulihkan kode rusak, HANYA bila dua sinyal setuju: ada tepat satu kode
+ * katalog yang cocok setelah nomornya dinormalkan ke empat digit, DAN nama
+ * barangnya menguatkan. Kalau salah satu meleset, kodenya tetap ditolak —
+ * dengan usulan disertakan supaya manusia bisa memutuskan dalam sekali lihat.
+ */
+function resolveCode(
+  raw: string,
+  sourceName: string,
+  katalog: Map<string, string>
+): { code: string; alasan: string } | { usulan: string | null } {
+  const m = /^([A-Z]{2,6})-?(\d{1,6})$/.exec(raw.replace(/-+/g, "-"));
+  if (!m) return { usulan: null };
+  const n = Number(m[2]);
+  if (!Number.isInteger(n) || n <= 0 || n > 9999) return { usulan: null };
+  const kandidat = `${m[1]}-${String(n).padStart(4, "0")}`;
+  const nama = katalog.get(kandidat);
+  if (!nama) return { usulan: null };
+  if (!namaMenguatkan(sourceName, nama)) return { usulan: `${kandidat} (${nama})` };
+  return { code: kandidat, alasan: `dipulihkan dari "${raw}"; nama "${sourceName}" cocok dengan "${nama}"` };
+}
+
 function crossCheck(out: ParsedCatalog): void {
   const catByCode = new Map(out.categories.map((c) => [c.code, c]));
   const supByCode = new Map(out.suppliers.map((s) => [s.code, s]));
@@ -427,10 +475,47 @@ function crossCheck(out: ParsedCatalog): void {
   // Saldo untuk barang yang tidak ada di katalog tidak bisa disimpan — tidak
   // ada Item untuk digantungkan. Dilaporkan sebagai masalah supaya kelihatan,
   // sebab biasanya penyebabnya kode salah ketik di salah satu dari dua lembar.
-  const byCode = new Set(out.items.map((i) => i.code));
+  const katalog = new Map(out.items.map((i) => [i.code, i.name]));
+  const byCode = new Set(katalog.keys());
+  // Kode yang SUDAH ditulis utuh di lembar saldo. Sebuah kode rusak tidak
+  // boleh dipulihkan menjadi salah satu dari ini: kalau barisnya sudah ada,
+  // memulihkan ke sana berarti dua baris memperebutkan satu barang. Itu
+  // bukan hipotesis — `SER 010` bernama "Baju Engginer" sementara `SER-0010`
+  // pada lembar yang sama bernama "Sepatu Kerja". Nomornya cocok, namanya
+  // menguatkan terhadap katalog, dan hasilnya tetap salah.
+  const sudahUtuh = new Set(out.stock.filter((x) => ITEM_CODE_RE.test(x.itemCode)).map((x) => x.itemCode));
   const stok: StockRow[] = [];
   const sudah = new Map<string, number>();
   for (const s of out.stock) {
+    if (!ITEM_CODE_RE.test(s.itemCode)) {
+      const hasil = resolveCode(s.itemCode, s.sourceName, katalog);
+      if ("code" in hasil && sudahUtuh.has(hasil.code)) {
+        out.issues.push({
+          rowNumber: s.rowNumber,
+          column: "Kode Material",
+          message:
+            `Kode "${s.itemCode}" ("${s.sourceName}") mengarah ke ${hasil.code}, ` +
+            `tetapi ${hasil.code} sudah punya baris saldonya sendiri di lembar ini. ` +
+            `Dua barang memperebutkan satu kode — perbaiki di sumbernya.`,
+        });
+        continue;
+      }
+      if ("code" in hasil) {
+        s.resolvedFrom = s.itemCode;
+        s.itemCode = hasil.code;
+      } else {
+        out.issues.push({
+          rowNumber: s.rowNumber,
+          column: "Kode Material",
+          message:
+            `Kode "${s.itemCode}" tidak berbentuk PREFIKS-0000` +
+            (hasil.usulan
+              ? `. Mirip ${hasil.usulan}, tetapi namanya di lembar saldo "${s.sourceName}" tidak cocok — pastikan dulu barangnya sama.`
+              : ` dan tidak ada padanannya di lembar Items.`),
+        });
+        continue;
+      }
+    }
     if (!byCode.has(s.itemCode)) {
       out.issues.push({
         rowNumber: s.rowNumber,

@@ -118,11 +118,18 @@ const WAJIB: readonly Field[] = ["cid", "name", "packageRef"] as const;
  * itu jenis kegagalan yang paling lama tidak ketahuan.
  */
 export function normalizePhone(raw: string): string {
-  return raw
+  const s = raw
     .replace(/[ ​-‏‪-‮⁦-⁩]/g, "")
     .replace(/[‐-―−]/g, "-")
     .replace(/[\s()-]/g, "")
     .trim();
+  // Nol di depan yang hilang dikembalikan. Spreadsheet memperlakukan kolom
+  // telepon sebagai ANGKA dan membuang nol pertamanya, jadi `081236023387`
+  // tersimpan sebagai `81236023387`. Ini bukan tebakan: tidak ada nomor
+  // seluler Indonesia yang sah diawali `8` tanpa `0` atau `+62` di depannya,
+  // sehingga hanya ada satu bentuk yang mungkin dimaksud.
+  if (/^8\d{8,12}$/.test(s)) return `0${s}`;
+  return s;
 }
 
 export const PHONE_RE = /^(?:\+62|62|0)\d{7,13}$/;
@@ -304,16 +311,20 @@ export function parseCustomerSheet(rows: string[][], tahunIni = new Date().getFu
         continue;
       }
       if (birthDate && diketik.getTime() !== birthDate.getTime()) {
-        // TIDAK dipilih salah satunya. Enam digit tengah NIK memuat tanggal
-        // lahir, jadi salah satu dari keduanya pasti keliru — dan menebak
-        // yang mana berarti menempelkan tanggal lahir yang salah pada
-        // seseorang selamanya, di dokumen yang nanti dipakai untuk kontrak.
-        push(
-          "birthDate",
-          `Tanggal lahir tidak cocok dengan NIK: kolom menulis ${iso(diketik)}, ` +
-            `NIK memuat ${iso(birthDate)}. Perbaiki salah satunya.`
+        // NIK YANG MENANG, dan itu keputusan yang dicatat — bukan lemparan
+        // koin. Nomornya diterbitkan Dukcapil dan tanggal lahirnya terkunci
+        // di dalam struktur nomor itu sendiri; kolom di sebelahnya diketik
+        // ulang oleh manusia dari formulir kertas. Ketika keduanya berselisih
+        // pada 19 dari 65 baris, yang jauh lebih mungkin salah adalah yang
+        // diketik ulang.
+        //
+        // Selisihnya TIDAK disembunyikan: catatannya membawa kedua nilai,
+        // sehingga siapa pun yang meninjau bisa membalik keputusan ini
+        // per-orang tanpa menggali NIK-nya sendiri.
+        notes.push(
+          `Tanggal lahir diambil dari NIK (${iso(birthDate)}); kolom berkas menulis ${iso(diketik)}. ` +
+            `Periksa bila pelanggan ini penting.`
         );
-        continue;
       }
       if (!birthDate) birthDate = diketik;
     }

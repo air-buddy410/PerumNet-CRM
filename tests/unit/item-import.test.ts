@@ -250,3 +250,56 @@ describe("parseCatalogWorkbook", () => {
     assert.equal(h.items.length, 1);
   });
 });
+
+describe("pemulihan kode saldo yang rusak", () => {
+  const ITEM = (code: string, name: string) =>
+    item(code, name, "Available", "", "", "w6hwsyj", "", "Rp 10,000", "Rp 13,000");
+
+  test("dipulihkan bila nomor DAN nama sama-sama menguatkan", () => {
+    const saldo = [
+      ["Kode Material", "Nama", "Stok"],
+      ["ACC-005", "Compact Closure", "31"],
+    ];
+    const h = parseCatalogWorkbook(workbook([ITEM("ACC-0005", "Compact Closure Outdoor")], [saldo]));
+    assert.equal(h.issues.length, 0);
+    assert.equal(h.stock.length, 1);
+    assert.equal(h.stock[0].itemCode, "ACC-0005");
+    assert.equal(h.stock[0].resolvedFrom, "ACC-005");
+  });
+
+  test("DITOLAK bila nomornya cocok tetapi namanya barang lain", () => {
+    // Kasus nyata: PAT-000009 bernama "Pigtail Tipe ST", sedangkan PAT-0009
+    // di katalog adalah "Patch Core LC UPC". Nomor berdekatan, barang beda.
+    const saldo = [
+      ["Kode Material", "Nama", "Stok"],
+      ["PAT-000009", "Pigtail Tipe ST", "12"],
+    ];
+    const h = parseCatalogWorkbook(workbook([ITEM("PAT-0009", "Patch Core LC UPC")], [saldo]));
+    assert.equal(h.stock.length, 0);
+    assert.equal(h.issues.length, 1);
+    assert.match(h.issues[0].message, /Mirip PAT-0009/);
+    assert.match(h.issues[0].message, /tidak cocok/);
+  });
+
+  test("DITOLAK bila kode tujuannya sudah punya baris saldo sendiri", () => {
+    // Kasus nyata: SER 010 = "Baju Engginer", SER-0010 = "Sepatu Kerja" pada
+    // lembar yang sama. Dua sinyal setuju dan hasilnya tetap salah.
+    const saldo = [
+      ["Kode Material", "Nama", "Stok"],
+      ["SER 010", "Baju Engginer", "3"],
+      ["SER-0010", "Sepatu Kerja", "3"],
+    ];
+    const h = parseCatalogWorkbook(workbook([ITEM("SER-0010", "Baju Engginer nagata XL")], [saldo]));
+    assert.equal(h.stock.length, 1);
+    assert.equal(h.stock[0].resolvedFrom, undefined);
+    assert.match(h.issues[0].message, /memperebutkan satu kode/);
+  });
+
+  test("kondisi tak dikenal jadi GOOD dengan catatan, bukan penolakan", () => {
+    const rows = [item("NET-0019", "Belden LAN", "Kabel", "", "", "w6hwsyj", "", "", "")];
+    const h = parseCatalogWorkbook(workbook(rows));
+    assert.equal(h.issues.length, 0);
+    assert.equal(h.items[0].condition, "GOOD");
+    assert.match(h.items[0].notes.join(" "), /tidak dikenal, dianggap GOOD/);
+  });
+});

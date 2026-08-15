@@ -164,16 +164,6 @@ describe("parseCustomerSheet", () => {
     assert.ok(!JSON.stringify(h).includes("rahasia-tidak-boleh-terbaca"));
   });
 
-  test("tanggal lahir yang bentrok dengan NIK MENGGAGALKAN baris", () => {
-    // Salah satu dari keduanya pasti keliru, dan menebak yang mana berarti
-    // menempelkan tanggal lahir salah pada seseorang selamanya.
-    const h = sheet(baris({ 6: "1982-06-10" }));
-    assert.equal(h.rows.length, 0);
-    assert.equal(h.issues.length, 1);
-    assert.match(h.issues[0].message, /1982-06-10/);
-    assert.match(h.issues[0].message, /1986-07-31/);
-  });
-
   test("tanggal lahir yang cocok dengan NIK lolos", () => {
     assert.equal(sheet(baris({ 6: "31/07/1986" })).issues.length, 0);
   });
@@ -245,5 +235,41 @@ describe("parseCustomerSheet", () => {
   test("berkas kosong tidak menghasilkan sukses senyap", () => {
     const h = parseCustomerSheet([], 2026);
     assert.equal(h.issues.length, 1);
+  });
+});
+
+describe("perbaikan setelah adu dengan data asli", () => {
+  test("nol di depan yang dimakan spreadsheet dikembalikan", () => {
+    // Kolom telepon diperlakukan sebagai ANGKA, jadi `081236023387` tersimpan
+    // sebagai `81236023387`. Tidak ada nomor Indonesia sah yang diawali 8
+    // telanjang, jadi hanya satu bentuk yang mungkin dimaksud.
+    assert.equal(normalizePhone("85738941976"), "085738941976");
+    assert.equal(normalizePhone("81236023387"), "081236023387");
+  });
+
+  test("nomor yang sudah benar tidak diubah", () => {
+    assert.equal(normalizePhone("081236023387"), "081236023387");
+    assert.equal(normalizePhone("+6281236023387"), "+6281236023387");
+    assert.equal(normalizePhone("6281236023387"), "6281236023387");
+  });
+
+  test("tanggal lahir bentrok kini jadi CATATAN dengan kedua nilainya", () => {
+    // NIK menang — nomornya diterbitkan Dukcapil dan tanggalnya terkunci di
+    // dalam strukturnya; kolom sebelahnya diketik ulang manusia. Tapi selisih
+    // TIDAK disembunyikan, supaya peninjau bisa membalik keputusan per-orang.
+    const h = sheet(baris({ 6: "1982-06-10" }));
+    assert.equal(h.issues.length, 0);
+    assert.equal(h.rows.length, 1);
+    assert.equal(h.rows[0].birthDate!.toISOString().slice(0, 10), "1986-07-31");
+    const n = h.rows[0].notes.join(" ");
+    assert.match(n, /1986-07-31/);
+    assert.match(n, /1982-06-10/);
+  });
+
+  test("tanpa NIK, tanggal ketikan tetap dipakai apa adanya", () => {
+    const h = sheet(baris({ 4: "", 6: "1982-06-10" }));
+    assert.equal(h.issues.length, 0);
+    assert.equal(h.rows[0].birthDate!.toISOString().slice(0, 10), "1982-06-10");
+    assert.equal(h.rows[0].identityNumber, null);
   });
 });
