@@ -65,20 +65,8 @@ stock.
 - **Butuh:** setiap akun yang menerima password default dari IT, termasuk jalur provisioning Mailcow, harus disimpan dengan `mustChangePassword = true`. Login pertama tidak boleh menghapus flag; reset password oleh admin harus mengaktifkannya kembali; hanya perubahan password yang berhasil yang boleh mengubahnya menjadi `false`.
 - **Kenapa tidak bisa di sisi frontend:** frontend hanya dapat menampilkan peringatan berdasarkan `CurrentUser.mustChangePassword`. Frontend tidak menerima password, hash, atau riwayat password, dan tidak dapat menentukan apakah password yang digunakan masih default. Data lama dengan flag yang salah perlu diperbaiki oleh backend/data maintenance.
 
-### Item Master perlu action untuk field katalog
-- **Layar:** `/inventory/items`
-- **Butuh:** `saveItemAction` atau kontrak action resmi yang menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
-- **Kenapa tidak bisa di sisi frontend:** action saat ini hanya menerima field master dasar. Frontend menampilkan empat nilai hasil impor secara read-only dan sengaja tidak mengirim field yang belum didukung agar UI tidak memberi kesan perubahan tersimpan padahal diabaikan.
 
-### Form edit Customer perlu kontrak PII resmi (§34)
-- **Layar:** `/crm/customers/[id]`
-- **Butuh:** `updateCustomerAction` menerima `identityNumber` dan `birthDate` secara opsional. Field yang tidak dikirim harus dipertahankan; nilai kosong hanya menghapus data bila user memang sengaja mengosongkannya. Backend perlu memvalidasi NIK tepat 16 digit, keunikan NIK, dan tanggal lahir yang valid.
-- **Kenapa tidak bisa di sisi frontend:** data raw hanya boleh dibaca dan ditulis oleh user yang memiliki izin edit customer serta `customers.pii_view`, dengan audit log perubahan. User tanpa izin PII tidak boleh menerima nilai raw atau mengirim kembali nomor telepon/email yang sudah dimasking dari form. Frontend tidak menambahkan input NIK/tanggal lahir sampai loader dan action resmi siap.
 
-### Master Supplier memerlukan action resmi
-- **Layar:** `/inventory/suppliers`
-- **Butuh:** loader pemasok permission-scoped serta action resmi untuk membuat, mengubah, dan mengaktifkan/menonaktifkan Supplier dengan field `code`, `name`, `phone`, `email`, `address`, `website`, `notes`, dan `isActive`. Gunakan permission existing `items.manage`, validasi kode unik, dan audit log untuk perubahan master.
-- **Kenapa belum dibuat form:** backend saat ini baru membuat Supplier melalui Impor Katalog dan belum menyediakan `saveSupplierAction`. Frontend hanya menampilkan daftar read-only agar tidak memberi kesan perubahan tersimpan padahal action belum ada.
 
 ---
 
@@ -90,3 +78,24 @@ stock.
 - **Kenapa tidak bisa di sisi frontend:** `loadEmployeeCards()` saat ini hanya mengembalikan metadata kartu dan tidak mengembalikan `publicToken`; frontend tidak boleh mengambil token dengan query database langsung atau membuat QR dari NIK/nama.
 
 Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman scan publik, dan route print duplex. Sampai `qrSvg` resmi tersedia, preview menampilkan status `QR belum tersedia` dan print fisik tetap ditahan. Kontrak yang direkomendasikan: tambahkan `qrSvg: string | null` pada hasil `loadEmployeeCards()` dengan SVG yang dibuat server-side.
+
+### Item Master perlu action untuk field katalog
+- **Layar:** `/inventory/items`
+- **Butuh:** `saveItemAction` atau kontrak action resmi yang menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
+- **Kenapa tidak bisa di sisi frontend:** action saat ini hanya menerima field master dasar. Frontend menampilkan empat nilai hasil impor secara read-only dan sengaja tidak mengirim field yang belum didukung agar UI tidak memberi kesan perubahan tersimpan padahal diabaikan.
+
+**Terjawab (Fase 74).** `saveItemAction` menerima `supplierId`, `purchaseCost`, `salePrice`, dan `condition`. Pemasok diperiksa keberadaannya; bidang yang tidak dikirim dibiarkan apa adanya. Lihat §41.4.
+
+### Form edit Customer perlu kontrak PII resmi (§34)
+- **Layar:** `/crm/customers/[id]`
+- **Butuh:** `updateCustomerAction` menerima `identityNumber` dan `birthDate` secara opsional. Field yang tidak dikirim harus dipertahankan; nilai kosong hanya menghapus data bila user memang sengaja mengosongkannya. Backend perlu memvalidasi NIK tepat 16 digit, keunikan NIK, dan tanggal lahir yang valid.
+- **Kenapa tidak bisa di sisi frontend:** data raw hanya boleh dibaca dan ditulis oleh user yang memiliki izin edit customer serta `customers.pii_view`, dengan audit log perubahan. User tanpa izin PII tidak boleh menerima nilai raw atau mengirim kembali nomor telepon/email yang sudah dimasking dari form. Frontend tidak menambahkan input NIK/tanggal lahir sampai loader dan action resmi siap.
+
+**Terjawab (Fase 74).** `updateCustomerAction` menerima `identityNumber` dan `birthDate`, memeriksa 16 digit dan keunikan NIK, serta mempertahankan bidang yang tidak dikirim. Ditambah satu hal yang belum diminta tetapi ternyata lebih mendesak: nilai bertopeng yang kembali dari formulir ditolak, sebab tanpa itu petugas tanpa izin PII menimpa nomor telepon asli dengan bintang tanpa galat apa pun. Lihat §41.1.
+
+### Master Supplier memerlukan action resmi
+- **Layar:** `/inventory/suppliers`
+- **Butuh:** loader pemasok permission-scoped serta action resmi untuk membuat, mengubah, dan mengaktifkan/menonaktifkan Supplier dengan field `code`, `name`, `phone`, `email`, `address`, `website`, `notes`, dan `isActive`. Gunakan permission existing `items.manage`, validasi kode unik, dan audit log untuk perubahan master.
+- **Kenapa belum dibuat form:** backend saat ini baru membuat Supplier melalui Impor Katalog dan belum menyediakan `saveSupplierAction`. Frontend hanya menampilkan daftar read-only agar tidak memberi kesan perubahan tersimpan padahal action belum ada.
+
+**Terjawab (Fase 74).** `saveSupplierAction` dan `toggleSupplierAction`, izin `items.manage`, kode unik, audit log. Pemasok dinonaktifkan bukan dihapus. Lihat §41.2.

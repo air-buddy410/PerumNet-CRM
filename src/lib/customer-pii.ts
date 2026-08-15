@@ -103,3 +103,24 @@ export function redactCustomer<T extends PiiPelanggan>(row: T, bolehLihat: boole
 export function redactCustomers<T extends PiiPelanggan>(rows: T[], bolehLihat: boolean): T[] {
   return bolehLihat ? rows : rows.map((r) => redactCustomer(r, false));
 }
+
+/**
+ * Nilai ini adalah topeng yang kembali dari formulir?
+ *
+ * Ini penjaga sisi TULIS, dan ia menutup lubang yang dibuka oleh penjaga sisi
+ * baca. Petugas yang boleh menyunting pelanggan tetapi tidak boleh melihat
+ * data pribadi membuka halaman dan melihat `••••••5678` di kolom telepon.
+ * Kolom itu berisi apa yang dilihatnya. Begitu ia menyimpan — walau yang
+ * diubahnya cuma alamat — formulir mengirimkan `••••••5678` kembali, dan
+ * nomor telepon yang sebenarnya tertimpa oleh bintang.
+ *
+ * Kerusakannya sunyi: tidak ada galat, penyimpanan berhasil, dan nomor itu
+ * hilang tanpa ada yang tahu sampai seseorang mencoba menelepon.
+ *
+ * Karena itu nilai bertopeng diperlakukan sebagai "tidak diubah", bukan
+ * sebagai nilai baru. Bintangnya bukan karakter yang bisa diketik orang di
+ * papan tik biasa, jadi kehadirannya cukup menjadi bukti.
+ */
+export function bertopeng(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.includes(BINTANG);
+}

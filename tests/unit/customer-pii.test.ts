@@ -6,6 +6,7 @@ import {
   maskEmail,
   redactCustomer,
   redactCustomers,
+  bertopeng,
   type PiiPelanggan,
 } from "@/lib/customer-pii";
 
@@ -141,5 +142,31 @@ describe("redactCustomers", () => {
   test("dengan izin: daftar dikembalikan utuh", () => {
     const rows = [{ id: "a", identityNumber: NIK, phone: "081236023387" }];
     assert.equal(redactCustomers(rows, true)[0].identityNumber, NIK);
+  });
+});
+
+describe("bertopeng — penjaga sisi tulis", () => {
+  test("nilai yang keluar dari penyamaran dikenali kembali", () => {
+    // Inilah lingkaran penuhnya: apa pun yang pernah lewat penyamaran harus
+    // bisa dikenali saat kembali dari formulir. Kalau tidak, nilai asli
+    // tertimpa bintang tanpa galat apa pun.
+    assert.equal(bertopeng(maskPhone("081236023387")), true);
+    assert.equal(bertopeng(maskIdentity(NIK)), true);
+    assert.equal(bertopeng(maskEmail("budi.dharma@gmail.com")), true);
+  });
+
+  test("nilai sungguhan lolos, sebab ia memang harus tersimpan", () => {
+    assert.equal(bertopeng("081236023387"), false);
+    assert.equal(bertopeng(NIK), false);
+    assert.equal(bertopeng("budi.dharma@gmail.com"), false);
+    assert.equal(bertopeng(""), false);
+    assert.equal(bertopeng(null), false);
+    assert.equal(bertopeng(undefined), false);
+  });
+
+  test("bintang di TENGAH tetap tertangkap", () => {
+    // Penyamaran NIK menyisakan empat digit di kedua ujung, jadi memeriksa
+    // huruf pertama saja tidak cukup.
+    assert.equal(bertopeng("5107••••••••0001"), true);
   });
 });
