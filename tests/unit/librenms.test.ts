@@ -12,6 +12,7 @@ import {
   portNameOf,
   speedBps,
   speedText,
+  portsToPrune,
 } from "@/lib/librenms";
 
 // Nilai-nilai di berkas ini disalin apa adanya dari enam perangkat PerumNet
@@ -200,5 +201,26 @@ describe("port", () => {
     assert.equal(speedText(undefined), null);
     assert.equal(speedText(0n), null);
     assert.equal(speedText(-1), null);
+  });
+});
+
+describe("portsToPrune — port yang sudah tidak dilaporkan", () => {
+  test("port yang hilang dari laporan dibuang", () => {
+    // Kasus nyata: ONU8/52 (port_id 818) dicabut, dan barisnya tertinggal
+    // di CRM selama sebelas jam sebelum ada yang menyadarinya.
+    assert.deepEqual(portsToPrune([1, 2, 3], [1, 2, 3, 818]), [818]);
+  });
+
+  test("tidak ada yang dibuang ketika semuanya masih dilaporkan", () => {
+    assert.deepEqual(portsToPrune([1, 2, 3], [1, 2, 3]), []);
+    assert.deepEqual(portsToPrune([1, 2, 3], []), []);
+  });
+
+  test("LAPORAN KOSONG TIDAK MENGHAPUS APA PUN", () => {
+    // Pengaman yang paling penting di berkas ini. LibreNMS yang tersendat
+    // mengembalikan nol port; tanpa aturan ini satu panggilan yang meleset
+    // menghapus seluruh 485 port sebuah OLT sekaligus, tanpa galat apa pun.
+    const semua = Array.from({ length: 485 }, (_, i) => i + 1);
+    assert.deepEqual(portsToPrune([], semua), []);
   });
 });

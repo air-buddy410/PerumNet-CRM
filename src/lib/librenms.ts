@@ -194,6 +194,25 @@ export function portKind(
   return "LAIN";
 }
 
+/**
+ * Port tersimpan mana yang sudah tidak dilaporkan LibreNMS lagi?
+ *
+ * Tabel port adalah SALINAN keadaan LibreNMS, bukan riwayat. ONU yang dicabut
+ * harus ikut hilang, kalau tidak ia menumpuk selamanya sebagai baris yang
+ * terlihat nyata di layar tetapi menggambarkan perangkat yang sudah tidak ada.
+ *
+ * Yang dijaga fungsi ini adalah kebalikannya: **daftar laporan yang kosong
+ * tidak menghapus apa pun.** LibreNMS yang sedang tersendat mengembalikan nol
+ * port, dan tanpa aturan ini satu panggilan yang meleset akan menghapus
+ * seluruh port sebuah perangkat sekaligus. Kehilangan diam-diam seperti itu
+ * jauh lebih mahal daripada satu baris basi yang tertinggal sebentar.
+ */
+export function portsToPrune(dilaporkan: number[], tersimpan: number[]): number[] {
+  if (dilaporkan.length === 0) return [];
+  const ada = new Set(dilaporkan);
+  return tersimpan.filter((id) => !ada.has(id));
+}
+
 /** Kecepatan berada di sekitar laju hilir GPON (2,488 Gbps)? */
 function laju25G(bps: bigint | number | null | undefined): boolean {
   if (bps === null || bps === undefined) return false;
