@@ -102,6 +102,11 @@ services:
       # verifikasi TLS, dan galatnya bicara soal sertifikat — bukan soal
       # variabel yang hilang, jadi mudah salah dikejar.
       MIKROTIK_INSECURE_TLS: ${MIKROTIK_INSECURE_TLS:-}
+      # Token API LibreNMS untuk tugas `librenms.sync`. Namanya juga tersimpan
+      # di Integration.credentialRef; nilainya HANYA di sini. Tanpa baris ini
+      # variabel tidak pernah sampai ke dalam container — Compose memakai .env
+      # untuk interpolasi, bukan untuk meneruskannya otomatis.
+      LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
       WORKER_TICK_MS: ${WORKER_TICK_MS:-15000}
     volumes:
       - uploads:/app/uploads
