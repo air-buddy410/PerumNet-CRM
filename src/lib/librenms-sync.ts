@@ -11,6 +11,7 @@ import {
   aliasOf,
   speedBps,
   portKind,
+  portsToPrune,
   type LibreDevice,
   type LibrePort,
 } from "@/lib/librenms";
@@ -47,6 +48,8 @@ export interface SyncOutcome {
   portsFetched: number;
   portsCreated: number;
   portsUpdated: number;
+  /** Port yang sudah tidak dilaporkan LibreNMS lagi, lalu dibuang. */
+  portsRemoved: number;
   portsByKind: Record<string, number>;
 }
 
@@ -141,7 +144,7 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
 
   const out: SyncOutcome = {
     fetched: hasil.data.length, created: 0, updated: 0, skipped: 0, missing: [], siteName: site.name,
-    portsFetched: 0, portsCreated: 0, portsUpdated: 0, portsByKind: {},
+    portsFetched: 0, portsCreated: 0, portsUpdated: 0, portsRemoved: 0, portsByKind: {},
   };
 
   const terlihat = new Set<string>();
@@ -214,7 +217,8 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
         `${out.fetched} perangkat dibaca · ${out.created} baru · ${out.updated} diperbarui` +
         `${out.skipped ? ` · ${out.skipped} dilewati` : ""}` +
         `${out.missing.length ? ` · ${out.missing.length} tidak lagi dipantau` : ""}` +
-        ` · ${out.portsFetched} port (${out.portsCreated} baru, ${out.portsUpdated} diperbarui)`,
+        ` · ${out.portsFetched} port (${out.portsCreated} baru, ${out.portsUpdated} diperbarui` +
+        `${out.portsRemoved ? `, ${out.portsRemoved} dibuang` : ""})`,
     },
   });
   if (out.created > 0) {
@@ -299,6 +303,23 @@ async function syncPorts(
         });
         out.portsCreated++;
       }
+    }
+
+    // Port yang masih tersimpan tetapi sudah tidak dilaporkan LibreNMS — ONU
+    // yang dicabut, kartu yang diganti — dibuang. Tabel ini salinan keadaan
+    // LibreNMS, bukan riwayat: barisnya lahir kembali sendiri kalau portnya
+    // muncul lagi, dan tidak ada apa pun di basis data ini yang menunjuk
+    // kepadanya. Aturan "laporan kosong tidak menghapus apa pun" ada di
+    // `portsToPrune`; panggilan yang gagal sudah keluar lebih awal di atas.
+    const buang = portsToPrune(
+      milik.map((p) => Number(p.port_id)),
+      [...lama.keys()]
+    );
+    if (buang.length > 0) {
+      const hapus = await db.networkPort.deleteMany({
+        where: { id: { in: buang.map((pid) => lama.get(pid)!) } },
+      });
+      out.portsRemoved += hapus.count;
     }
   }
 }
