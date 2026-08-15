@@ -189,8 +189,18 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
     // itu; kalau tidak, `Paket-Hemat(175000)` akan diam-diam menjadi
     // "Personal" padahal itu paket yang berbeda dengan harga kebetulan sama.
     const harga = priceFromPlan(nama);
-    const cocokHarga = harga === null ? undefined : paketDb.find((p) => Number(p.monthlyPrice) === harga);
-    if (cocokHarga && nama.toLowerCase().includes(cocokHarga.name.toLowerCase())) {
+    // SELURUH paket berharga sama diperiksa, bukan hanya yang pertama
+    // ditemukan. Empat paket berbeda sama-sama berharga Rp175.000; mengambil
+    // yang pertama lalu menolaknya karena namanya bukan itu membuat impor
+    // membuat paket BARU padahal padanannya sudah ada — dan setiap kali
+    // dijalankan ulang, satu salinan lagi lahir.
+    const cocokHarga =
+      harga === null
+        ? undefined
+        : paketDb
+            .filter((p) => Number(p.monthlyPrice) === harga)
+            .find((p) => nama.toLowerCase().includes(p.name.toLowerCase()));
+    if (cocokHarga) {
       paket.set(nama, cocokHarga.id);
       continue;
     }
