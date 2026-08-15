@@ -576,18 +576,31 @@ export async function applyCustomerFromRows(
     antrean.set(pt.odpId, a);
   }
 
+  // Langganan yang SUDAH menempati port dilewati. `OdpPort.subscriptionId`
+  // bersifat unik — satu langganan hanya boleh di satu port — jadi tanpa
+  // penyaring ini, menjalankan impor untuk kedua kalinya langsung menabrak
+  // batasan itu dan menggagalkan seluruh penautan. Klaim "aman diulang"
+  // hanya benar bila yang sudah tertaut memang dilewati.
+  const sudahBerport = new Set(
+    (await db.odpPort.findMany({
+      where: { subscriptionId: { not: null } },
+      select: { subscriptionId: true },
+    })).map((p) => p.subscriptionId!)
+  );
+
   const tersentuh = new Set<string>();
   for (const r of rows) {
     if (!r.odpRef) continue;
     const oid = odpId2.get(r.odpRef);
     const sid = subId2.get(r.cid);
-    if (!oid || !sid) continue;
+    if (!oid || !sid || sudahBerport.has(sid)) continue;
     const a = antrean.get(oid);
     // Port habis TIDAK menggagalkan impor: kapasitasnya berasal dari sumber
     // yang bisa saja tertinggal, jadi kehabisan port lebih menandakan
     // kapasitas yang perlu dikoreksi daripada pelanggan yang salah.
     if (!a || a.length === 0) continue;
     await db.odpPort.update({ where: { id: a.shift()! }, data: { subscriptionId: sid, status: "USED" } });
+    sudahBerport.add(sid);
     tersentuh.add(oid);
     outcome.linkedOdpPorts++;
   }
