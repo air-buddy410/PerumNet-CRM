@@ -445,6 +445,7 @@ export function NetworkMap({
         activeMap = map;
         mapRef.current = map;
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+        map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
 
         map.once("load", () => {
           if (cancelled) return;
@@ -463,8 +464,8 @@ export function NetworkMap({
         });
 
         map.on("error", (event) => {
-          const message = event.error instanceof Error ? event.error.message : "Tile/style internal gagal dimuat";
-          fail(`Basemap internal belum tersedia. ${message}`);
+          const message = event.error instanceof Error ? event.error.message : "Tile/style peta gagal dimuat";
+          fail(`Basemap tidak tersedia. ${message}`);
         });
 
         const openOdp = (odpId: string) => {
@@ -520,7 +521,7 @@ export function NetworkMap({
         });
       } catch (error) {
         if (cancelled || (error instanceof DOMException && error.name === "AbortError")) return;
-        fail(error instanceof Error ? error.message : "Style peta internal gagal dimuat");
+        fail(error instanceof Error ? error.message : "Style peta gagal dimuat");
       }
     };
 
@@ -544,9 +545,9 @@ export function NetworkMap({
 
   const statusLabel =
     status === "loading"
-      ? "Memuat basemap internal…"
+      ? "Memuat basemap…"
       : status === "error"
-        ? "Basemap internal belum tersedia. Peta jaringan mandiri tetap ditampilkan."
+        ? "Basemap belum tersedia. Peta jaringan mandiri tetap ditampilkan."
         : null;
 
   return (
@@ -565,7 +566,7 @@ export function NetworkMap({
         </div>
       )}
       <p className="sr-only" aria-live="polite">
-        {status === "ready" ? "Basemap internal aktif." : errorMessage ?? ""}
+        {status === "ready" ? "Basemap aktif." : errorMessage ?? ""}
       </p>
     </div>
   );
