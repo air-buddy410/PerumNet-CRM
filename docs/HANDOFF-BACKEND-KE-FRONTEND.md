@@ -1924,3 +1924,59 @@ harga adalah baris yang tampak sah tetapi tidak bisa ditagih.
 
 Rencana lengkap memasukkan data ada di
 [`docs/RENCANA-MASUKKAN-DATA.md`](RENCANA-MASUKKAN-DATA.md).
+
+## 37. Sisa pekerjaan frontend per 15 Agustus
+
+Halaman impor katalog dan pelanggan sudah jadi, `allowPartial` sudah
+tertangani. Tiga yang belum:
+
+### 37.1 §34 belum selesai — form pelanggan tanpa NIK & tanggal lahir
+
+`Customer.identityNumber` dan `Customer.birthDate` sudah ada di skema dan
+sudah terisi lewat impor, tetapi **tidak ada input untuk keduanya** di
+`/crm/customers`. Akibatnya: nilai hasil impor tidak akan pernah bisa
+dikoreksi lewat aplikasi.
+
+Ini penting untuk 19 baris yang tanggal lahirnya diambil dari NIK karena
+kolom berkasnya berselisih — catatannya membawa kedua nilai supaya peninjau
+bisa membalik keputusan itu per-orang, dan tanpa form ia tidak bisa
+membalikkannya.
+
+Tampilkan lewat baris yang sudah tersamar (`redactCustomer` menanganinya);
+untuk mengubah, izin `customers.pii_view` yang menentukan apakah nilai
+aslinya terlihat.
+
+### 37.2 Master `Supplier` belum punya halaman sama sekali
+
+Model `Supplier` (code, name, phone, email, address, website, notes,
+isActive) terisi lewat impor katalog — 20 vendor. Belum ada daftar, belum ada
+form. Sekarang satu-satunya cara melihatnya lewat database.
+
+Kaitannya: `Item.supplierId`.
+
+### 37.3 BARU — 817 port jaringan tanpa tempat ditampilkan
+
+`NetworkPort` ditarik dari LibreNMS tiap 10 menit dan sekarang berisi 817
+baris. Belum ada halaman apa pun untuknya.
+
+**Jangan tampilkan sebagai satu daftar panjang.** 817 baris itu tiga jenis
+benda berbeda, dan tanpa penyaring daftarnya tidak terbaca:
+
+| Golongan | Jumlah | Artinya |
+|---|---|---|
+| `ONU` | **669** | satu baris per pelanggan pada OLT HSGQ — 686 hidup |
+| `PON` | 64 | port PON; di sinilah ODP menggantung |
+| `ETHERNET` | 52 | uplink & backbone |
+| `LAIN` / `VLAN` / `PPP` | 32 | sisanya |
+
+Golongannya belum tersimpan sebagai kolom — hitung di sisi baca dengan
+`portKind(ifType, ifName)` dari `@/lib/librenms`.
+
+Yang paling berguna ditampilkan lebih dulu:
+
+1. **Di detail perangkat** (`/noc/devices`): jumlah port per golongan, dan
+   daftar PON + ETHERNET saja. ONU disembunyikan di balik satu tautan.
+2. **`ifAlias`** hanya terisi bila operator benar-benar menuliskannya
+   (`Uplink-2116-Master_Switch`, `TO_Switch_Distribusi`) — salinan `ifName`
+   sudah dibuang di backend. Kolom yang terisi berarti sesuatu; tampilkan.
+3. `operStatus` `up`/`down`, dan `ifSpeedBps` diformat Gbps/Mbps.
