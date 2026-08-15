@@ -111,3 +111,70 @@ export function shouldSkip(d: LibreDevice): boolean {
   const truthy = (v: number | boolean | null | undefined) => v === 1 || v === true;
   return truthy(d.disabled) || truthy(d.ignore);
 }
+
+// ── Port / antarmuka ────────────────────────────────────────────
+
+/** Bentuk satu port dari `GET /api/v0/ports`. Hanya yang kita pakai. */
+export interface LibrePort {
+  port_id: number;
+  device_id: number;
+  ifName?: string | null;
+  ifAlias?: string | null;
+  ifDescr?: string | null;
+  ifType?: string | null;
+  ifSpeed?: number | string | null;
+  ifOperStatus?: string | null;
+  ifAdminStatus?: string | null;
+}
+
+/**
+ * Nama port yang dipakai. `ifName` yang utama, `ifDescr` cadangannya.
+ *
+ * Port tanpa nama sama sekali dilewati oleh pemanggilnya — bukan diberi nama
+ * karangan seperti "port-123", sebab nama semacam itu terlihat sah dan akan
+ * dipakai orang untuk merujuk sesuatu yang sebenarnya tidak diketahui.
+ */
+export function portNameOf(p: LibrePort): string | null {
+  const n = (p.ifName ?? "").trim() || (p.ifDescr ?? "").trim();
+  return n || null;
+}
+
+/**
+ * `ifAlias` hanya disimpan bila ia benar-benar membawa keterangan.
+ *
+ * Sebagian besar perangkat menyalin ifName ke ifAlias ketika operator tidak
+ * mengisinya. Menyimpan salinan itu membuat kolom keterangan tampak terisi
+ * seluruhnya padahal 818 dari 818 tidak mengatakan apa pun — dan kolom yang
+ * selalu terisi berhenti diperhatikan orang.
+ */
+export function aliasOf(p: LibrePort): string | null {
+  const alias = (p.ifAlias ?? "").trim();
+  if (!alias) return null;
+  const nama = portNameOf(p);
+  return nama && alias.toLowerCase() === nama.toLowerCase() ? null : alias;
+}
+
+/** ifSpeed LibreNMS boleh angka, teks, atau kosong. */
+export function speedBps(v: number | string | null | undefined): bigint | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return BigInt(Math.trunc(n));
+}
+
+/**
+ * Golongan port dalam bahasa yang bermakna bagi operasional, bukan bagi SNMP.
+ *
+ * Dipakai untuk menyaring: daftar 818 port tanpa golongan tidak bisa dibaca
+ * siapa pun, sebab 690 di antaranya adalah satu baris per ONU pelanggan.
+ */
+export function portKind(ifType: string | null | undefined, ifName?: string | null): string {
+  const t = (ifType ?? "").trim().toLowerCase();
+  const n = (ifName ?? "").trim().toLowerCase();
+  if (t === "gpon" || n.startsWith("gpon")) return "PON";
+  if (n.startsWith("onu") || n.startsWith("ont")) return "ONU";
+  if (t === "l2vlan" || t === "propvirtual") return "VLAN";
+  if (t === "ppp") return "PPP";
+  if (t.includes("ethernet")) return "ETHERNET";
+  return "LAIN";
+}

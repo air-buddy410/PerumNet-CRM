@@ -224,9 +224,13 @@ export const TASKS: TaskDefinition[] = [
       const d = r.data;
       return {
         detail:
-          `${d.fetched} dibaca · ${d.created} baru · ${d.updated} diperbarui` +
+          `${d.fetched} perangkat (${d.created} baru, ${d.updated} diperbarui)` +
           (d.skipped ? ` · ${d.skipped} dilewati` : "") +
-          (d.missing.length ? ` · ${d.missing.length} tidak lagi dipantau` : ""),
+          (d.missing.length ? ` · ${d.missing.length} tidak lagi dipantau` : "") +
+          ` · ${d.portsFetched} port (${d.portsCreated} baru, ${d.portsUpdated} diperbarui)` +
+          (Object.keys(d.portsByKind).length
+            ? ` — ${Object.entries(d.portsByKind).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${n}`).join(" ")}`
+            : ""),
       };
     },
   },

@@ -7,6 +7,10 @@ import {
   isUp,
   uptimeText,
   shouldSkip,
+  portKind,
+  aliasOf,
+  portNameOf,
+  speedBps,
 } from "@/lib/librenms";
 
 // Nilai-nilai di berkas ini disalin apa adanya dari enam perangkat PerumNet
@@ -122,5 +126,44 @@ describe("shouldSkip", () => {
   test("perangkat biasa ikut", () => {
     assert.equal(shouldSkip({ device_id: 1, hostname: "x", disabled: 0, ignore: 0 }), false);
     assert.equal(shouldSkip({ device_id: 1, hostname: "x" }), false);
+  });
+});
+
+describe("port", () => {
+  test("golongan port memakai bahasa operasional, bukan istilah SNMP", () => {
+    assert.equal(portKind("gpon", "gpon_1/2/1"), "PON");
+    assert.equal(portKind("other", "ONU8/41"), "ONU");
+    assert.equal(portKind("ethernetCsmacd", "sfp-sfpplus1"), "ETHERNET");
+    assert.equal(portKind("l2vlan", "vlan100"), "VLAN");
+    assert.equal(portKind("ppp", "pppoe-out1"), "PPP");
+  });
+
+  test("ONU dikenali dari NAMANYA, sebab ifType-nya cuma 'other'", () => {
+    // 690 dari 818 port kita bertipe `other`. Tanpa membaca namanya, seluruh
+    // ONU pelanggan akan tercampur dengan port lain-lain yang tidak berarti.
+    assert.equal(portKind("other", "ONU1/57"), "ONU");
+    assert.notEqual(portKind("other", "entah"), "ONU");
+  });
+
+  test("ifAlias yang cuma salinan ifName TIDAK disimpan", () => {
+    // Perangkat menyalin ifName ke ifAlias saat operator tidak mengisinya.
+    // Menyimpannya membuat kolom keterangan tampak terisi 818 dari 818
+    // padahal tak satu pun mengatakan sesuatu.
+    assert.equal(aliasOf({ port_id: 1, device_id: 2, ifName: "ether13", ifAlias: "ether13" }), null);
+    assert.equal(
+      aliasOf({ port_id: 2, device_id: 2, ifName: "sfp-sfpplus1", ifAlias: "Uplink-2116-Master_Switch" }),
+      "Uplink-2116-Master_Switch"
+    );
+  });
+
+  test("port tanpa nama menghasilkan null, bukan nama karangan", () => {
+    assert.equal(portNameOf({ port_id: 9, device_id: 2, ifName: "  ", ifDescr: null }), null);
+    assert.equal(portNameOf({ port_id: 9, device_id: 2, ifName: null, ifDescr: "eth0" }), "eth0");
+  });
+
+  test("kecepatan kosong atau nol jadi null, bukan 0n", () => {
+    assert.equal(speedBps(null), null);
+    assert.equal(speedBps(0), null);
+    assert.equal(speedBps("10000000000"), 10_000_000_000n);
   });
 });

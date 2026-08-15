@@ -7,7 +7,12 @@ import {
   isUp,
   uptimeText,
   shouldSkip,
+  portNameOf,
+  aliasOf,
+  speedBps,
+  portKind,
   type LibreDevice,
+  type LibrePort,
 } from "@/lib/librenms";
 
 // ── Menarik inventaris perangkat dari LibreNMS (Fase 70) ────────
@@ -38,6 +43,11 @@ export interface SyncOutcome {
   /** Perangkat CRM yang tidak lagi ada di LibreNMS. Ditandai, bukan dihapus. */
   missing: string[];
   siteName: string;
+  /** Port: dibaca, dibuat, diperbarui, dan rincian per golongan. */
+  portsFetched: number;
+  portsCreated: number;
+  portsUpdated: number;
+  portsByKind: Record<string, number>;
 }
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -50,8 +60,8 @@ type Result<T> = { ok: true; data: T } | { ok: false; error: string };
  * di seluruh aplikasi ini, dan alasannya sederhana: basis data disalin untuk
  * cadangan, dibuka saat pemeriksaan, dan diekspor saat pindah mesin.
  */
-async function fetchDevices(baseUrl: string, token: string): Promise<Result<LibreDevice[]>> {
-  const url = `${baseUrl.replace(/\/+$/, "")}/api/v0/devices`;
+async function apiGet<T>(baseUrl: string, path: string, token: string, key: string): Promise<Result<T[]>> {
+  const url = `${baseUrl.replace(/\/+$/, "")}${path}`;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), API_TIMEOUT_MS);
   try {
@@ -64,11 +74,12 @@ async function fetchDevices(baseUrl: string, token: string): Promise<Result<Libr
       // LibreNMS mengembalikan tokennya kembali pada sebagian pesan galat.
       return { ok: false, error: `LibreNMS menjawab HTTP ${res.status}.` };
     }
-    const body = (await res.json()) as { status?: string; devices?: LibreDevice[] };
-    if (body.status !== "ok" || !Array.isArray(body.devices)) {
-      return { ok: false, error: "Jawaban LibreNMS tidak berbentuk daftar perangkat." };
+    const body = (await res.json()) as Record<string, unknown>;
+    const isi = body[key];
+    if (body.status !== "ok" || !Array.isArray(isi)) {
+      return { ok: false, error: `Jawaban LibreNMS tidak memuat daftar \`${key}\`.` };
     }
-    return { ok: true, data: body.devices };
+    return { ok: true, data: isi as T[] };
   } catch (e) {
     const err = e as Error;
     return {
@@ -107,7 +118,7 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
     return { ok: false, error: `Env var ${envName} belum terisi di proses ini.` };
   }
 
-  const hasil = await fetchDevices(integration.baseUrl, token);
+  const hasil = await apiGet<LibreDevice>(integration.baseUrl, "/api/v0/devices", token, "devices");
   if (!hasil.ok) {
     await db.integrationEvent.create({
       data: {
@@ -130,9 +141,12 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
 
   const out: SyncOutcome = {
     fetched: hasil.data.length, created: 0, updated: 0, skipped: 0, missing: [], siteName: site.name,
+    portsFetched: 0, portsCreated: 0, portsUpdated: 0, portsByKind: {},
   };
 
   const terlihat = new Set<string>();
+  /** device_id LibreNMS → id NetworkDevice kita, untuk menautkan portnya. */
+  const idPerangkat = new Map<number, string>();
   for (const d of hasil.data) {
     if (shouldSkip(d)) {
       out.skipped++;
@@ -147,7 +161,7 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
     const catatanStatus = `LibreNMS: ${hidup ? "hidup" : "MATI"}${uptime ? `, uptime ${uptime}` : ""}`;
 
     if (!lama) {
-      await db.networkDevice.create({
+      const baru = await db.networkDevice.create({
         data: {
           hostname,
           deviceType: deviceTypeFromOs(d.os, d.sysName),
@@ -158,10 +172,13 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
           siteId: site.id,
           notes: `Ditarik dari LibreNMS. Site masih ${site.name} — pindahkan ke site yang benar. ${catatanStatus}`,
         },
+        select: { id: true },
       });
+      idPerangkat.set(d.device_id, baru.id);
       out.created++;
       continue;
     }
+    idPerangkat.set(d.device_id, lama.id);
 
     // Hanya yang LibreNMS memang tahu. Site, PIC, rack, dan catatan operator
     // tidak disentuh — itu milik manusia yang mengisinya.
@@ -178,6 +195,8 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
     out.updated++;
   }
 
+  await syncPorts(integration.baseUrl, token, idPerangkat, out);
+
   // Perangkat yang hilang dari LibreNMS DILAPORKAN, tidak dihapus maupun
   // dinonaktifkan. Ia mungkin hanya dilepas sementara dari pemantauan,
   // sementara di CRM ia sudah tertaut ke langganan dan riwayat alarm.
@@ -191,7 +210,11 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
       direction: "OUT",
       eventType: "DEVICE_SYNC",
       status: "OK",
-      detail: `${out.fetched} dibaca · ${out.created} baru · ${out.updated} diperbarui · ${out.skipped} dilewati${out.missing.length ? ` · ${out.missing.length} tidak lagi dipantau` : ""}`,
+      detail:
+        `${out.fetched} perangkat dibaca · ${out.created} baru · ${out.updated} diperbarui` +
+        `${out.skipped ? ` · ${out.skipped} dilewati` : ""}` +
+        `${out.missing.length ? ` · ${out.missing.length} tidak lagi dipantau` : ""}` +
+        ` · ${out.portsFetched} port (${out.portsCreated} baru, ${out.portsUpdated} diperbarui)`,
     },
   });
   if (out.created > 0) {
@@ -205,4 +228,72 @@ export async function syncLibrenmsDevices(): Promise<Result<SyncOutcome>> {
   }
 
   return { ok: true, data: out };
+}
+
+
+/**
+ * Menyelaraskan port setiap perangkat.
+ *
+ * Dicocokkan lewat `port_id` LibreNMS, bukan nama: operator kadang mengganti
+ * label port, dan pencocokan berbasis nama akan membaca perubahan label
+ * sebagai port lama menghilang lalu port baru muncul — riwayatnya putus tanpa
+ * apa pun yang benar-benar berubah di perangkatnya.
+ *
+ * Kegagalan di sini TIDAK menggagalkan sinkron perangkat. Inventaris perangkat
+ * jauh lebih berharga daripada daftar portnya, dan menahannya karena satu
+ * panggilan port gagal menukar yang penting demi yang tambahan.
+ */
+async function syncPorts(
+  baseUrl: string,
+  token: string,
+  idPerangkat: Map<number, string>,
+  out: SyncOutcome
+): Promise<void> {
+  if (idPerangkat.size === 0) return;
+  const hasil = await apiGet<LibrePort>(baseUrl, "/api/v0/ports", token, "ports");
+  if (!hasil.ok) return;
+
+  out.portsFetched = hasil.data.length;
+  const sekarang = new Date();
+
+  for (const [libreId, deviceId] of idPerangkat) {
+    const milik = hasil.data.filter((p) => Number(p.device_id) === libreId);
+    if (milik.length === 0) continue;
+
+    const lama = new Map(
+      (await db.networkPort.findMany({ where: { deviceId }, select: { id: true, librenmsPortId: true } })).map(
+        (x) => [x.librenmsPortId, x.id]
+      )
+    );
+
+    for (const p of milik) {
+      const ifName = portNameOf(p);
+      // Port tanpa nama dilewati, bukan diberi nama karangan.
+      if (!ifName) continue;
+
+      const kind = portKind(p.ifType, ifName);
+      out.portsByKind[kind] = (out.portsByKind[kind] ?? 0) + 1;
+
+      const data = {
+        ifName,
+        ifAlias: aliasOf(p),
+        ifType: p.ifType?.trim() || null,
+        ifSpeedBps: speedBps(p.ifSpeed),
+        operStatus: p.ifOperStatus?.trim() || null,
+        adminStatus: p.ifAdminStatus?.trim() || null,
+        lastSyncAt: sekarang,
+      };
+
+      const adaId = lama.get(Number(p.port_id));
+      if (adaId) {
+        await db.networkPort.update({ where: { id: adaId }, data });
+        out.portsUpdated++;
+      } else {
+        await db.networkPort.create({
+          data: { deviceId, librenmsPortId: Number(p.port_id), ...data },
+        });
+        out.portsCreated++;
+      }
+    }
+  }
 }

@@ -1233,6 +1233,41 @@ model NetworkDevice {
   oltDevice      OltDevice?
   mikrotikRouter MikrotikRouter?
   probeTargets   ProbeTarget[]
+  ports          NetworkPort[]
+}
+
+/// Fase 71 — antarmuka jaringan yang ditarik dari LibreNMS.
+///
+/// BUKAN `PonPort` dan bukan `OdpPort`. Keduanya itu model kita sendiri untuk
+/// perencanaan jaringan; yang ini cermin apa adanya dari apa yang perangkatnya
+/// laporkan lewat SNMP, dan isinya campur: uplink backbone, port PON, sampai
+/// satu baris per ONU pelanggan.
+///
+/// `ifType` yang memisahkannya, dan perbedaannya besar:
+///   - `gpon`            → port PON; di sinilah ODP menggantung
+///   - `ethernetCsmacd`  → uplink & backbone
+///   - `other`           → satu per ONU pelanggan pada OLT HSGQ
+model NetworkPort {
+  id             String   @id @default(cuid())
+  deviceId       String
+  /// `port_id` LibreNMS. Jangkar pencocokan yang stabil: ifName bisa berubah
+  /// ketika operator mengganti label, sedangkan port_id tidak.
+  librenmsPortId Int
+  ifName         String
+  /// Label yang diketik operator di perangkatnya. Sering hanya salinan
+  /// ifName, tetapi pada uplink ia membawa keterangan sungguhan
+  /// ("TO_Switch_Distribusi") yang tidak ada di tempat lain mana pun.
+  ifAlias        String?
+  ifType         String?
+  ifSpeedBps     BigInt?
+  operStatus     String? // up | down | lowerLayerDown | ...
+  adminStatus    String?
+  lastSyncAt     DateTime @default(now())
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, librenmsPortId])
+  @@index([deviceId, ifType])
 }
 
 model NetworkLink {
