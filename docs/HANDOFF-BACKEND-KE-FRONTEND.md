@@ -1980,3 +1980,67 @@ Yang paling berguna ditampilkan lebih dulu:
    (`Uplink-2116-Master_Switch`, `TO_Switch_Distribusi`) — salinan `ifName`
    sudah dibuang di backend. Kolom yang terisi berarti sesuatu; tampilkan.
 3. `operStatus` `up`/`down`, dan `ifSpeedBps` diformat Gbps/Mbps.
+
+## 38. Data produksi sudah terisi — empat halaman kini punya isi
+
+Per 15 Agustus, basis data produksi tidak lagi kosong. Yang kemarin "belum ada
+datanya" sekarang ada, dan itu mengubah urutan pekerjaan frontend.
+
+| Tabel | Isi |
+|---|---|
+| `Customer` | **1.711** |
+| `Subscription` | **1.711** (1.287 sudah punya `pppoeUsername`) |
+| `Package` | 27 |
+| `Odp` | **577** — 526 berkoordinat, 526 berinduk |
+| `OdpPort` | 8.607, **1.677 terisi** |
+| `NetworkDevice` / `NetworkPort` | 6 / 818 |
+
+### 38.1 Peta ODP — sekarang paling bernilai
+
+**526 ODP berkoordinat** siap dipetakan, lengkap dengan hierarki:
+`NetworkSite` → `Odp` (role `MS`) → `Odp` (role `ODP`) → `OdpPort` →
+`Subscription` → `Customer`.
+
+Yang perlu ada di peta, diurut menurut kegunaan:
+
+1. Titik ODP diwarnai menurut okupansi (`portUsed` / `portCapacity`).
+2. Garis ke induknya (`parentId`) — itu yang membuat kaskade MS terlihat.
+3. Klik titik → daftar pelanggan di port-portnya.
+4. `opticPowerDbm` sebagai label; nilainya negatif dan itu normal.
+
+ALUS punya `/distpoint/map` yang bisa jadi acuan bentuk, tetapi datanya sudah
+ada di kita — tidak perlu menunggu apa pun.
+
+### 38.2 Daftar pelanggan — 1.711 baris, perlu filter
+
+Halaman `/crm/customers` sebelumnya menampilkan tabel kosong. Sekarang 1.711
+baris, jadi butuh filter yang berguna: **status**, **paket**, **ODP**, dan
+**punya/tidak punya `pppoeUsername`**.
+
+Yang terakhir itu papan skor operasional: 424 langganan belum punya username
+PPPoE, artinya belum bisa dipantau. Menampilkannya sebagai filter membuat sisa
+pekerjaan itu kelihatan alih-alih tersembunyi.
+
+Ingat `redactCustomer` — semua sudah tersamar di jalur data (§34), jadi
+kolom NIK aman ditampilkan apa adanya.
+
+### 38.3 Yang masih sama seperti §37
+
+- **§34** — form pelanggan masih tanpa input NIK & tanggal lahir
+- **Master `Supplier`** — belum ada halaman
+- **818 `NetworkPort`** — belum ada tampilan; jangan satu daftar panjang,
+  669 di antaranya satu baris per pelanggan
+
+### 38.4 Angka yang sengaja belum sempurna
+
+Jangan diperlakukan sebagai bug:
+
+- **434 sesi PPPoE yatim** — 188 ambigu (nomor cocok, nama tidak) dan 246
+  tanpa kandidat. Dibiarkan yatim dengan sengaja: sesi yang salah pasang
+  terlihat seperti pekerjaan yang sudah beres, dan itu jauh lebih mahal
+  daripada yang jelas belum selesai.
+- **34 pelanggan tanpa port ODP** — kapasitas ODP-nya penuh menurut sumber.
+  Perlu dicek lapangan.
+- **22 paket berkecepatan 0 Mbps** — harga diambil dari nama paket di sistem
+  sumber, kecepatannya tidak ada di mana pun. Tampilkan sebagai "belum
+  diketahui", bukan "0 Mbps".
