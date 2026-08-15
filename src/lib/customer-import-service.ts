@@ -398,8 +398,52 @@ export async function applyCustomerFromRows(
     skippedIssues: plan.ok ? [] : plan.issues,
   };
 
-  await db.$transaction(async (prisma) => {
-    // ── ODP dulu: port tidak bisa ditempati sebelum tiangnya ada ──
+  // Semua pencarian berulang dimuat SEKALI di sini, bukan per baris di dalam
+  // transaksi. Dengan 1.711 pelanggan, satu query per baris berarti ribuan
+  // perjalanan bolak-balik — dan transaksi yang menahan kunci selama itu
+  // kehabisan waktu sebelum separuh datanya masuk. Itu bukan hipotesis:
+  // percobaan pertama mati di detik kelima.
+  const nomorTerakhir = await db.customer.findFirst({
+    where: { customerNumber: { startsWith: "CST-" } },
+    orderBy: { customerNumber: "desc" },
+    select: { customerNumber: true },
+  });
+  let urut = Number(nomorTerakhir?.customerNumber.split("-")[1] ?? 0);
+  if (!Number.isFinite(urut)) urut = 0;
+
+  const layananAda = new Set(
+    (await db.subscription.findMany({ select: { serviceNumber: true } })).map((x) => x.serviceNumber)
+  );
+
+  await db.$transaction(
+    async (prisma) => {
+    // ── Paket dulu: langganan tidak bisa dibuat tanpa harganya ──
+    for (const np of plan.newPackages) {
+      const p = await prisma.package.create({
+        data: {
+          code: np.code,
+          name: np.plan.replace(/\s*\([^)]*\)\s*$/, "").trim() || np.code,
+          monthlyPrice: BigInt(np.price),
+          // Kecepatan TIDAK ditebak dari harga. Dua paket berharga sama di
+          // sumber ini terbukti berbeda kecepatan, dan angka karangan akan
+          // dipakai orang untuk menjanjikan sesuatu kepada pelanggan.
+          downloadMbps: 0,
+          uploadMbps: 0,
+          description: `Dibuat dari impor (${np.plan}). Kecepatan belum diketahui — isi sebelum dipakai untuk penawaran.`,
+        },
+        select: { id: true },
+      });
+      paket.set(np.plan, p.id);
+      outcome.createdPackages.push(np.code);
+    }
+
+    const hargaPaket = new Map(
+      (await prisma.package.findMany({
+        select: { id: true, monthlyPrice: true, downloadMbps: true, uploadMbps: true },
+      })).map((x) => [x.id, x])
+    );
+
+    // ── ODP: port tidak bisa ditempati sebelum tiangnya ada ──
     for (const o of plan.odps) {
       if (o.action !== "CREATE") continue;
       const odp = await prisma.odp.create({
@@ -421,7 +465,7 @@ export async function applyCustomerFromRows(
 
       let customerId: string;
       if (rencanaBaris.action === "CREATE") {
-        const nomor = await nextNumber(prisma, "CST", "customerNumber");
+        const nomor = `CST-${String(++urut).padStart(5, "0")}`;
         const c = await prisma.customer.create({
           data: {
             customerNumber: nomor,
@@ -472,12 +516,10 @@ export async function applyCustomerFromRows(
       // ── Langganan ──
       const packageId = paket.get(r.packageRef);
       if (!packageId) continue;
-      const sudahAda = await prisma.subscription.findUnique({ where: { serviceNumber: r.cid } });
-      if (sudahAda) continue;
-      const p = await prisma.package.findUniqueOrThrow({
-        where: { id: packageId },
-        select: { monthlyPrice: true, downloadMbps: true, uploadMbps: true },
-      });
+      if (layananAda.has(r.cid)) continue;
+      layananAda.add(r.cid);
+      const p = hargaPaket.get(packageId);
+      if (!p) continue;
       const sub = await prisma.subscription.create({
         data: {
           // Nomor layanan MEMAKAI CID dari sistem sumber, bukan nomor baru.
@@ -548,17 +590,3 @@ export async function applyCustomerFromRows(
   return { ok: true, data: outcome };
 }
 
-/** Nomor berurutan bergaya `CST-00001`, aman terhadap pemanggilan berulang. */
-async function nextNumber(
-  prisma: Parameters<Parameters<typeof db.$transaction>[0]>[0],
-  prefix: string,
-  field: "customerNumber"
-): Promise<string> {
-  const last = await prisma.customer.findFirst({
-    where: { [field]: { startsWith: `${prefix}-` } },
-    orderBy: { [field]: "desc" },
-    select: { [field]: true },
-  });
-  const n = last ? Number(String(last[field]).split("-")[1]) : 0;
-  return `${prefix}-${String((Number.isFinite(n) ? n : 0) + 1).padStart(5, "0")}`;
-}
