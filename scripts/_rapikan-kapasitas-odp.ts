@@ -26,17 +26,16 @@ async function main() {
   let diperbaiki = 0;
 
   for (const o of aneh) {
-    // 15 hanya bisa berarti 16 salah hitung: tidak ada splitter 1:15, dan
-    // selisih satu terlalu kecil untuk berarti 1:8.
-    const target = o.portCapacity === 15 ? 16 : null;
-
-    if (target === null) {
-      // 10 bisa berarti 8 maupun 16, dan tidak ada di data yang memihak
-      // salah satunya. Dibiarkan — menebak kapasitas berarti menjanjikan
-      // port yang mungkin tidak ada di tiangnya.
-      console.log(`  ?  ${o.code.padEnd(16)} ${o.portUsed}/${o.portCapacity} — ambigu, dibiarkan untuk diperiksa lapangan`);
-      continue;
-    }
+    // Kapasitas di luar 8 dan 16 diperlakukan sebagai 1:16.
+    //
+    // Untuk 15 itu jelas: tidak ada splitter 1:15 dan selisih satu terlalu
+    // kecil untuk berarti 1:8. Untuk 10 tidak jelas dari data mana pun —
+    // pemilik produk yang memutuskan menganggapnya 1:16, dan keputusan itu
+    // dicatat di sini supaya tidak dikira kesimpulan mesin.
+    //
+    // Menaikkan kapasitas selalu aman: port yang belum ada dibuat, port yang
+    // sudah terisi tidak tersentuh. Yang berbahaya menurunkannya.
+    const target = 16;
     if (target < o.portUsed) {
       console.log(`  !  ${o.code.padEnd(16)} ${o.portUsed}/${o.portCapacity} — target ${target} lebih kecil dari yang terpakai, dilewati`);
       continue;
