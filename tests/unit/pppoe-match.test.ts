@@ -82,3 +82,29 @@ describe("matchUsernames", () => {
     assert.equal(h.matched[0].serviceNumber, "PN1000042532");
   });
 });
+
+describe("nama empat huruf", () => {
+  const K4 = [
+    { serviceNumber: "PN102030001", customerName: "I Ketut Rayu" },
+    { serviceNumber: "PN102030011", customerName: "I Wayan Suka" },
+    { serviceNumber: "PN1021030011", customerName: "I Gede Sugiarta" },
+  ];
+
+  test("nama empat huruf tetap menguatkan — itu justru yang membedakan", () => {
+    // Ambang lima huruf membuang Rayu, Suka, Sari, Reta, Dewi — nama Bali
+    // yang paling membedakan satu orang dari yang lain.
+    assert.equal(nameCorroborates("sryb_030001_rayu", "I Ketut Rayu"), true);
+    assert.equal(nameCorroborates("sryb_030011_suka", "I Wayan Suka"), true);
+  });
+
+  test("gelar dan sapaan tetap tidak menguatkan", () => {
+    assert.equal(nameCorroborates("x_030001_agus", "I Agus Something"), false);
+    assert.equal(nameCorroborates("x_030001_made", "I Made Something"), false);
+  });
+
+  test("dua kandidat, nama menyaring jadi satu", () => {
+    const h = matchUsernames(["sryb_030011_suka"], K4);
+    assert.equal(h.matched.length, 1);
+    assert.equal(h.matched[0].serviceNumber, "PN102030011");
+  });
+});

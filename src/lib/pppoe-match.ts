@@ -58,10 +58,14 @@ export function wordsIn(username: string): string[] {
 export function nameCorroborates(username: string, customerName: string): boolean {
   const u = username.toLowerCase().replace(/[^a-z]/g, "");
   if (!u) return false;
+  // Ambangnya EMPAT huruf, bukan lima. Lima terdengar lebih aman tetapi
+  // membuang nama Bali yang paling membedakan: Rayu, Suka, Sari, Reta, Dewi.
+  // Yang menjaga ketelitiannya bukan panjang kata melainkan daftar UMUM di
+  // bawah — kata pendek yang sering muncul disaring di sana, satu per satu.
   const kata = customerName
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length >= 5 && !UMUM.has(w));
+    .filter((w) => w.length >= 4 && !UMUM.has(w));
   return kata.some((w) => u.includes(w));
 }
 
@@ -73,8 +77,15 @@ export function nameCorroborates(username: string, customerName: string): boolea
  * pasangan sama saja dengan tidak memeriksa nama sama sekali.
  */
 const UMUM = new Set([
+  // Urutan kelahiran & sapaan — muncul pada ratusan pelanggan.
   "wayan", "kadek", "komang", "ketut", "putu", "gede", "made", "nyoman",
-  "dewa", "gusti", "agus", "ayu", "luh", "nengah",
+  "nengah", "gusti", "dewa", "ayu", "luh", "ida", "ngurah", "bagus",
+  // Empat huruf yang lolos ambang tetapi sama seringnya. Daftar ini
+  // sengaja PENDEK: yang dibuang hanya gelar dan sapaan, bukan nama.
+  // "Sari", "Suka", "Rayu" terdengar umum tetapi justru itulah bagian yang
+  // membedakan satu orang dari yang lain — dan pengaman terhadap kandidat
+  // ganda sudah bekerja terpisah, jadi tidak perlu dibuang di sini.
+  "anak", "agus", "sang", "jero",
 ]);
 
 /**
