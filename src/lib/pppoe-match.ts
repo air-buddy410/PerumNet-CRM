@@ -56,17 +56,26 @@ export function wordsIn(username: string): string[] {
  * muncul di ribuan nama Bali dan tidak membuktikan apa pun.
  */
 export function nameCorroborates(username: string, customerName: string): boolean {
-  const u = username.toLowerCase().replace(/[^a-z]/g, "");
-  if (!u) return false;
-  // Ambangnya EMPAT huruf, bukan lima. Lima terdengar lebih aman tetapi
-  // membuang nama Bali yang paling membedakan: Rayu, Suka, Sari, Reta, Dewi.
-  // Yang menjaga ketelitiannya bukan panjang kata melainkan daftar UMUM di
-  // bawah — kata pendek yang sering muncul disaring di sana, satu per satu.
+  // Angka dibuang dari KEDUA sisi. Sistem sumber menempelkan urutan pada
+  // sebagian nama ("Salin01", "Dewi01"), dan angka itu tidak pernah ikut
+  // tertulis di username — tanpa dibuang, nama yang justru identik jadi
+  // tidak pernah cocok.
+  const ruas = username.toLowerCase().split(/[^a-z0-9]+/).map((r) => r.replace(/\d+/g, "")).filter(Boolean);
+  const gabung = ruas.join("");
+  if (!gabung) return false;
+
   const kata = customerName
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !UMUM.has(w));
-  return kata.some((w) => u.includes(w));
+    .map((w) => w.replace(/[^a-z]/g, ""))
+    .filter((w) => w.length >= 3 && !UMUM.has(w));
+
+  return kata.some((w) =>
+    // Nama pendek (3 huruf: Rai, Eni, Ani, Adi) hanya diterima bila ia
+    // menjadi RUAS UTUH pada username — `sryte_030018_rai`. Sebagai
+    // potongan di tengah kata, tiga huruf terlalu mudah muncul kebetulan.
+    w.length <= 3 ? ruas.includes(w) : gabung.includes(w)
+  );
 }
 
 /**

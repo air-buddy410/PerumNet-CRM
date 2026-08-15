@@ -108,3 +108,29 @@ describe("nama empat huruf", () => {
     assert.equal(h.matched[0].serviceNumber, "PN102030011");
   });
 });
+
+describe("nama pendek dan nama berangka", () => {
+  test("nama tiga huruf diterima bila jadi RUAS UTUH", () => {
+    // `sryte_030018_rai` melawan "Ni Luh Rai": "rai" adalah ruas tersendiri,
+    // bukan potongan di tengah kata.
+    assert.equal(nameCorroborates("sryte_030018_rai", "Ni Luh Rai"), true);
+    assert.equal(nameCorroborates("sryte_060027_eni", "Ni Luh Eni"), true);
+  });
+
+  test("tiga huruf sebagai potongan di tengah kata DITOLAK", () => {
+    // "rai" muncul di dalam "suraia" tanpa berarti apa-apa. Tiga huruf
+    // terlalu mudah muncul kebetulan untuk diterima sebagai bukti.
+    assert.equal(nameCorroborates("sryb_030018_suraiawan", "Ni Luh Rai"), false);
+  });
+
+  test("angka pada nama dibuang dari kedua sisi", () => {
+    // Sistem sumber menempelkan urutan pada sebagian nama; angka itu tidak
+    // pernah ikut tertulis di username.
+    assert.equal(nameCorroborates("sryte_022519_salin", "I Made Salin01"), true);
+    assert.equal(nameCorroborates("sryb_052518_dewi", "Ni Putu Tulung Dewi01"), true);
+  });
+
+  test("nama panjang tetap boleh cocok sebagai potongan", () => {
+    assert.equal(nameCorroborates("sryb_042532_mardika", "I Kadek Toni Mardika"), true);
+  });
+});
