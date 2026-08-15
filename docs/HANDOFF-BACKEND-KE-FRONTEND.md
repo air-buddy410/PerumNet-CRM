@@ -2044,3 +2044,70 @@ Jangan diperlakukan sebagai bug:
 - **22 paket berkecepatan 0 Mbps** — harga diambil dari nama paket di sistem
   sumber, kecepatannya tidak ada di mana pun. Tampilkan sebagai "belum
   diketahui", bukan "0 Mbps".
+
+## 39. Peta ODP — OpenStreetMap, dan HANYA OpenStreetMap
+
+Diminta langsung oleh pemilik produk: petanya memakai OpenStreetMap, dan
+**atribusi yang muncul di peta hanya OpenStreetMap** — tidak ada logo, merek,
+atau watermark penyedia lain.
+
+### Yang dipakai
+
+Ubin dari OSM, dirender Leaflet. Sudah ada di aplikasi (`/noc/map`,
+`/noc/ftth`), jadi ikuti pola yang sama alih-alih menambah pustaka baru.
+
+```
+https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+```
+
+Atribusinya **wajib** dan tidak boleh dihapus — itu syarat lisensi ODbL, bukan
+hiasan. Yang diminta bukan menghilangkannya, melainkan memastikan **hanya itu**
+yang muncul:
+
+```
+&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
+```
+
+Jangan tambahkan Mapbox, Google, Carto, Stadia, atau penyedia ubin lain —
+masing-masing menuntut atribusinya sendiri muncul di peta, dan itu persis yang
+tidak diinginkan.
+
+### Aturan yang tetap berlaku
+
+**Koordinat pelanggan dan ODP TIDAK BOLEH dikirim ke geocoder publik.**
+Mengambil ubin peta aman — server ubin hanya menerima nomor petak (`z/x/y`)
+dan tidak pernah tahu titik kita. Yang dilarang adalah *pencarian alamat*
+(Nominatim dan sejenisnya) atas data pelanggan: di sana koordinat atau
+alamatnya benar-benar dikirim keluar.
+
+Kalau butuh pencarian di peta, cari di **data kita sendiri** — kode ODP, nama
+pelanggan, nomor layanan — bukan lewat layanan geocoding.
+
+### Data yang tersedia (sudah ada di produksi)
+
+| | |
+|---|---|
+| ODP berkoordinat | **526** dari 577 |
+| Berinduk (kaskade MS) | **526** |
+| Port terisi | 1.677 dari 8.607 |
+| Site | 5 |
+
+Hierarkinya: `NetworkSite` → `Odp` (role `MS`) → `Odp` (role `ODP`) →
+`OdpPort` → `Subscription` → `Customer`.
+
+### Urutan yang paling berguna
+
+1. **Titik ODP diwarnai menurut okupansi** — `portUsed` / `portCapacity`.
+   Itu satu-satunya hal yang langsung dipakai orang lapangan.
+2. **Garis ke induk** (`parentId`) — yang membuat kaskade Master Splitter
+   terlihat sebagai jaringan, bukan sekumpulan titik.
+3. **Klik titik → daftar pelanggan** di port-portnya.
+4. `opticPowerDbm` sebagai label. **Nilainya negatif dan itu normal** —
+   jangan diabsolutkan; membuang tandanya mengubah "sinyal lemah" jadi
+   "sinyal kuat".
+
+### Yang tidak punya koordinat
+
+51 ODP tanpa titik. **Tampilkan sebagai daftar peringatan di samping peta,
+jangan ditaruh di koordinat tebakan.** Titik yang mengarang lokasi lebih
+berbahaya daripada titik yang hilang — teknisi akan mendatanginya.
