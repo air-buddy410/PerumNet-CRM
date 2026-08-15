@@ -1798,3 +1798,89 @@ Formulir pelanggan belum punya input untuk `identityNumber` dan `birthDate`.
 Selama belum ada, keduanya hanya bisa terisi lewat impor — dan tidak akan
 pernah bisa dikoreksi lewat aplikasi. Menambahkannya ke form
 `/crm/customers` bagian dari pekerjaan ini.
+
+## 35. Impor pelanggan, langganan, dan ODP (Fase 68) — PERLU HALAMAN
+
+Backend siap. Belum ada halamannya.
+
+**Server action** (di `src/app/(app)/crm/customers/actions.ts`):
+
+```ts
+previewCustomerImportAction(formData)   // { file } → ImportPlan
+applyCustomerImportAction(formData)     // { file } → ImportOutcome
+```
+
+Izin: `customers.create` **dan** `subscriptions.create` — impor ini membuat
+langganan, bukan hanya pelanggan. Sama seperti impor katalog, **penerapan
+mengunggah ULANG berkasnya**; jangan kirim baris hasil pratinjau.
+
+### Satu unggahan, tiga hal terbuat sekaligus
+
+Ini yang paling perlu jelas di layar, sebab tidak terduga dari namanya:
+
+1. **ODP** yang belum ada dibuat lebih dulu, lengkap dengan portnya.
+2. **Pelanggan** dibuat atau dilengkapi.
+3. **Langganan** dibuat, lalu **menempati satu port ODP**.
+
+### Bentuk `ImportPlan`
+
+| Bidang | Isi |
+|---|---|
+| `ok` | false bila ada satu saja `issues`; tombol Terapkan harus mati |
+| `customers[]` | `{ rowNumber, cid, name, action, reason, changes[], notes[] }` |
+| `odps[]` | `{ code, action, customers }` — `customers` = berapa baris menunjuk ODP itu |
+| `issues[]` | `{ rowNumber, column, message }` |
+| `willCreateCustomers`, `willCompleteCustomers`, `willSkipCustomers` | angka |
+| `willCreateOdps`, `willCreateSubscriptions` | angka |
+| `unknownPackages[]` | **menahan** — paket tanpa padanan di master |
+| `unknownSales[]` | **TIDAK menahan** — pelanggannya tetap dibuat, pemiliknya kosong |
+
+`action` pada pelanggan sama polanya dengan impor lain: `CREATE`,
+`LENGKAPI` (hanya bidang **kosong** yang diisi), `SKIP`.
+
+**Nama, telepon, dan alamat TIDAK pernah ditimpa lewat impor.** Data di
+aplikasi bisa jadi koreksi CS yang lebih baru daripada spreadsheet.
+Perbedaannya dilaporkan di `notes`, tidak diterapkan.
+
+### Yang perlu ditonjolkan di layar
+
+1. **Kapasitas ODP adalah DUGAAN.** ODP dibuat dengan 8 port
+   (`KAPASITAS_ODP_DUGAAN`) karena sumbernya tidak memuat kapasitas sama
+   sekali. Angka itu hampir pasti terlalu kecil — ekspor hanya memuat
+   pelanggan 2026, sedangkan tiang yang sama juga melayani pelanggan lama.
+   Setiap ODP yang dibuat diberi `notes` yang menyebutnya. **Tampilkan
+   peringatan ini di pratinjau**, jangan biarkan orang mengira okupansi yang
+   terlihat penuh itu kenyataan.
+2. **`unknownSales` bukan error.** Contoh nyata: *"Komang (3 orang bernama
+   sama)"* — pencocokan sengaja menolak bila ambigu. Tampilkan sebagai
+   informasi, dan sediakan cara menetapkan pemilik belakangan.
+3. **`notes` per baris berwarna kuning, bukan merah.** Contoh nyata:
+   *"Tanggal lahir diambil dari NIK (1986-07-31); kolom berkas menulis
+   1982-06-10"*. Itu keputusan yang sudah diambil, bukan kegagalan — tapi
+   peninjau harus bisa melihat dan membalikkannya.
+
+### Bentuk `ImportOutcome`
+
+```ts
+{
+  createdOdps: string[];                                   // kode ODP
+  createdCustomers: { cid, customerNumber, name }[];
+  completedCustomers: { cid, fields: string[] }[];
+  createdSubscriptions: number;
+  linkedOdpPorts: number;
+  skipped: number;
+}
+```
+
+### Catatan yang memengaruhi tampilan lain
+
+- **`Subscription.serviceNumber` memakai CID dari sistem sumber**
+  (`PN260801705`), bukan nomor `SVC-#####` baru. Itu yang tertulis di router
+  sebagai username PPPoE — menerbitkan nomor kedua akan memutus satu-satunya
+  jembatan ke sesi yang benar-benar hidup.
+- **Paket dicocokkan lewat harga di namanya.** Berkas menulis `Paket-225k`,
+  master menyebutnya `Berdua` seharga Rp225.000. Kalau harga paket diubah di
+  aplikasi, jembatan itu putus — impor berikutnya akan melaporkan paketnya
+  tidak dikenal, bukan salah memasangkan.
+- Master paket kini berisi lima paket **sebenarnya** (Personal, Berdua,
+  Keluarga, Natah, Banjar). Empat paket contoh lama sudah dihapus.

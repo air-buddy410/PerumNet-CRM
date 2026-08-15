@@ -290,16 +290,17 @@ const PACKAGES: {
   // 2026). Sebelumnya di sini ada empat paket karangan (HOME-10 … BIZ-100)
   // yang tidak pernah dijual; lihat NONAKTIFKAN_PAKET_LAMA di bawah.
   //
-  // Situs menyebut SATU angka kecepatan per paket ("Up To 27 Mbps") tanpa
-  // memisah unduh dan unggah, jadi keduanya disamakan. Kalau ternyata
-  // asimetris, itu koreksi satu baris di sini — bukan tebakan yang menyebar.
+  // Kecepatan SIMETRIS — dikonfirmasi pemilik produk, bukan disimpulkan dari
+  // situs yang hanya menyebut satu angka.
   //
-  // Paket Personal punya biaya registrasi Rp50.000 DAN mewajibkan pembayaran
-  // tiga bulan di muka (total awal Rp575.000). Kewajiban tiga bulan itu
-  // aturan komersial yang tidak bisa diungkapkan model Package; ia dicatat di
-  // deskripsi supaya tidak hilang, dan harus ditegakkan saat penagihan.
+  // Paket Personal punya biaya registrasi Rp50.000. Kewajiban bayar tiga
+  // bulan di muka yang tertulis di situs BUKAN sifat paketnya — itu promo
+  // bundling, dan promo berubah tanpa paketnya berubah. Menaruhnya di sini
+  // akan membuat setiap langganan Personal di masa depan mewarisi syarat yang
+  // barangkali sudah berakhir. Ia menunggu modul promo; sampai itu ada,
+  // penegakannya di penagihan.
   { code: "PERSONAL", name: "Personal", down: 27, up: 27, price: 175_000, install: 50_000,
-    desc: "Registrasi Rp50.000; wajib bayar 3 bulan di awal (total awal Rp575.000)." },
+    desc: "Registrasi Rp50.000." },
   { code: "BERDUA", name: "Berdua", down: 47, up: 47, price: 225_000, install: 0,
     desc: "Registrasi gratis. Paket paling populer." },
   { code: "KELUARGA", name: "Keluarga", down: 77, up: 77, price: 275_000, install: 0,
@@ -311,11 +312,16 @@ const PACKAGES: {
 ];
 
 /**
- * Paket karangan dari seed awal. TIDAK dihapus — dinonaktifkan, dan hanya
- * bila belum pernah dipakai satu langganan pun. Menghapus master yang sudah
- * tersambung ke langganan akan memutus riwayat harga pelanggan lama.
+ * Paket karangan dari seed awal — dihapus.
+ *
+ * Penghapusan tetap DIJAGA: hanya terjadi bila paketnya belum pernah dipakai
+ * satu langganan, quotation, survey, atau lead pun. Master yang sudah
+ * tersambung ke transaksi tidak akan dihapus meski namanya ada di daftar ini,
+ * sebab menghapusnya memutus riwayat harga pelanggan lama dan itu tidak bisa
+ * dibatalkan. Daftar ini pun sengaja tidak dikosongkan setelah dipakai: seed
+ * harus tetap idempoten pada basis data yang belum pernah dijalankan.
  */
-const NONAKTIFKAN_PAKET_LAMA = ["HOME-10", "HOME-20", "HOME-50", "BIZ-100"];
+const HAPUS_PAKET_LAMA = ["HOME-10", "HOME-20", "HOME-50", "BIZ-100"];
 
 // Approval matrix (PRD §48) dengan struktur organisasi staff -> supervisor -> owner:
 // SUPERVISOR = supervisor divisi pengaju (dinamis), OWNER = pemilik,
@@ -518,22 +524,26 @@ async function main() {
     });
   }
 
-  // Paket karangan dari seed awal dinonaktifkan — TIDAK dihapus, dan hanya
-  // bila belum pernah dipakai satu langganan pun. Menghapus master yang sudah
-  // tersambung ke langganan akan memutus riwayat harga pelanggan lama, dan
-  // itu jenis kerusakan yang tidak bisa dibatalkan.
-  for (const code of NONAKTIFKAN_PAKET_LAMA) {
+  // Paket karangan dari seed awal dihapus — tetapi hanya yang benar-benar
+  // belum tersentuh transaksi apa pun. Seluruh relasi diperiksa, bukan hanya
+  // langganan: sebuah quotation lama yang menunjuk paket terhapus akan
+  // meledak saat dibuka, dan itu baru ketahuan berbulan-bulan kemudian.
+  for (const code of HAPUS_PAKET_LAMA) {
     const lama = await db.package.findUnique({
       where: { code },
-      select: { id: true, isActive: true, _count: { select: { subscriptions: true } } },
+      select: {
+        id: true,
+        _count: { select: { subscriptions: true, quotations: true, surveys: true, interestedLeads: true } },
+      },
     });
-    if (!lama || !lama.isActive) continue;
-    if (lama._count.subscriptions > 0) {
-      console.log(`  ! Paket ${code} masih dipakai ${lama._count.subscriptions} langganan — dibiarkan aktif.`);
+    if (!lama) continue;
+    const dipakai = Object.entries(lama._count).filter(([, n]) => n > 0);
+    if (dipakai.length) {
+      console.log(`  ! Paket ${code} masih dipakai (${dipakai.map(([k, n]) => `${k}=${n}`).join(", ")}) — tidak dihapus.`);
       continue;
     }
-    await db.package.update({ where: { id: lama.id }, data: { isActive: false } });
-    console.log(`  - Paket contoh ${code} dinonaktifkan (tidak pernah dipakai).`);
+    await db.package.delete({ where: { id: lama.id } });
+    console.log(`  - Paket contoh ${code} dihapus (tidak pernah dipakai).`);
   }
 
   console.log("Seeding inventory master...");
