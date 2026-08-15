@@ -8,6 +8,7 @@ import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/constants";
 import { previewCustomerImport, applyCustomerImport } from "@/lib/customer-import-service";
+import { NIK_RE, birthDateFromNik } from "@/lib/customer-import";
 
 const schema = z.object({
   customerId: z.string().min(1),
@@ -21,6 +22,14 @@ const schema = z.object({
   salesOwnerId: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]),
   notes: z.string().optional(),
+  // Fase 74 — data pribadi. Keduanya opsional: 1.711 pelanggan hasil impor
+  // masuk tanpa NIK, dan memaksa mengisinya di sini akan mengunci setiap
+  // penyuntingan lain sampai seseorang menebak nomornya.
+  identityNumber: z
+    .string()
+    .optional()
+    .refine((v) => !v || NIK_RE.test(v.replace(/\s/g, "")), "NIK harus 16 digit angka"),
+  birthDate: z.string().optional(),
 });
 
 export async function updateCustomerAction(formData: FormData): Promise<void> {
@@ -32,7 +41,23 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
         encodeURIComponent(parsed.error.issues[0]?.message ?? "Input tidak valid")
     );
   }
-  const { customerId, ...d } = parsed.data;
+  const { customerId, identityNumber, birthDate, ...d } = parsed.data;
+
+  // NIK memuat tanggal lahir pada enam digit tengahnya. Bila keduanya diisi
+  // dan berselisih, yang DITOLAK adalah penyimpanannya — bukan salah satunya
+  // dipilih diam-diam. Di form, orang yang mengetik bisa langsung melihat
+  // mana yang keliru; menebak untuknya justru menyembunyikan salah ketik.
+  const nik = identityNumber?.replace(/\s/g, "") || null;
+  const lahirKetik = birthDate ? new Date(birthDate) : null;
+  const lahirNik = nik ? birthDateFromNik(nik) : null;
+  if (lahirKetik && lahirNik && lahirKetik.getTime() !== lahirNik.getTime()) {
+    redirect(
+      `/crm/customers/${customerId}?error=` +
+        encodeURIComponent(
+          `Tanggal lahir tidak cocok dengan NIK: NIK memuat ${lahirNik.toISOString().slice(0, 10)}.`
+        )
+    );
+  }
   const before = await db.customer.findUnique({ where: { id: customerId } });
   if (!before) {
     redirect("/crm/customers?error=" + encodeURIComponent("Customer tidak ditemukan."));
@@ -50,6 +75,10 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
       salesOwnerId: d.salesOwnerId || null,
       status: d.status,
       notes: d.notes || null,
+      identityNumber: nik,
+      // Tanggal lahir diambil dari NIK bila ada — di situlah ia paling bisa
+      // dipercaya. Ketikan hanya dipakai ketika NIK-nya kosong.
+      birthDate: lahirNik ?? lahirKetik,
     },
   });
   await logAudit({

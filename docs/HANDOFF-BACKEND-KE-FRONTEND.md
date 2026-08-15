@@ -2170,3 +2170,88 @@ ODbL, bukan hiasan. MapLibre menampilkannya otomatis dari properti
 | Kaskade MS→ODP | **526** kaitan induk |
 | Port terisi | 1.677 dari 8.615 |
 | Kapasitas | 77 ODP 1:8 · 500 ODP 1:16 |
+
+---
+
+## §41 — Tiga jalur backend yang tadinya menghambat Luna
+
+Ketiganya sudah ada sekarang. Semua di sisi server; halamannya milik Luna.
+
+### 41.1 NIK & tanggal lahir pada formulir pelanggan
+
+`saveCustomerAction` di `src/app/(app)/crm/customers/actions.ts` menerima dua
+medan baru:
+
+| name | bentuk | wajib |
+|---|---|---|
+| `identityNumber` | 16 angka; spasi dibersihkan sendiri | tidak |
+| `birthDate` | `YYYY-MM-DD` | tidak |
+
+**NIK memuat tanggal lahirnya sendiri** — `PPRRSS DDMMYY NNNN`, dan pada
+perempuan tanggalnya ditambah 40. Karena itu backend MENURUNKAN tanggal lahir
+dari NIK dan memakai turunan itu; medan `birthDate` hanya terpakai bila NIK
+kosong.
+
+Kalau operator mengetik keduanya dan keduanya berbeda, aksi ini **menolak dan
+kembali dengan `?error=`**, bukan diam-diam memilih salah satu. Formulir
+sebaiknya menampilkan tanggal turunan itu begitu 16 angka selesai diketik,
+supaya bentrokannya kelihatan sebelum disimpan.
+
+NIK **tidak wajib**: 1.711 pelanggan hasil impor tidak punya NIK, dan
+mewajibkannya membuat tiap penyuntingan kecil pada mereka mustahil disimpan.
+
+Nilainya ditampilkan tersamar (`3271****...****1234`) bagi peran tanpa izin
+lihat PII — penyamaran terjadi di lapisan data, jadi halaman tidak perlu
+mengurusnya. Lihat §34.
+
+### 41.2 Master pemasok
+
+`saveSupplierAction` dan `toggleSupplierAction` di
+`src/app/(app)/inventory/actions.ts`. Izin: `ITEMS_MANAGE`.
+Halaman yang dituju: `/inventory/suppliers`, dengan `?ok=` / `?error=`.
+
+| name | catatan |
+|---|---|
+| `id` | kosong = buat baru |
+| `code` | huruf/angka/strip; disimpan huruf besar; unik |
+| `name` | wajib |
+| `phone` `email` `address` `website` `notes` | opsional |
+
+**Pemasok dinonaktifkan, tidak dihapus.** `toggleSupplierAction` membalik
+`isActive`. Pemasok yang pernah dipakai adalah bagian riwayat pembelian barang;
+menghapusnya memutus asal-usul harga.
+
+Ini BUKAN hal yang sama dengan `NetworkDevice.vendor`. Yang itu merek perangkat
+(ZTE, MikroTik); yang ini pihak yang menjualnya.
+
+### 41.3 Tampilan port jaringan
+
+`src/lib/network-port.ts`:
+
+- `loadRingkasanPort()` → satu baris per perangkat, berisi `perGolongan`,
+  `total`, `naik`.
+- `loadPortPerangkat(deviceId, golongan?)` → barisnya, kecepatan sudah
+  berbentuk teks siap tampil (`"10 Gbps"`).
+
+**Jangan tampilkan 819 port sebagai satu daftar.** Itu tiga jenis benda yang
+berbeda, dan yang terbanyak justru yang paling jarang dicari:
+
+| Golongan | Jumlah | Apa ini |
+|---|---|---|
+| ONU | 671 | satu baris per perangkat pelanggan di OLT |
+| PON | 80 | port serat pada OLT |
+| ETHERNET | 56 | uplink & port tembaga |
+| VLAN | 10 | antarmuka logis di router |
+| PPP | 2 | terowongan di router |
+
+Bukaan yang benar: ringkasan per perangkat dulu, lalu PON dan ETHERNET; ONU di
+balik satu tautan.
+
+**Nama port PON membawa keterangan yang tidak ada di tempat lain.** Operator
+menamainya menurut daerah atau master splitter yang disuapinya — `MsPuraPuseh`,
+`MsKikopang`, `YehKali`, `Selalang&kalanganyar`. Tampilkan `ifName` apa adanya;
+jangan dirapikan atau dipotong.
+
+Kecepatan kosong berarti perangkat tidak melaporkan, dan itu bukan hal yang
+sama dengan nol. `speedText` mengembalikan `null` — tampilkan sebagai strip,
+bukan "0 bps".

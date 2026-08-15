@@ -168,13 +168,53 @@ export function speedBps(v: number | string | null | undefined): bigint | null {
  * Dipakai untuk menyaring: daftar 818 port tanpa golongan tidak bisa dibaca
  * siapa pun, sebab 690 di antaranya adalah satu baris per ONU pelanggan.
  */
-export function portKind(ifType: string | null | undefined, ifName?: string | null): string {
+export function portKind(
+  ifType: string | null | undefined,
+  ifName?: string | null,
+  ifSpeedBps?: bigint | number | null
+): string {
   const t = (ifType ?? "").trim().toLowerCase();
   const n = (ifName ?? "").trim().toLowerCase();
   if (t === "gpon" || n.startsWith("gpon")) return "PON";
   if (n.startsWith("onu") || n.startsWith("ont")) return "ONU";
+  // `XGE01` — singkatan vendor untuk 10 Gigabit Ethernet. Ini uplink OLT,
+  // dan pada perangkat kita keduanya memang melapor 10 Gbps.
+  if (/^xge\d*$/.test(n)) return "ETHERNET";
+  if (/^pon\d+$/.test(n)) return "PON";
+  // Port PON pada OLT HSGQ melapor ifType `other`, sama seperti ONU, sehingga
+  // tipenya tidak memisahkan keduanya. Yang memisahkan adalah kecepatan:
+  // 2,5 Gbps adalah laju hilir GPON, dan port ONU tidak melaporkan kecepatan
+  // sama sekali. Aturan ini yang menyelamatkan 14 port yang oleh operator
+  // dinamai menurut daerah atau master splitter yang mereka suapi
+  // ("MsPuraPuseh", "YehKali") — tanpa itu semuanya jatuh ke LAIN.
+  if (t === "other" && laju25G(ifSpeedBps)) return "PON";
   if (t === "l2vlan" || t === "propvirtual") return "VLAN";
   if (t === "ppp") return "PPP";
   if (t.includes("ethernet")) return "ETHERNET";
   return "LAIN";
+}
+
+/** Kecepatan berada di sekitar laju hilir GPON (2,488 Gbps)? */
+function laju25G(bps: bigint | number | null | undefined): boolean {
+  if (bps === null || bps === undefined) return false;
+  const n = Number(bps);
+  return n >= 2_400_000_000 && n <= 2_600_000_000;
+}
+
+/**
+ * `ifSpeed` (bit per detik) menjadi satuan yang dibaca orang.
+ *
+ * Nol dan negatif dikembalikan sebagai null, bukan "0 Kbps": LibreNMS memakai
+ * nol untuk "perangkat tidak melaporkan kecepatan", dan itu bukan hal yang
+ * sama dengan port yang benar-benar berkecepatan nol.
+ */
+export function speedText(bps: bigint | number | null | undefined): string | null {
+  if (bps === null || bps === undefined) return null;
+  const n = Number(bps);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const bulatkan = (nilai: number) => String(+nilai.toFixed(1));
+  if (n >= 1_000_000_000) return `${bulatkan(n / 1_000_000_000)} Gbps`;
+  if (n >= 1_000_000) return `${bulatkan(n / 1_000_000)} Mbps`;
+  if (n >= 1_000) return `${bulatkan(n / 1_000)} Kbps`;
+  return `${n} bps`;
 }

@@ -196,3 +196,81 @@ export async function applyCatalogImportAction(formData: FormData) {
   }
   return result;
 }
+
+// ── Master pemasok (Fase 74) ────────────────────────────────────
+//
+// Dipisahkan dari `NetworkDevice.vendor`, yang artinya MEREK perangkat
+// (ZTE, MikroTik) dan bukan pihak yang menjualnya.
+
+const supplierSchema = z.object({
+  id: z.string().optional(),
+  code: z
+    .string()
+    .min(2, "Kode minimal 2 karakter")
+    .regex(/^[A-Za-z0-9_-]+$/, "Kode hanya huruf/angka/strip/underscore"),
+  name: z.string().min(2, "Nama minimal 2 karakter"),
+  phone: z.string().optional(),
+  email: z.string().email("Email tidak valid").optional().or(z.literal("")),
+  address: z.string().optional(),
+  website: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export async function saveSupplierAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
+  const parsed = supplierSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    redirect("/inventory/suppliers?error=" + encodeURIComponent(parsed.error.issues[0]?.message ?? "Input tidak valid"));
+  }
+  const { id, code, ...d } = parsed.data;
+  const data = {
+    code: code.toUpperCase(),
+    name: d.name,
+    phone: d.phone || null,
+    email: d.email || null,
+    address: d.address || null,
+    website: d.website || null,
+    notes: d.notes || null,
+  };
+
+  const bentrok = await db.supplier.findFirst({ where: { code: data.code, ...(id ? { NOT: { id } } : {}) }, select: { id: true } });
+  if (bentrok) {
+    redirect("/inventory/suppliers?error=" + encodeURIComponent(`Kode ${data.code} sudah dipakai pemasok lain.`));
+  }
+
+  const hasil = id
+    ? await db.supplier.update({ where: { id }, data })
+    : await db.supplier.create({ data });
+
+  await logAudit({
+    userId: user.id,
+    action: id ? "SUPPLIER_UPDATE" : "SUPPLIER_CREATE",
+    module: "inventory",
+    entityType: "Supplier",
+    entityId: hasil.id,
+    description: `${id ? "Mengubah" : "Membuat"} pemasok ${data.code} — ${data.name}`,
+  });
+  revalidatePath("/inventory/suppliers");
+  redirect("/inventory/suppliers?ok=" + encodeURIComponent(`Pemasok ${data.code} disimpan.`));
+}
+
+export async function toggleSupplierAction(formData: FormData): Promise<void> {
+  const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
+  const id = String(formData.get("id") ?? "");
+  const s = await db.supplier.findUnique({ where: { id }, select: { id: true, code: true, isActive: true } });
+  if (!s) redirect("/inventory/suppliers?error=" + encodeURIComponent("Pemasok tidak ditemukan."));
+
+  // DINONAKTIFKAN, tidak dihapus. Pemasok yang pernah dipakai tetap jadi
+  // bagian riwayat pembelian barang; menghapusnya memutus asal-usul harga.
+  await db.supplier.update({ where: { id }, data: { isActive: !s.isActive } });
+  await logAudit({
+    userId: user.id,
+    action: "SUPPLIER_TOGGLE",
+    module: "inventory",
+    entityType: "Supplier",
+    entityId: id,
+    description: `${s.isActive ? "Menonaktifkan" : "Mengaktifkan"} pemasok ${s.code}`,
+  });
+  revalidatePath("/inventory/suppliers");
+  redirect("/inventory/suppliers?ok=" + encodeURIComponent(`Pemasok ${s.code} diperbarui.`));
+}

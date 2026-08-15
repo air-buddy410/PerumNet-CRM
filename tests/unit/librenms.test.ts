@@ -11,6 +11,7 @@ import {
   aliasOf,
   portNameOf,
   speedBps,
+  speedText,
 } from "@/lib/librenms";
 
 // Nilai-nilai di berkas ini disalin apa adanya dari enam perangkat PerumNet
@@ -138,6 +139,23 @@ describe("port", () => {
     assert.equal(portKind("ppp", "pppoe-out1"), "PPP");
   });
 
+  test("port PON OLT HSGQ dikenali walau dinamai menurut daerah", () => {
+    // Nilai asli dari 192.168.100.11 dan .12. Operator mengganti nama port
+    // PON menjadi nama daerah atau master splitter yang disuapinya. ifType-nya
+    // `other`, sama seperti ONU — hanya kecepatan yang memisahkan.
+    assert.equal(portKind("other", "MsPuraPuseh", 2_500_000_000n), "PON");
+    assert.equal(portKind("other", "Selalang&kalanganyar", 2_500_000_000n), "PON");
+    assert.equal(portKind("other", "PON07", 2_500_000_000n), "PON");
+    assert.equal(portKind("other", "XGE02", 10_000_000_000n), "ETHERNET");
+  });
+
+  test("ONU tetap ONU meski kecepatannya terisi", () => {
+    // Pengaman urutan: nama dibaca lebih dulu daripada kecepatan, supaya
+    // 671 ONU tidak berubah jadi PON kalau suatu hari perangkat mulai
+    // melaporkan laju 2,5 Gbps pada mereka.
+    assert.equal(portKind("other", "ONU8/9", 2_500_000_000n), "ONU");
+  });
+
   test("ONU dikenali dari NAMANYA, sebab ifType-nya cuma 'other'", () => {
     // 690 dari 818 port kita bertipe `other`. Tanpa membaca namanya, seluruh
     // ONU pelanggan akan tercampur dengan port lain-lain yang tidak berarti.
@@ -165,5 +183,22 @@ describe("port", () => {
     assert.equal(speedBps(null), null);
     assert.equal(speedBps(0), null);
     assert.equal(speedBps("10000000000"), 10_000_000_000n);
+  });
+
+  test("kecepatan ditampilkan dalam satuan yang dipakai orang", () => {
+    // Angka-angka ini yang benar-benar ada pada enam perangkat kita.
+    assert.equal(speedText(10_000_000_000n), "10 Gbps");
+    assert.equal(speedText(1_000_000_000n), "1 Gbps");
+    assert.equal(speedText(100_000_000n), "100 Mbps");
+    assert.equal(speedText(2_500_000_000n), "2.5 Gbps");
+  });
+
+  test("kecepatan tak dilaporkan tetap kosong, bukan '0 bps'", () => {
+    // Nol pada LibreNMS artinya perangkat tidak melaporkan, dan itu bukan
+    // hal yang sama dengan port yang kecepatannya memang nol.
+    assert.equal(speedText(null), null);
+    assert.equal(speedText(undefined), null);
+    assert.equal(speedText(0n), null);
+    assert.equal(speedText(-1), null);
   });
 });
