@@ -441,6 +441,11 @@ export function NetworkMap({
             (initialBounds.minLat + initialBounds.maxLat) / 2,
           ],
           zoom: 13,
+          // MapLibre menambahkan AttributionControl sendiri bila ini tidak
+          // dimatikan. Karena kita memasang satu secara eksplisit di bawah —
+          // agar posisinya terkendali — yang bawaan harus dimatikan; kalau
+          // tidak, atribusi OpenStreetMap tampil DUA KALI.
+          attributionControl: false,
         });
         activeMap = map;
         mapRef.current = map;

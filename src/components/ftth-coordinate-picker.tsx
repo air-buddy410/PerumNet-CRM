@@ -46,6 +46,11 @@ export function FtthCoordinatePicker({
           style,
           center: hasInitialPoint ? [initialLng, initialLat] : [0, 0],
           zoom: hasInitialPoint ? 14 : 2,
+          // MapLibre menambahkan AttributionControl sendiri bila ini tidak
+          // dimatikan. Karena kita memasang satu secara eksplisit di bawah —
+          // agar posisinya terkendali — yang bawaan harus dimatikan; kalau
+          // tidak, atribusi OpenStreetMap tampil DUA KALI.
+          attributionControl: false,
         });
         mapRef.current = map;
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
