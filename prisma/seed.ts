@@ -284,13 +284,38 @@ const AREAS: [string, string][] = [
 ];
 
 const PACKAGES: {
-  code: string; name: string; down: number; up: number; price: number; install: number;
+  code: string; name: string; down: number; up: number; price: number; install: number; desc: string;
 }[] = [
-  { code: "HOME-10", name: "Home 10 Mbps", down: 10, up: 5, price: 150_000, install: 250_000 },
-  { code: "HOME-20", name: "Home 20 Mbps", down: 20, up: 10, price: 200_000, install: 250_000 },
-  { code: "HOME-50", name: "Home 50 Mbps", down: 50, up: 25, price: 300_000, install: 250_000 },
-  { code: "BIZ-100", name: "Business 100 Mbps", down: 100, up: 50, price: 1_000_000, install: 500_000 },
+  // Fase 67 — paket SEBENARNYA, disalin dari https://perumnet.id (15 Agustus
+  // 2026). Sebelumnya di sini ada empat paket karangan (HOME-10 … BIZ-100)
+  // yang tidak pernah dijual; lihat NONAKTIFKAN_PAKET_LAMA di bawah.
+  //
+  // Situs menyebut SATU angka kecepatan per paket ("Up To 27 Mbps") tanpa
+  // memisah unduh dan unggah, jadi keduanya disamakan. Kalau ternyata
+  // asimetris, itu koreksi satu baris di sini — bukan tebakan yang menyebar.
+  //
+  // Paket Personal punya biaya registrasi Rp50.000 DAN mewajibkan pembayaran
+  // tiga bulan di muka (total awal Rp575.000). Kewajiban tiga bulan itu
+  // aturan komersial yang tidak bisa diungkapkan model Package; ia dicatat di
+  // deskripsi supaya tidak hilang, dan harus ditegakkan saat penagihan.
+  { code: "PERSONAL", name: "Personal", down: 27, up: 27, price: 175_000, install: 50_000,
+    desc: "Registrasi Rp50.000; wajib bayar 3 bulan di awal (total awal Rp575.000)." },
+  { code: "BERDUA", name: "Berdua", down: 47, up: 47, price: 225_000, install: 0,
+    desc: "Registrasi gratis. Paket paling populer." },
+  { code: "KELUARGA", name: "Keluarga", down: 77, up: 77, price: 275_000, install: 0,
+    desc: "Registrasi gratis." },
+  { code: "NATAH", name: "Natah", down: 107, up: 107, price: 325_000, install: 0,
+    desc: "Registrasi gratis." },
+  { code: "BANJAR", name: "Banjar", down: 177, up: 177, price: 500_000, install: 0,
+    desc: "Registrasi gratis." },
 ];
+
+/**
+ * Paket karangan dari seed awal. TIDAK dihapus — dinonaktifkan, dan hanya
+ * bila belum pernah dipakai satu langganan pun. Menghapus master yang sudah
+ * tersambung ke langganan akan memutus riwayat harga pelanggan lama.
+ */
+const NONAKTIFKAN_PAKET_LAMA = ["HOME-10", "HOME-20", "HOME-50", "BIZ-100"];
 
 // Approval matrix (PRD §48) dengan struktur organisasi staff -> supervisor -> owner:
 // SUPERVISOR = supervisor divisi pengaju (dinamis), OWNER = pemilik,
@@ -488,8 +513,27 @@ async function main() {
         uploadMbps: p.up,
         monthlyPrice: BigInt(p.price),
         installationFee: BigInt(p.install),
+        description: p.desc,
       },
     });
+  }
+
+  // Paket karangan dari seed awal dinonaktifkan — TIDAK dihapus, dan hanya
+  // bila belum pernah dipakai satu langganan pun. Menghapus master yang sudah
+  // tersambung ke langganan akan memutus riwayat harga pelanggan lama, dan
+  // itu jenis kerusakan yang tidak bisa dibatalkan.
+  for (const code of NONAKTIFKAN_PAKET_LAMA) {
+    const lama = await db.package.findUnique({
+      where: { code },
+      select: { id: true, isActive: true, _count: { select: { subscriptions: true } } },
+    });
+    if (!lama || !lama.isActive) continue;
+    if (lama._count.subscriptions > 0) {
+      console.log(`  ! Paket ${code} masih dipakai ${lama._count.subscriptions} langganan — dibiarkan aktif.`);
+      continue;
+    }
+    await db.package.update({ where: { id: lama.id }, data: { isActive: false } });
+    console.log(`  - Paket contoh ${code} dinonaktifkan (tidak pernah dipakai).`);
   }
 
   console.log("Seeding inventory master...");
