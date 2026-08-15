@@ -9,19 +9,58 @@ import type {
   MapLayerMouseEvent,
   StyleSpecification,
 } from "maplibre-gl";
-import type { LinkStatus, NetworkMapData, OccupancyLevel } from "@/lib/noc-map";
+import type { LinkStatus, MapBounds, NetworkMapData, OccupancyLevel } from "@/lib/noc-map";
 
 const MAP_STYLE_URL = "/maps/style.json";
-const NETWORK_SOURCE_ID = "perumnet-network-overlay";
+const TOPOLOGY_SOURCE_ID = "perumnet-topology-lines";
+const INFRASTRUCTURE_SOURCE_ID = "perumnet-infrastructure-points";
+const CUSTOMER_SOURCE_ID = "perumnet-customer-points";
+const TOPOLOGY_LINE_LAYER_ID = "perumnet-topology-lines";
 const ROUTE_LAYER_ID = "perumnet-fiber-routes";
 const CUSTOMER_LINK_LAYER_ID = "perumnet-customer-links";
-const CASCADE_LAYER_ID = "perumnet-odp-cascades";
-const SITE_LAYER_ID = "perumnet-network-sites";
-const CUSTOMER_LAYER_ID = "perumnet-customers";
-const ODP_LAYER_ID = "perumnet-odps";
+const INFRASTRUCTURE_CLUSTER_LAYER_ID = "perumnet-infrastructure-clusters";
+const INFRASTRUCTURE_CLUSTER_COUNT_LAYER_ID = "perumnet-infrastructure-cluster-count";
+const INFRASTRUCTURE_LAYER_ID = "perumnet-infrastructure-points";
+const CUSTOMER_CLUSTER_LAYER_ID = "perumnet-customer-clusters";
+const CUSTOMER_CLUSTER_COUNT_LAYER_ID = "perumnet-customer-cluster-count";
+const CUSTOMER_LAYER_ID = "perumnet-customer-points";
+
+export type NetworkTopologyNodeKind = "POP" | "ODC" | "OLT" | "MS" | "ODP";
+
+export type NetworkTopologyNode = {
+  id: string;
+  refId: string;
+  kind: NetworkTopologyNodeKind;
+  label: string;
+  latitude: number;
+  longitude: number;
+  status: string;
+  siteType?: string;
+};
+
+export type NetworkTopologyEdgeKind =
+  | "SITE_LINK"
+  | "SITE_OLT"
+  | "OLT_ODP"
+  | "SITE_ODP"
+  | "ODP_CASCADE";
+
+export type NetworkTopologyEdge = {
+  id: string;
+  fromId: string;
+  toId: string;
+  kind: NetworkTopologyEdgeKind;
+  label: string;
+};
+
+export type NetworkTopology = {
+  nodes: NetworkTopologyNode[];
+  edges: NetworkTopologyEdge[];
+  bounds: MapBounds | null;
+};
 
 type NetworkFeatureProperties = {
-  kind: "site" | "route" | "odp" | "customer" | "customer-link" | "cascade";
+  kind: "site" | "olt" | "odp" | "route" | "customer" | "customer-link" | "topology-link";
   id: string;
   color: string;
   label: string;
@@ -40,12 +79,19 @@ type NetworkFeatureProperties = {
   routerName?: string | null;
   lastSeenAt?: string | null;
   selected?: boolean;
+  nodeKind?: NetworkTopologyNodeKind;
+  edgeKind?: NetworkTopologyEdgeKind;
+  refId?: string;
 };
 
-type NetworkFeatureCollection = GeoJSON.FeatureCollection<
-  GeoJSON.Point | GeoJSON.LineString,
-  NetworkFeatureProperties
->;
+type NetworkLineCollection = GeoJSON.FeatureCollection<GeoJSON.LineString, NetworkFeatureProperties>;
+type NetworkPointCollection = GeoJSON.FeatureCollection<GeoJSON.Point, NetworkFeatureProperties>;
+
+type NetworkOverlay = {
+  lines: NetworkLineCollection;
+  infrastructure: NetworkPointCollection;
+  customers: NetworkPointCollection;
+};
 
 type NetworkMapPalette = {
   occupancy: Record<OccupancyLevel, string>;
@@ -57,6 +103,7 @@ type NetworkMapPalette = {
 
 type NetworkMapProps = {
   data: NetworkMapData;
+  topology: NetworkTopology;
   selectedOdpId: string | null;
   palette: NetworkMapPalette;
   occupancyLabels: Record<OccupancyLevel, string>;
@@ -70,33 +117,107 @@ function styleUrlFromEnvironment(styleUrl?: string) {
   return styleUrl?.trim() || process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() || MAP_STYLE_URL;
 }
 
+const TOPOLOGY_EDGE_COLOR: Record<NetworkTopologyEdgeKind, string> = {
+  SITE_LINK: "#64748b",
+  SITE_OLT: "#0e7490",
+  OLT_ODP: "#0f766e",
+  SITE_ODP: "#0d9488",
+  ODP_CASCADE: "#d97706",
+};
+
+function topologyFallbackNodes(data: NetworkMapData): NetworkTopologyNode[] {
+  return [
+    ...data.sites.map((site) => ({
+      id: `site:${site.id}`,
+      refId: site.id,
+      kind: "POP" as const,
+      label: site.name,
+      latitude: site.latitude,
+      longitude: site.longitude,
+      status: site.status,
+      siteType: site.type,
+    })),
+    ...data.odps.map((odp) => ({
+      id: `odp:${odp.id}`,
+      refId: odp.id,
+      kind: odp.role === "MS" ? ("MS" as const) : ("ODP" as const),
+      label: odp.code,
+      latitude: odp.latitude,
+      longitude: odp.longitude,
+      status: odp.status,
+    })),
+  ];
+}
+
 function buildOverlay(
   data: NetworkMapData,
+  topology: NetworkTopology,
   palette: NetworkMapPalette,
   occupancyLabels: Record<OccupancyLevel, string>,
   selectedOdpId: string | null,
-): NetworkFeatureCollection {
+): NetworkOverlay {
   const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
-  const features: NetworkFeatureCollection["features"] = [];
+  const nodes = topology.nodes.length ? topology.nodes : topologyFallbackNodes(data);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const lines: NetworkLineCollection["features"] = [];
+  const infrastructure: NetworkPointCollection["features"] = [];
+  const customers: NetworkPointCollection["features"] = [];
 
-  for (const site of data.sites) {
-    features.push({
+  for (const node of nodes) {
+    const odp = node.refId ? odpById.get(node.refId) : null;
+    const isOdpNode = node.kind === "ODP" || node.kind === "MS";
+    const featureKind = isOdpNode ? "odp" : node.kind === "OLT" ? "olt" : "site";
+    infrastructure.push({
       type: "Feature",
-      geometry: { type: "Point", coordinates: [site.longitude, site.latitude] },
+      geometry: { type: "Point", coordinates: [node.longitude, node.latitude] },
       properties: {
-        kind: "site",
-        id: site.id,
-        color: palette.site[site.type] ?? palette.site.DEFAULT ?? "#0e7490",
-        label: site.name,
-        status: site.status,
-        siteType: site.type,
+        kind: featureKind,
+        id: node.id,
+        refId: node.refId,
+        color: isOdpNode
+          ? palette.occupancy[odp?.occupancy ?? "FREE"]
+          : node.kind === "OLT"
+            ? "#2563eb"
+            : palette.site[node.siteType ?? node.kind] ?? palette.site.DEFAULT ?? "#0e7490",
+        label: node.label,
+        status: node.status,
+        siteType: node.siteType,
+        nodeKind: node.kind,
+        role: isOdpNode ? node.kind : undefined,
+        used: odp?.used,
+        capacity: odp?.capacity,
+        occupancyLabel: odp ? occupancyLabels[odp.occupancy] : undefined,
+        selected: odp?.id === selectedOdpId,
+      },
+    });
+  }
+
+  for (const edge of topology.edges) {
+    const from = nodeById.get(edge.fromId);
+    const to = nodeById.get(edge.toId);
+    if (!from || !to || (from.latitude === to.latitude && from.longitude === to.longitude)) continue;
+    lines.push({
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [from.longitude, from.latitude],
+          [to.longitude, to.latitude],
+        ],
+      },
+      properties: {
+        kind: "topology-link",
+        id: edge.id,
+        color: TOPOLOGY_EDGE_COLOR[edge.kind],
+        label: edge.label,
+        edgeKind: edge.kind,
       },
     });
   }
 
   for (const route of data.routes) {
     if (route.coordinates.length < 2) continue;
-    features.push({
+    lines.push({
       type: "Feature",
       geometry: { type: "LineString", coordinates: route.coordinates },
       properties: {
@@ -110,27 +231,8 @@ function buildOverlay(
     });
   }
 
-  for (const odp of data.odps) {
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [odp.longitude, odp.latitude] },
-      properties: {
-        kind: "odp",
-        id: odp.id,
-        color: palette.occupancy[odp.occupancy],
-        label: odp.code,
-        status: odp.status,
-        used: odp.used,
-        capacity: odp.capacity,
-        occupancyLabel: occupancyLabels[odp.occupancy],
-        role: odp.role,
-        selected: odp.id === selectedOdpId,
-      },
-    });
-  }
-
   for (const customer of data.customers) {
-    features.push({
+    customers.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [customer.longitude, customer.latitude] },
       properties: {
@@ -149,8 +251,8 @@ function buildOverlay(
     });
 
     const odp = customer.odpId ? odpById.get(customer.odpId) : null;
-    if (odp) {
-      features.push({
+    if (odp && (customer.latitude !== odp.latitude || customer.longitude !== odp.longitude)) {
+      lines.push({
         type: "Feature",
         geometry: {
           type: "LineString",
@@ -169,29 +271,36 @@ function buildOverlay(
     }
   }
 
-  for (const cascade of data.cascades) {
-    const from = odpById.get(cascade.fromId);
-    const to = odpById.get(cascade.toId);
-    if (!from || !to) continue;
-    features.push({
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [from.longitude, from.latitude],
-          [to.longitude, to.latitude],
-        ],
-      },
-      properties: {
-        kind: "cascade",
-        id: `${cascade.fromId}-${cascade.toId}`,
-        color: "#94a3b8",
-        label: `${from.code} → ${to.code}`,
-      },
-    });
+  if (!topology.edges.some((edge) => edge.kind === "ODP_CASCADE")) {
+    for (const cascade of data.cascades) {
+      const from = odpById.get(cascade.fromId);
+      const to = odpById.get(cascade.toId);
+      if (!from || !to || (from.latitude === to.latitude && from.longitude === to.longitude)) continue;
+      lines.push({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [from.longitude, from.latitude],
+            [to.longitude, to.latitude],
+          ],
+        },
+        properties: {
+          kind: "topology-link",
+          id: `${cascade.fromId}-${cascade.toId}`,
+          color: TOPOLOGY_EDGE_COLOR.ODP_CASCADE,
+          label: `${from.code} → ${to.code}`,
+          edgeKind: "ODP_CASCADE",
+        },
+      });
+    }
   }
 
-  return { type: "FeatureCollection", features };
+  return {
+    lines: { type: "FeatureCollection", features: lines },
+    infrastructure: { type: "FeatureCollection", features: infrastructure },
+    customers: { type: "FeatureCollection", features: customers },
+  };
 }
 
 function featureText(properties: Record<string, unknown>, key: string, fallback = "—") {
@@ -213,12 +322,16 @@ function createPopupContent(
   const detail = document.createElement("p");
   if (properties.kind === "site") {
     detail.textContent = `${featureText(properties, "siteType")} · status ${featureText(properties, "status")}`;
+  } else if (properties.kind === "olt") {
+    detail.textContent = `OLT · status ${featureText(properties, "status")} · lokasi ${featureText(properties, "siteType")}`;
   } else if (properties.kind === "route") {
     const length = Number(properties.lengthMeters);
     const lengthLabel = Number.isFinite(length) ? `${Math.round(length)} m (perkiraan)` : "panjang belum tersedia";
     detail.textContent = `${featureText(properties, "routeType")} · ${lengthLabel}`;
   } else if (properties.kind === "odp") {
     detail.textContent = `${featureText(properties, "role", "ODP")} · ${featureText(properties, "used", "0")}/${featureText(properties, "capacity", "0")} port · ${featureText(properties, "occupancyLabel")}`;
+  } else if (properties.kind === "topology-link") {
+    detail.textContent = `Koneksi ${featureText(properties, "edgeKind")} · relasi tersimpan`;
   } else {
     const lastSeen = featureText(properties, "lastSeenAt", "belum tersedia");
     detail.textContent = `${featureText(properties, "serviceNumber")} · subscription ${featureText(properties, "status")} · link ${featureText(properties, "linkStatus", "UNKNOWN")}`;
@@ -229,37 +342,68 @@ function createPopupContent(
   }
   root.append(detail);
 
-  if (properties.kind === "odp" && onOpenOdp && typeof properties.id === "string") {
+  const odpId = typeof properties.refId === "string" ? properties.refId : properties.id;
+  if (properties.kind === "odp" && onOpenOdp && typeof odpId === "string") {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "crm-network-popup-action";
     button.textContent = "Buka detail ODP";
-    button.addEventListener("click", () => onOpenOdp(properties.id as string));
+    button.addEventListener("click", () => onOpenOdp(odpId));
     root.append(button);
   }
 
   return root;
 }
 
-function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
-  if (map.getSource(NETWORK_SOURCE_ID)) {
-    (map.getSource(NETWORK_SOURCE_ID) as GeoJSONSource).setData(overlay);
+function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
+  if (map.getSource(TOPOLOGY_SOURCE_ID)) {
+    (map.getSource(TOPOLOGY_SOURCE_ID) as GeoJSONSource).setData(overlay.lines);
+    (map.getSource(INFRASTRUCTURE_SOURCE_ID) as GeoJSONSource).setData(overlay.infrastructure);
+    (map.getSource(CUSTOMER_SOURCE_ID) as GeoJSONSource).setData(overlay.customers);
     return;
   }
 
-  map.addSource(NETWORK_SOURCE_ID, {
+  map.addSource(TOPOLOGY_SOURCE_ID, {
     type: "geojson",
-    data: overlay,
+    data: overlay.lines,
+  });
+
+  map.addSource(INFRASTRUCTURE_SOURCE_ID, {
+    type: "geojson",
+    data: overlay.infrastructure,
+    cluster: true,
+    clusterRadius: 48,
+    clusterMaxZoom: 14,
+  });
+
+  map.addSource(CUSTOMER_SOURCE_ID, {
+    type: "geojson",
+    data: overlay.customers,
+    cluster: true,
+    clusterRadius: 48,
+    clusterMaxZoom: 14,
+  });
+
+  map.addLayer({
+    id: TOPOLOGY_LINE_LAYER_ID,
+    type: "line",
+    source: TOPOLOGY_SOURCE_ID,
+    filter: ["==", ["get", "kind"], "topology-link"],
+    paint: {
+      "line-color": ["get", "color"],
+      "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.18, 10, 0.48, 14, 0.92],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.8, 12, 1.5, 16, 2.6],
+    },
   });
 
   map.addLayer({
     id: ROUTE_LAYER_ID,
     type: "line",
-    source: NETWORK_SOURCE_ID,
+    source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "route"],
     paint: {
       "line-color": ["get", "color"],
-      "line-opacity": 0.84,
+      "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 11, 0.64, 15, 0.88],
       "line-width": [
         "match",
         ["get", "routeType"],
@@ -274,69 +418,58 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
   map.addLayer({
     id: CUSTOMER_LINK_LAYER_ID,
     type: "line",
-    source: NETWORK_SOURCE_ID,
+    source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "customer-link"],
     paint: {
       "line-color": ["get", "color"],
-      "line-opacity": 0.62,
-      "line-width": 1,
+      "line-dasharray": [1.5, 1.5],
+      "line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 10, 0.08, 13, 0.38, 16, 0.7],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 1.1, 17, 1.8],
     },
   });
 
   map.addLayer({
-    id: CASCADE_LAYER_ID,
-    type: "line",
-    source: NETWORK_SOURCE_ID,
-    filter: ["==", ["get", "kind"], "cascade"],
-    paint: {
-      "line-color": ["get", "color"],
-      "line-dasharray": [2, 2],
-      "line-opacity": 0.9,
-      "line-width": 1.5,
-    },
-  });
-
-  map.addLayer({
-    id: SITE_LAYER_ID,
+    id: INFRASTRUCTURE_CLUSTER_LAYER_ID,
     type: "circle",
-    source: NETWORK_SOURCE_ID,
-    filter: ["==", ["get", "kind"], "site"],
+    source: INFRASTRUCTURE_SOURCE_ID,
+    filter: ["has", "point_count"],
     paint: {
-      "circle-color": ["get", "color"],
-      "circle-radius": ["match", ["get", "siteType"], "POP", 8, "MINI_POP", 6, 7],
-      "circle-stroke-color": "#ffffff",
+      "circle-color": "#0f766e",
+      "circle-radius": ["step", ["get", "point_count"], 18, 10, 22, 50, 28],
+      "circle-stroke-color": "#ccfbf1",
       "circle-stroke-width": 2,
     },
   });
 
   map.addLayer({
-    id: CUSTOMER_LAYER_ID,
-    type: "circle",
-    source: NETWORK_SOURCE_ID,
-    filter: ["==", ["get", "kind"], "customer"],
+    id: INFRASTRUCTURE_CLUSTER_COUNT_LAYER_ID,
+    type: "symbol",
+    source: INFRASTRUCTURE_SOURCE_ID,
+    filter: ["has", "point_count"],
+    layout: {
+      "text-field": ["get", "point_count_abbreviated"],
+      "text-size": 12,
+      "text-allow-overlap": true,
+    },
     paint: {
-      "circle-color": ["get", "color"],
-      "circle-opacity": 0.88,
-      "circle-radius": 4,
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 1,
+      "text-color": "#ffffff",
     },
   });
 
   map.addLayer({
-    id: ODP_LAYER_ID,
+    id: INFRASTRUCTURE_LAYER_ID,
     type: "circle",
-    source: NETWORK_SOURCE_ID,
-    filter: ["==", ["get", "kind"], "odp"],
+    source: INFRASTRUCTURE_SOURCE_ID,
+    filter: ["!", ["has", "point_count"]],
     paint: {
-      "circle-color": ["case", ["==", ["get", "role"], "MS"], "#f59e0b", ["get", "color"]],
+      "circle-color": ["get", "color"],
       "circle-opacity": 0.98,
-      "circle-radius": ["case", ["==", ["get", "role"], "MS"], 10, 8],
+      "circle-radius": ["match", ["get", "nodeKind"], "OLT", 7, "MS", 10, "ODC", 9, "POP", 8, 7],
       "circle-stroke-color": [
         "case",
         ["boolean", ["get", "selected"], false],
         "#0f172a",
-        ["==", ["get", "role"], "MS"],
+        ["==", ["get", "nodeKind"], "MS"],
         "#f59e0b",
         "#ffffff",
       ],
@@ -348,19 +481,63 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkFeatureCollection) {
       ],
     },
   });
+
+  map.addLayer({
+    id: CUSTOMER_CLUSTER_LAYER_ID,
+    type: "circle",
+    source: CUSTOMER_SOURCE_ID,
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": "#0369a1",
+      "circle-radius": ["step", ["get", "point_count"], 18, 10, 22, 50, 28],
+      "circle-stroke-color": "#bae6fd",
+      "circle-stroke-width": 2,
+    },
+  });
+
+  map.addLayer({
+    id: CUSTOMER_CLUSTER_COUNT_LAYER_ID,
+    type: "symbol",
+    source: CUSTOMER_SOURCE_ID,
+    filter: ["has", "point_count"],
+    layout: {
+      "text-field": ["get", "point_count_abbreviated"],
+      "text-size": 12,
+      "text-allow-overlap": true,
+    },
+    paint: {
+      "text-color": "#ffffff",
+    },
+  });
+
+  map.addLayer({
+    id: CUSTOMER_LAYER_ID,
+    type: "circle",
+    source: CUSTOMER_SOURCE_ID,
+    filter: ["!", ["has", "point_count"]],
+    minzoom: 8,
+    paint: {
+      "circle-color": ["get", "color"],
+      "circle-opacity": 0.88,
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 4.5, 17, 6],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1,
+    },
+  });
 }
 
-function fitMapToData(map: MapLibreMap, data: NetworkMapData) {
-  if (!data.bounds) return;
+function fitMapToData(map: MapLibreMap, data: NetworkMapData, topology: NetworkTopology) {
+  const mapBounds = topology.bounds ?? data.bounds;
+  if (!mapBounds) return;
 
-  const latSpan = Math.max(data.bounds.maxLat - data.bounds.minLat, 0.004);
-  const lngSpan = Math.max(data.bounds.maxLng - data.bounds.minLng, 0.004);
-  const bounds: [[number, number], [number, number]] = [
-    [data.bounds.minLng - lngSpan * 0.08, data.bounds.minLat - latSpan * 0.08],
-    [data.bounds.maxLng + lngSpan * 0.08, data.bounds.maxLat + latSpan * 0.08],
+  const latSpan = Math.max(mapBounds.maxLat - mapBounds.minLat, 0.004);
+  const lngSpan = Math.max(mapBounds.maxLng - mapBounds.minLng, 0.004);
+  const mapLibreBounds: [[number, number], [number, number]] = [
+    [mapBounds.minLng - lngSpan * 0.08, mapBounds.minLat - latSpan * 0.08],
+    [mapBounds.maxLng + lngSpan * 0.08, mapBounds.maxLat + latSpan * 0.08],
   ];
 
-  map.fitBounds(bounds, {
+  map.fitBounds(mapLibreBounds, {
     padding: 44,
     maxZoom: 16,
     duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 420,
@@ -369,6 +546,7 @@ function fitMapToData(map: MapLibreMap, data: NetworkMapData) {
 
 export function NetworkMap({
   data,
+  topology,
   selectedOdpId,
   palette,
   occupancyLabels,
@@ -381,10 +559,11 @@ export function NetworkMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const selectedOdpIdRef = useRef(selectedOdpId);
   const dataRef = useRef(data);
+  const topologyRef = useRef(topology);
   const paletteRef = useRef(palette);
   const occupancyLabelsRef = useRef(occupancyLabels);
   const mapReadyRef = useRef(false);
-  const [status, setStatus] = useState<MapStatus>(data.bounds ? "loading" : "unavailable");
+  const [status, setStatus] = useState<MapStatus>(data.bounds || topology.bounds ? "loading" : "unavailable");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
@@ -392,6 +571,7 @@ export function NetworkMap({
 
   selectedOdpIdRef.current = selectedOdpId;
   dataRef.current = data;
+  topologyRef.current = topology;
   paletteRef.current = palette;
   occupancyLabelsRef.current = occupancyLabels;
 
@@ -408,7 +588,7 @@ export function NetworkMap({
   const focusMap = useCallback(() => {
     if (!mapReadyRef.current || !mapRef.current) return;
     mapRef.current.resize();
-    fitMapToData(mapRef.current, dataRef.current);
+    fitMapToData(mapRef.current, dataRef.current, topologyRef.current);
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -432,7 +612,7 @@ export function NetworkMap({
     const controller = new AbortController();
     let activeMap: MapLibreMap | null = null;
 
-    const initialBounds = data.bounds;
+    const initialBounds = topology.bounds ?? data.bounds;
     if (!initialBounds || !containerRef.current) {
       setStatus("unavailable");
       setErrorMessage(null);
@@ -494,6 +674,7 @@ export function NetworkMap({
             map,
             buildOverlay(
               dataRef.current,
+              topologyRef.current,
               paletteRef.current,
               occupancyLabelsRef.current,
               selectedOdpIdRef.current,
@@ -501,7 +682,7 @@ export function NetworkMap({
           );
           mapReadyRef.current = true;
           setStatus("ready");
-          fitMapToData(map, dataRef.current);
+          fitMapToData(map, dataRef.current, topologyRef.current);
         });
 
         map.on("error", (event) => {
@@ -532,32 +713,64 @@ export function NetworkMap({
             .addTo(map);
         };
 
-        map.on("click", ODP_LAYER_ID, showPopup);
-        map.on("click", SITE_LAYER_ID, showPopup);
+        const expandCluster = (sourceId: string) => (event: MapLayerMouseEvent) => {
+          const feature = event.features?.[0];
+          const clusterId = Number(feature?.properties?.cluster_id);
+          const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+          if (!source || !Number.isFinite(clusterId)) return;
+          void source
+            .getClusterExpansionZoom(clusterId)
+            .then((zoom) => {
+              if (cancelled) return;
+              map.easeTo({
+                center: event.lngLat,
+                zoom,
+                duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 420,
+              });
+            })
+            .catch(() => undefined);
+        };
+
+        map.on("click", INFRASTRUCTURE_CLUSTER_LAYER_ID, expandCluster(INFRASTRUCTURE_SOURCE_ID));
+        map.on("click", CUSTOMER_CLUSTER_LAYER_ID, expandCluster(CUSTOMER_SOURCE_ID));
+        map.on("click", INFRASTRUCTURE_LAYER_ID, showPopup);
         map.on("click", ROUTE_LAYER_ID, showPopup);
         map.on("click", CUSTOMER_LAYER_ID, showPopup);
-        map.on("mouseenter", ODP_LAYER_ID, () => {
+        map.on("click", TOPOLOGY_LINE_LAYER_ID, showPopup);
+        map.on("mouseenter", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseenter", CUSTOMER_CLUSTER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseenter", INFRASTRUCTURE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseenter", CUSTOMER_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
-        map.on("mouseenter", SITE_LAYER_ID, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
         map.on("mouseenter", ROUTE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
-        map.on("mouseleave", ODP_LAYER_ID, () => {
+        map.on("mouseenter", TOPOLOGY_LINE_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseleave", CUSTOMER_CLUSTER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseleave", INFRASTRUCTURE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
         map.on("mouseleave", CUSTOMER_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
-        map.on("mouseleave", SITE_LAYER_ID, () => {
+        map.on("mouseleave", ROUTE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
-        map.on("mouseleave", ROUTE_LAYER_ID, () => {
+        map.on("mouseleave", TOPOLOGY_LINE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
       } catch (error) {
@@ -579,10 +792,12 @@ export function NetworkMap({
 
   useEffect(() => {
     if (!mapReadyRef.current || !mapRef.current) return;
-    const source = mapRef.current.getSource(NETWORK_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(buildOverlay(data, palette, occupancyLabels, selectedOdpId));
-    fitMapToData(mapRef.current, data);
-  }, [data, palette, occupancyLabels, selectedOdpId]);
+    applyMapLayers(
+      mapRef.current,
+      buildOverlay(data, topology, palette, occupancyLabels, selectedOdpId),
+    );
+    fitMapToData(mapRef.current, data, topology);
+  }, [data, topology, palette, occupancyLabels, selectedOdpId]);
 
   const statusLabel =
     status === "loading"

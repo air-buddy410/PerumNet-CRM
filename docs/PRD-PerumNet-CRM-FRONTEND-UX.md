@@ -1021,3 +1021,47 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
 - Halaman Pemasok dan panel port tidak boleh menyebabkan horizontal overflow, teks keluar card, status pecah satu huruf per baris, atau kontrol tabel menyempit vertikal.
 - Daftar port default tidak menampilkan seluruh ONU sekaligus; filter ONU dan port lainnya tetap dapat dibuka dan ditutup tanpa kehilangan query tabel utama.
+
+## 38. Topologi garis peta POP–OLT–MS/ODC–ODP–customer
+
+### Aturan visual jaringan
+
+- `/noc/map` menggambar relasi jaringan yang memang tersedia sebagai garis solid:
+  POP atau ODC ke OLT, OLT ke ODP melalui PON, ODC ke MS/ODP melalui `siteId`,
+  MS/ODP ke induknya melalui `parentId`, dan site ke site melalui `NetworkLink`.
+- `FiberRoute` tetap menjadi jalur visual solid berdasarkan geometri survey yang
+  tersimpan. Jalur ini tidak diperlakukan sebagai sumber kebenaran relasi node.
+- Garis ODP ke customer selalu putus-putus dan warnanya mengikuti status link
+  PPPoE (`ONLINE`, `OFFLINE`, `DISABLED`, atau `UNKNOWN`).
+- Relasi tanpa endpoint atau koordinat lengkap tidak digambar. Frontend tidak
+  membuat garis berdasarkan titik terdekat, jarak, atau dugaan operator.
+- Garis solid dan putus-putus tidak menggantikan marker: OLT, ODC, MS, ODP, POP,
+  dan customer tetap dapat dibedakan melalui marker serta popup.
+
+### Grouping dan zoom
+
+- Titik infrastruktur (POP, ODC, OLT, MS, ODP) dan customer memakai cluster yang
+  terpisah agar jumlah pelanggan tidak bercampur dengan simpul jaringan.
+- Klik cluster memakai expansion zoom MapLibre dan transisi sekitar 420 ms. Saat
+  `prefers-reduced-motion` aktif, durasi menjadi 0 ms.
+- Opacity garis topology meningkat bertahap ketika zoom mendekat. Garis customer
+  disembunyikan saat zoom jauh dan muncul saat detail sudah terbaca, sehingga
+  grouping tetap bersih.
+- Fit-to-data menghitung titik infrastruktur dan customer yang sedang terlihat;
+  filter site, OLT, okupansi, status subscription, router, status link, dan ODP
+  terpilih tetap dipertahankan.
+
+### Fallback dan acceptance
+
+- SVG fallback memakai aturan yang sama: relasi jaringan solid, ODP → customer
+  putus-putus, marker jenis simpul berbeda, dan tidak ada koneksi buatan ketika
+  relasi atau koordinat kosong.
+- QA topology wajib mencakup POP dengan OLT, OLT–PON–MS/ODP, MS sebagai parent,
+  ODC melalui `siteId`, status customer keempat jenis, serta relasi/koordinat
+  yang tidak lengkap.
+- QA dilakukan pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan
+  360×800. Peta tidak boleh memiliki garis palsu, popup/legenda/marker keluar
+  viewport, atau horizontal overflow.
+- Implementasi hanya memperluas query baca pada page `/noc/map` dan renderer
+  frontend. Tidak ada perubahan aplikasi referensi, `src/lib/**`, schema,
+  database, API, Server Action, auth, RBAC, atau business rule.
