@@ -5,12 +5,14 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, Flash, ActiveBadge, EmptyState } from "@/components/ui";
 import {
+  buildTableHref,
   parseTableQuery,
   SortableTableHeader,
   TableControls,
   type TableSearchParams,
   type TableSortOption,
 } from "@/components/table-controls";
+import { saveSupplierAction, toggleSupplierAction } from "../actions";
 
 export const metadata = { title: "Pemasok" };
 
@@ -25,7 +27,7 @@ export default async function SuppliersPage({
 }: {
   searchParams: Promise<TableSearchParams>;
 }) {
-  await requirePermission(PERMISSIONS.ITEMS_MANAGE);
+  const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
   const sp = await searchParams;
   const table = parseTableQuery(sp, {
     defaultSort: "code",
@@ -38,7 +40,8 @@ export default async function SuppliersPage({
       ? [{ isActive: table.direction }, { name: "asc" }, { id: "asc" }]
       : [{ code: table.direction }, { id: "asc" }];
 
-  const [suppliers, total] = await Promise.all([
+  const canManage = user.permissions.has(PERMISSIONS.ITEMS_MANAGE);
+  const [suppliers, total, editRow] = await Promise.all([
     db.supplier.findMany({
       orderBy,
       include: { _count: { select: { items: true } } },
@@ -46,6 +49,9 @@ export default async function SuppliersPage({
       take: table.pageSize,
     }),
     db.supplier.count(),
+    table.query.edit
+      ? db.supplier.findUnique({ where: { id: table.query.edit } })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -61,7 +67,8 @@ export default async function SuppliersPage({
       />
       <Flash ok={table.query.ok} error={table.query.error} />
 
-      <div className="crm-list-column">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="crm-list-column">
         <div className="card overflow-x-auto">
           {suppliers.length === 0 ? (
             <EmptyState message="Belum ada pemasok. Pemasok dibuat melalui Impor Katalog." />
@@ -102,6 +109,7 @@ export default async function SuppliersPage({
                       sortKey="isActive"
                     />
                   </th>
+                  {canManage && <th className="th"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -124,6 +132,22 @@ export default async function SuppliersPage({
                     <td className="td max-w-[15rem] text-xs">{supplier.website ?? "—"}</td>
                     <td className="td">{supplier._count.items}</td>
                     <td className="td"><ActiveBadge isActive={supplier.isActive} /></td>
+                    {canManage && (
+                      <td className="td whitespace-nowrap text-right text-xs">
+                        <Link
+                          href={buildTableHref("/inventory/suppliers", table.query, { edit: supplier.id })}
+                          className="text-brand-600 hover:underline"
+                        >
+                          Ubah
+                        </Link>
+                        <form action={toggleSupplierAction} className="ml-3 inline">
+                          <input type="hidden" name="id" value={supplier.id} />
+                          <button type="submit" className="text-slate-500 hover:underline">
+                            {supplier.isActive ? "Nonaktifkan" : "Aktifkan"}
+                          </button>
+                        </form>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -143,9 +167,57 @@ export default async function SuppliersPage({
         />
 
         <div className="card p-4 text-xs text-slate-500">
-          Pemasok pada halaman ini bersumber dari Impor Katalog. Form tambah, ubah, dan
-          nonaktifkan akan diaktifkan setelah action master pemasok resmi tersedia.
+          Pemasok dapat ditambahkan dari form di samping tabel atau dilengkapi melalui
+          Impor Katalog. Pemasok yang pernah dipakai dinonaktifkan, bukan dihapus, agar
+          riwayat pembelian tetap utuh.
         </div>
+      </div>
+
+        {canManage && (
+          <div className="card h-fit min-w-0 p-5">
+            <h2 className="mb-1 font-medium">{editRow ? `Ubah: ${editRow.code}` : "Pemasok baru"}</h2>
+            <p className="mb-4 text-xs leading-relaxed text-slate-500">
+              Kode pemasok harus unik. Data ini menjadi sumber vendor material, bukan merek perangkat.
+            </p>
+            <form action={saveSupplierAction} className="space-y-3">
+              {editRow && <input type="hidden" name="id" value={editRow.id} />}
+              <div>
+                <label className="label" htmlFor="supplier-code">Kode</label>
+                <input id="supplier-code" name="code" className="input" defaultValue={editRow?.code ?? ""} required />
+              </div>
+              <div>
+                <label className="label" htmlFor="supplier-name">Nama</label>
+                <input id="supplier-name" name="name" className="input" defaultValue={editRow?.name ?? ""} required />
+              </div>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div>
+                  <label className="label" htmlFor="supplier-phone">Telepon</label>
+                  <input id="supplier-phone" name="phone" className="input" defaultValue={editRow?.phone ?? ""} />
+                </div>
+                <div>
+                  <label className="label" htmlFor="supplier-email">Email</label>
+                  <input id="supplier-email" name="email" type="email" className="input" defaultValue={editRow?.email ?? ""} />
+                </div>
+              </div>
+              <div>
+                <label className="label" htmlFor="supplier-address">Alamat</label>
+                <textarea id="supplier-address" name="address" rows={2} className="input" defaultValue={editRow?.address ?? ""} />
+              </div>
+              <div>
+                <label className="label" htmlFor="supplier-website">Website</label>
+                <input id="supplier-website" name="website" type="url" className="input" defaultValue={editRow?.website ?? ""} placeholder="https://" />
+              </div>
+              <div>
+                <label className="label" htmlFor="supplier-notes">Catatan</label>
+                <textarea id="supplier-notes" name="notes" rows={3} className="input" defaultValue={editRow?.notes ?? ""} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" className="btn-primary">{editRow ? "Simpan perubahan" : "Tambah pemasok"}</button>
+                {editRow && <Link href="/inventory/suppliers" className="btn-secondary">Batal</Link>}
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

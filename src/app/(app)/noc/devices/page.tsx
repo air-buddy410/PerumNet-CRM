@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, NET_DEVICE_TYPES, CRITICALITY, statusLabel } from "@/lib/constants";
-import { portKind as classifyPortKind } from "@/lib/librenms";
+import { loadPortPerangkat, loadRingkasanPort } from "@/lib/network-port";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import { buildTableHref, parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
@@ -24,18 +24,6 @@ const PORT_KIND_LABELS: Record<string, string> = {
   PPP: "PPP",
   LAIN: "Lainnya",
 };
-
-function formatPortSpeed(value: bigint | null) {
-  if (value === null || value <= 0n) return "—";
-  const gigabit = 1_000_000_000n;
-  const megabit = 1_000_000n;
-  if (value < megabit) return "< 1 Mbps";
-  const divisor = value >= gigabit ? gigabit : megabit;
-  const unit = value >= gigabit ? "Gbps" : "Mbps";
-  const whole = value / divisor;
-  const decimal = (value % divisor) * 10n / divisor;
-  return decimal > 0n ? `${whole}.${decimal} ${unit}` : `${whole} ${unit}`;
-}
 
 function portStatus(value: string | null) {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -61,7 +49,7 @@ export default async function NetDevicesPage({
       ? [{ status: table.direction }, { id: "asc" }]
       : [{ hostname: table.direction }, { id: "asc" }];
 
-  const [devices, total, sites, users, editRow, selectedDevice] = await Promise.all([
+  const [devices, total, sites, users, editRow, selectedDevice, selectedPorts, portSummaries] = await Promise.all([
     db.networkDevice.findMany({
       include: { site: true, owner: true, _count: { select: { ports: true } } },
       orderBy,
@@ -75,29 +63,32 @@ export default async function NetDevicesPage({
     table.query.device
       ? db.networkDevice.findUnique({
         where: { id: table.query.device },
-        include: {
-          site: true,
-          ports: { orderBy: [{ ifName: "asc" }, { librenmsPortId: "asc" }] },
-        },
+        include: { site: true },
       })
       : Promise.resolve(null),
+    table.query.device
+      ? loadPortPerangkat(table.query.device)
+      : Promise.resolve([]),
+    table.query.device
+      ? loadRingkasanPort()
+      : Promise.resolve([]),
   ]);
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
   const requestedPortFilter = table.query.portKind;
   const portFilter = requestedPortFilter === "ONU" || requestedPortFilter === "OTHER"
     ? requestedPortFilter
     : "DEFAULT";
-  const selectedPorts = selectedDevice?.ports ?? [];
-  const portCounts = selectedPorts.reduce<Record<string, number>>((counts, port) => {
-    const kind = classifyPortKind(port.ifType, port.ifName);
-    counts[kind] = (counts[kind] ?? 0) + 1;
+  const selectedSummary = table.query.device
+    ? portSummaries.find((summary) => summary.deviceId === table.query.device)
+    : undefined;
+  const portCounts = selectedSummary?.perGolongan ?? selectedPorts.reduce<Record<string, number>>((counts, port) => {
+    counts[port.golongan] = (counts[port.golongan] ?? 0) + 1;
     return counts;
   }, {});
   const visiblePorts = selectedPorts.filter((port) => {
-    const kind = classifyPortKind(port.ifType, port.ifName);
-    if (portFilter === "ONU") return kind === "ONU";
-    if (portFilter === "OTHER") return kind !== "PON" && kind !== "ETHERNET" && kind !== "ONU";
-    return kind === "PON" || kind === "ETHERNET";
+    if (portFilter === "ONU") return port.golongan === "ONU";
+    if (portFilter === "OTHER") return !["PON", "ETHERNET", "ONU"].includes(port.golongan);
+    return port.golongan === "PON" || port.golongan === "ETHERNET";
   });
   const latestPortSync = selectedPorts.reduce<Date | null>((latest, port) => (
     !latest || port.lastSyncAt > latest ? port.lastSyncAt : latest
@@ -119,7 +110,7 @@ export default async function NetDevicesPage({
       />
       <Flash ok={table.query.ok} error={table.query.error} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="crm-list-column">
           <div className="card overflow-x-auto">
           {devices.length === 0 ? (
@@ -178,15 +169,15 @@ export default async function NetDevicesPage({
         {table.query.device && (
           <section className="card overflow-hidden" aria-labelledby="network-port-panel-title">
             <div className="flex flex-wrap items-start justify-between gap-3 p-5">
-              <div className="min-w-0">
-                <h2 id="network-port-panel-title" className="text-base font-semibold text-slate-800">
-                  Port perangkat{selectedDevice ? ` · ${selectedDevice.hostname}` : ""}
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedDevice
-                    ? `Site ${selectedDevice.site.siteCode} · Sinkronisasi terakhir ${formatUiDateTime(latestPortSync, "belum tersedia")}`
+                  <div className="min-w-0">
+                    <h2 id="network-port-panel-title" className="text-base font-semibold text-slate-800">
+                      Port perangkat{selectedDevice ? ` · ${selectedDevice.hostname}` : ""}
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {selectedDevice
+                    ? `Site ${selectedDevice.site.siteCode} · ${selectedSummary ? `${selectedSummary.naik} aktif dari ${selectedSummary.total} port · ` : ""}Sinkronisasi terakhir ${formatUiDateTime(latestPortSync, "belum tersedia")}`
                     : "Perangkat yang dipilih tidak ditemukan."}
-                </p>
+                    </p>
               </div>
               <Link
                 href={buildTableHref("/noc/devices", table.query, { device: null, portKind: null })}
@@ -255,16 +246,16 @@ export default async function NetDevicesPage({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {visiblePorts.map((port) => {
-                          const kind = classifyPortKind(port.ifType, port.ifName);
                           const operational = portStatus(port.operStatus);
+                          const administrative = portStatus(port.adminStatus);
                           return (
                             <tr key={port.id} className="hover:bg-slate-50">
                               <td className="td whitespace-nowrap font-mono text-xs font-semibold">{port.ifName}</td>
-                              <td className="td max-w-[18rem] text-xs">{port.ifAlias ?? "—"}</td>
-                              <td className="td whitespace-nowrap text-xs">{PORT_KIND_LABELS[kind] ?? kind}</td>
+                              <td className="td max-w-[18rem] whitespace-normal break-words text-xs">{port.ifAlias ?? "—"}</td>
+                              <td className="td whitespace-nowrap text-xs">{PORT_KIND_LABELS[port.golongan] ?? port.golongan}</td>
                               <td className="td"><Badge value={operational.value} label={operational.label} /></td>
-                              <td className="td whitespace-nowrap text-xs">{portStatus(port.adminStatus).label}</td>
-                              <td className="td whitespace-nowrap text-xs">{formatPortSpeed(port.ifSpeedBps)}</td>
+                              <td className="td"><Badge value={administrative.value} label={administrative.label} /></td>
+                              <td className="td whitespace-nowrap text-xs">{port.kecepatan ?? "—"}</td>
                               <td className="td whitespace-nowrap text-xs">{formatUiDateTime(port.lastSyncAt, "belum tersedia")}</td>
                             </tr>
                           );
@@ -292,7 +283,7 @@ export default async function NetDevicesPage({
                 <label className="label" htmlFor="hostname">Hostname</label>
                 <input id="hostname" name="hostname" className="input" defaultValue={editRow?.hostname ?? ""} required />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="deviceType">Jenis</label>
                   <select id="deviceType" name="deviceType" className="input" defaultValue={editRow?.deviceType ?? "ROUTER"}>

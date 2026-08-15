@@ -11,6 +11,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { CustomerPiiFields } from "@/components/customer-pii-fields";
 import { updateCustomerAction } from "../actions";
 
 export const metadata = { title: "Detail Customer" };
@@ -54,6 +55,7 @@ export default async function CustomerDetailPage({
   const customer = redactCustomer(rawCustomer, user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW));
 
   const canEdit = user.permissions.has(PERMISSIONS.CUSTOMERS_EDIT);
+  const canViewPii = user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW);
   const canCreateSub = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_CREATE);
   const canCreateTermination = user.permissions.has(PERMISSIONS.TERMINATION_CREATE);
   const terminationSubscriptionIds = new Set(
@@ -132,11 +134,28 @@ export default async function CustomerDetailPage({
               <option value="INACTIVE">Nonaktif</option>
             </select>
           </div>
-          <div className="sm:col-span-2">
-            <label className="label" htmlFor="notes">Catatan</label>
-            <textarea id="notes" name="notes" rows={2} className="input" defaultValue={customer.notes ?? ""} disabled={!canEdit} />
-          </div>
+        <div className="sm:col-span-2">
+          <label className="label" htmlFor="notes">Catatan</label>
+          <textarea id="notes" name="notes" rows={2} className="input" defaultValue={customer.notes ?? ""} disabled={!canEdit} />
         </div>
+      </div>
+      {canViewPii ? (
+        <CustomerPiiFields
+          initialIdentityNumber={customer.identityNumber ?? null}
+          initialBirthDate={customer.birthDate?.toISOString().slice(0, 10) ?? ""}
+          canEdit={canEdit}
+        />
+      ) : (
+        <section className="crm-customer-pii-section" aria-labelledby="customer-pii-protected-title">
+          <div className="crm-customer-pii-heading">
+            <div>
+              <h2 id="customer-pii-protected-title">Data identitas</h2>
+              <p>NIK dan tanggal lahir dilindungi dan tidak dikirim ke browser tanpa izin PII.</p>
+            </div>
+            <span className="crm-customer-pii-badge">Dilindungi</span>
+          </div>
+        </section>
+      )}
         {canEdit && <button type="submit" className="btn-primary">Simpan</button>}
       </form>
 

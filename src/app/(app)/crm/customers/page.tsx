@@ -15,6 +15,18 @@ const sortOptions: readonly TableSortOption[] = [
   { value: "status", label: "Status" },
 ];
 
+const CUSTOMER_STATUSES = [
+  ["", "Semua status"],
+  ["ACTIVE", "Aktif"],
+  ["INACTIVE", "Nonaktif"],
+] as const;
+
+const PPPOE_FILTERS = [
+  ["", "Semua username PPPoE"],
+  ["has", "Sudah punya username"],
+  ["missing", "Belum punya username"],
+] as const;
+
 export default async function CustomersPage({
   searchParams,
 }: {
@@ -23,14 +35,36 @@ export default async function CustomersPage({
   const user = await requirePermission(PERMISSIONS.CUSTOMERS_VIEW);
   const sp = await searchParams;
   const table = parseTableQuery(sp, { defaultSort: "createdAt", defaultDirection: "desc", sortOptions });
-  const where: Prisma.CustomerWhereInput | undefined = table.query.q
-    ? {
-        OR: [
-          { name: { contains: table.query.q } },
-          { customerNumber: { contains: table.query.q } },
-          { phone: { contains: table.query.q } },
-        ],
-      }
+  const status = CUSTOMER_STATUSES.some(([value]) => value === table.query.status)
+    ? table.query.status
+    : "";
+  const pppoe = PPPOE_FILTERS.some(([value]) => value === table.query.pppoe)
+    ? table.query.pppoe
+    : "";
+  const subscriptionWhere: Prisma.SubscriptionWhereInput = {};
+  if (table.query.packageId) subscriptionWhere.packageId = table.query.packageId;
+  if (table.query.odpId) subscriptionWhere.odpPort = { is: { odpId: table.query.odpId } };
+  if (pppoe === "has") subscriptionWhere.pppoeUsername = { not: null };
+  if (pppoe === "missing") {
+    subscriptionWhere.OR = [{ pppoeUsername: null }, { pppoeUsername: "" }];
+  }
+
+  const whereParts: Prisma.CustomerWhereInput[] = [];
+  if (table.query.q) {
+    whereParts.push({
+      OR: [
+        { name: { contains: table.query.q } },
+        { customerNumber: { contains: table.query.q } },
+        { phone: { contains: table.query.q } },
+      ],
+    });
+  }
+  if (status) whereParts.push({ status });
+  if (Object.keys(subscriptionWhere).length > 0) {
+    whereParts.push({ subscriptions: { some: subscriptionWhere } });
+  }
+  const where: Prisma.CustomerWhereInput | undefined = whereParts.length > 0
+    ? { AND: whereParts }
     : undefined;
   const orderBy: Prisma.CustomerOrderByWithRelationInput[] = table.sort === "customerNumber"
     ? [{ customerNumber: table.direction }, { id: "asc" }]
@@ -40,7 +74,7 @@ export default async function CustomersPage({
         ? [{ status: table.direction }, { id: "asc" }]
         : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const [rawCustomers, total] = await Promise.all([
+  const [rawCustomers, total, packages, odps] = await Promise.all([
     db.customer.findMany({
       where,
       include: { area: true, salesOwner: true, _count: { select: { subscriptions: true } } },
@@ -49,6 +83,16 @@ export default async function CustomersPage({
       take: table.pageSize,
     }),
     db.customer.count({ where }),
+    db.package.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, downloadMbps: true, uploadMbps: true },
+      orderBy: { name: "asc" },
+    }),
+    db.odp.findMany({
+      where: { status: { not: "INACTIVE" } },
+      select: { id: true, code: true, role: true },
+      orderBy: { code: "asc" },
+    }),
   ]);
 
   // Penyamaran di JALUR DATA, bukan di JSX. Bentuknya tidak berubah, jadi
@@ -60,7 +104,7 @@ export default async function CustomersPage({
     <div>
       <PageHeader
         title="Customers"
-        subtitle="Pelanggan berasal dari konversi lead (dengan quotation Accepted) — traceability Lead → Customer terjaga."
+        subtitle="Kelola data pelanggan, layanan aktif, dan kesiapan pemantauan PPPoE."
         action={
           <a href="/api/export/customers" className="btn-secondary">
             Unduh CSV
@@ -69,9 +113,13 @@ export default async function CustomersPage({
       />
       <Flash ok={table.query.ok} error={table.query.error} />
 
-      <form method="GET" className="mb-4 flex items-end gap-3">
-        <div className="w-72">
-          <label className="label" htmlFor="q">Cari</label>
+      <form method="GET" className="card mb-5 grid min-w-0 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(16rem,1.6fr)_minmax(10rem,1fr)_minmax(12rem,1.2fr)_minmax(12rem,1.2fr)_auto] xl:items-end">
+        <input type="hidden" name="page" value="1" />
+        <input type="hidden" name="pageSize" value={table.pageSize} />
+        <input type="hidden" name="sort" value={table.sort} />
+        <input type="hidden" name="direction" value={table.direction} />
+        <div className="min-w-0">
+          <label className="label" htmlFor="q">Cari customer</label>
           <input
             id="q"
             name="q"
@@ -80,14 +128,48 @@ export default async function CustomersPage({
             defaultValue={table.query.q ?? ""}
           />
         </div>
-        <button type="submit" className="btn-secondary">Cari</button>
+        <div className="min-w-0">
+          <label className="label" htmlFor="status">Status</label>
+          <select id="status" name="status" className="input" defaultValue={status}>
+            {CUSTOMER_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </div>
+        <div className="min-w-0">
+          <label className="label" htmlFor="packageId">Paket</label>
+          <select id="packageId" name="packageId" className="input" defaultValue={table.query.packageId ?? ""}>
+            <option value="">Semua paket</option>
+            {packages.map((pkg) => (
+              <option key={pkg.id} value={pkg.id}>
+                {pkg.name} ({pkg.downloadMbps}/{pkg.uploadMbps} Mbps)
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-0">
+          <label className="label" htmlFor="odpId">ODP</label>
+          <select id="odpId" name="odpId" className="input" defaultValue={table.query.odpId ?? ""}>
+            <option value="">Semua ODP</option>
+            {odps.map((odp) => (
+              <option key={odp.id} value={odp.id}>{odp.code}{odp.role === "MS" ? " · MS" : ""}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-0 sm:col-span-2 xl:col-span-1">
+          <label className="label" htmlFor="pppoe">PPPoE</label>
+          <div className="flex gap-2">
+            <select id="pppoe" name="pppoe" className="input min-w-0" defaultValue={pppoe}>
+              {PPPOE_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <button type="submit" className="btn-secondary shrink-0">Terapkan</button>
+          </div>
+        </div>
       </form>
 
       <div className="card overflow-x-auto">
         {customers.length === 0 ? (
           <EmptyState message="Belum ada customer. Konversi lead dengan quotation Accepted untuk membuat customer." />
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[880px]">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
                 <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="customerNumber" /></th>

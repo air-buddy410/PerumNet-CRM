@@ -99,3 +99,8 @@ Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman
 - **Kenapa belum dibuat form:** backend saat ini baru membuat Supplier melalui Impor Katalog dan belum menyediakan `saveSupplierAction`. Frontend hanya menampilkan daftar read-only agar tidak memberi kesan perubahan tersimpan padahal action belum ada.
 
 **Terjawab (Fase 74).** `saveSupplierAction` dan `toggleSupplierAction`, izin `items.manage`, kode unik, audit log. Pemasok dinonaktifkan bukan dihapus. Lihat §41.2.
+
+### Verifikasi kontrak PII — selesai, guard UI tetap aktif
+- **Layar:** `/crm/customers/[id]`
+- **Status:** Opus sudah memperbaiki preservasi field yang tidak dikirim dan penjagaan sisi tulis `customers.pii_view` pada `updateCustomerAction` (`fe1c6ba`). Frontend sekarang menampilkan NIK/tanggal lahir hanya bagi user dengan izin lihat PII, dan hanya membuatnya editable bersama `customers.edit`.
+- **Guard frontend:** user tanpa akses PII tidak menerima raw atau nilai masking di form identitas. Field yang tidak ditampilkan tidak dikirim, validasi kenyamanan NIK/tanggal dilakukan di browser, dan server tetap menjadi validasi final.

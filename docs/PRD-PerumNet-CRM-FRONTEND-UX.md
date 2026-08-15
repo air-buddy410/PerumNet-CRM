@@ -941,10 +941,10 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 ### Status dependency Customer PII
 
-- Frontend belum menampilkan input NIK (`identityNumber`) atau tanggal lahir (`birthDate`) pada form customer.
-- Input baru hanya boleh diaktifkan setelah `updateCustomerAction` dan loader menyediakan kontrak raw PII yang permission-scoped dengan izin `customers.pii_view` dan izin edit customer.
-- Kontrak backend wajib mempertahankan field yang tidak dikirim, hanya menghapus nilai pada empty value yang disengaja, memvalidasi NIK 16 digit/unik serta tanggal lahir, dan mencatat audit log.
-- User tanpa akses PII tidak boleh menerima raw value atau mengirim kembali nilai telepon/email yang sudah dimasking. Tidak ada kontrol palsu yang terlihat tersimpan tetapi diabaikan oleh action.
+- `updateCustomerAction` dan jalur data raw PII sudah tersedia secara permission-scoped. Form customer menampilkan NIK dan tanggal lahir hanya untuk user dengan `customers.pii_view`.
+- Pengeditan field identitas hanya aktif bersama `customers.edit`; user tanpa izin edit tetap dapat melihat data bila memang memiliki izin lihat PII.
+- NIK divalidasi 16 digit di browser dan server. Bila NIK lengkap, tanggal lahir yang diturunkan ditampilkan sebagai pemeriksaan kenyamanan sebelum simpan.
+- User tanpa akses PII tidak menerima nilai raw atau nilai masking di dalam form identitas. Backend tetap menjadi penjaga final dan mempertahankan field yang tidak dikirim.
 
 ### Acceptance dan bukti QA
 
@@ -1001,9 +1001,9 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 ### Master pemasok
 
-- `/inventory/suppliers` tersedia untuk user dengan `items.manage` dan menampilkan Supplier secara read-only dengan pagination serta sorting server-side.
+- `/inventory/suppliers` tersedia untuk user dengan `items.manage` dan menyediakan tambah, ubah, aktifkan, serta nonaktifkan pemasok melalui action resmi.
 - Daftar menampilkan kode, nama, kontak, website, alamat/catatan, jumlah item terhubung, dan status aktif. Teks panjang tetap membungkus di dalam cell atau dapat digeser melalui wrapper tabel.
-- Pemasok pada tahap ini berasal dari Impor Katalog. Tombol tambah, ubah, dan nonaktifkan tidak ditampilkan sebelum action master Supplier resmi tersedia.
+- Pemasok tetap dapat dilengkapi dari Impor Katalog. Menonaktifkan pemasok tidak menghapus riwayat pembelian.
 
 ### Panel port perangkat
 
@@ -1014,7 +1014,7 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 ### Dependency Customer PII
 
-- NIK dan tanggal lahir customer tetap ditunda sampai loader raw PII dan `updateCustomerAction` resmi tersedia dengan permission scope, validasi, serta audit log.
+- NIK dan tanggal lahir customer sudah tersedia setelah kontrak server-side Opus §41.1 selesai. UI tetap permission-aware: raw hanya untuk `customers.pii_view`, edit hanya dengan `customers.edit`, dan nilai masking tidak pernah dikirim kembali.
 
 ### Acceptance responsive §37
 
@@ -1065,3 +1065,54 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Implementasi hanya memperluas query baca pada page `/noc/map` dan renderer
   frontend. Tidak ada perubahan aplikasi referensi, `src/lib/**`, schema,
   database, API, Server Action, auth, RBAC, atau business rule.
+
+## 39. Handoff Opus §41 — Customer, Pemasok, dan NetworkPort
+
+### Daftar customer dan filter operasional
+
+- `/crm/customers` menyediakan filter server-side untuk status customer, paket,
+  ODP, serta ketersediaan username PPPoE.
+- Filter disimpan pada query URL dan tetap dipertahankan ketika operator
+  mengganti sorting, jumlah data per halaman, atau berpindah halaman.
+- Query relasi subscription memakai whitelist nilai filter dan tetap mengikuti
+  permission `customers.view`; frontend tidak mengambil dataset besar lalu
+  menyaringnya di browser.
+- Copy halaman menjelaskan kesiapan pemantauan PPPoE tanpa menampilkan data
+  teknis sebagai istilah perencanaan internal.
+
+### Data identitas customer — kontrak siap dan UI aktif
+
+- Form NIK dan tanggal lahir hanya menerima data raw untuk user dengan
+  `customers.pii_view`, dan pengeditan memerlukan `customers.edit`.
+- NIK memakai validasi 16 digit, tanggal format `YYYY-MM-DD`, serta pemeriksaan
+  tanggal yang diturunkan dari NIK sebelum form dikirim.
+- Field yang tidak ditampilkan tidak dikirim. Backend tetap mempertahankan nilai
+  yang tidak dikirim dan menolak atau mengabaikan nilai masking pada action.
+
+### Master pemasok
+
+- `/inventory/suppliers` memakai `saveSupplierAction` dan
+  `toggleSupplierAction` untuk tambah, ubah, aktifkan, dan menonaktifkan
+  pemasok dengan permission `items.manage`.
+- Form tampil sebagai panel samping pada desktop dan turun setelah tabel pada
+  tablet/mobile. Tabel tetap memakai pagination, sorting, dan horizontal scroll
+  terkontrol.
+- Pemasok dinonaktifkan, bukan dihapus, agar riwayat pembelian tetap dapat
+  ditelusuri. Import Katalog tetap tersedia sebagai jalur pelengkapan massal.
+
+### Panel NetworkPort
+
+- `/noc/devices` menggunakan ringkasan port per perangkat dan detail port dari
+  loader resmi Opus. Tampilan awal hanya PON dan Ethernet.
+- ONU, VLAN, PPP, dan port lainnya dibuka melalui filter terkontrol; daftar ONU
+  besar tidak dirender pada tampilan awal.
+- Kecepatan yang tidak dilaporkan ditampilkan sebagai “—”, bukan nol. Alias,
+  status operasional, status admin, jenis port, dan waktu sinkronisasi tetap
+  terlihat dengan wrapping aman.
+
+### Acceptance responsive §39
+
+- QA wajib mencakup 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan
+  360×800.
+- Filter, form pemasok, tabel, panel port, badge, dan action tidak boleh keluar
+  card, bertumpuk, atau memicu horizontal overflow.
