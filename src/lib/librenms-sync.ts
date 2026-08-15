@@ -250,7 +250,12 @@ async function syncPorts(
   out: SyncOutcome
 ): Promise<void> {
   if (idPerangkat.size === 0) return;
-  const hasil = await apiGet<LibrePort>(baseUrl, "/api/v0/ports", token, "ports");
+  // `columns` WAJIB. Tanpa itu LibreNMS hanya mengembalikan port_id dan
+  // ifName — tanpa device_id, sehingga tidak ada satu port pun yang bisa
+  // ditautkan ke perangkatnya. Kegagalannya senyap: 816 port terbaca, nol
+  // tersimpan, dan tidak ada error di mana pun.
+  const KOLOM = "port_id,device_id,ifName,ifAlias,ifDescr,ifType,ifSpeed,ifOperStatus,ifAdminStatus";
+  const hasil = await apiGet<LibrePort>(baseUrl, `/api/v0/ports?columns=${KOLOM}`, token, "ports");
   if (!hasil.ok) return;
 
   out.portsFetched = hasil.data.length;
