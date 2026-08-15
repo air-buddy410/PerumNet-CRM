@@ -276,7 +276,7 @@ async function syncPorts(
       // Port tanpa nama dilewati, bukan diberi nama karangan.
       if (!ifName) continue;
 
-      const kind = portKind(p.ifType, ifName);
+      const kind = portKind(p.ifType, ifName, speedBps(p.ifSpeed));
       out.portsByKind[kind] = (out.portsByKind[kind] ?? 0) + 1;
 
       const data = {
