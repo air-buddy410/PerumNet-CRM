@@ -185,7 +185,11 @@ export async function previewCatalogImportAction(formData: FormData) {
 
 export async function applyCatalogImportAction(formData: FormData) {
   const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
-  const result = await applyCatalogImport(user, formData.get("file") as File, String(formData.get("warehouseId") ?? ""));
+  // `allowPartial` HARUS datang dari centang yang sadar di layar, bukan
+  // nilai bawaan. Melewati baris bermasalah adalah keputusan operator.
+  const result = await applyCatalogImport(user, formData.get("file") as File, String(formData.get("warehouseId") ?? ""), {
+    allowPartial: formData.get("allowPartial") === "1",
+  });
   if (result.ok) {
     revalidatePath("/inventory/items");
     revalidatePath("/inventory/stock");

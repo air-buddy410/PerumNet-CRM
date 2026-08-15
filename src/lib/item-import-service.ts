@@ -89,6 +89,11 @@ export interface ImportOutcome {
   /** Nomor dokumen saldo awal; null bila tidak ada stok yang diimpor. */
   openingTxNumber: string | null;
   openingUnits: number;
+  /**
+   * Baris bermasalah yang DILEWATI karena penerapan dijalankan sebagian.
+   * Kosong bila berkasnya bersih.
+   */
+  skippedIssues: RowIssue[];
 }
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -378,10 +383,22 @@ export async function previewCatalogImport(
 
 // ── Penerapan ───────────────────────────────────────────────────
 
+/**
+ * @param opts.allowPartial Menerapkan baris yang SEHAT saja dan melewati yang
+ *   bermasalah. Bawaannya `false`, dan itu disengaja: impor separuh lebih
+ *   sulit dibereskan daripada impor yang ditolak — SELAMA berkasnya masih
+ *   mungkin diperbaiki. Ketika sumbernya tidak akan diperbaiki, menolak
+ *   seluruhnya berarti tidak ada yang pernah masuk, dan itu jelas lebih
+ *   buruk. Karena itu jalan keluarnya ada, tetapi harus DIMINTA — bukan
+ *   longgar diam-diam. Baris yang dilewati dikembalikan di `skippedIssues`
+ *   dan tercatat di audit, dan menjalankan ulang berkas yang sama aman
+ *   sebab seluruh pencocokan memakai kode yang stabil.
+ */
 export async function applyCatalogImport(
   user: CurrentUser,
   file: File,
-  warehouseId: string
+  warehouseId: string,
+  opts?: { allowPartial?: boolean }
 ): Promise<Result<ImportOutcome>> {
   const sheets = await toSheets(user, file);
   if (!sheets.ok) return sheets;
@@ -390,10 +407,10 @@ export async function applyCatalogImport(
   if (!rencana.ok) return rencana;
   const { plan, parsed, katKode, supKode } = rencana.data;
 
-  if (!plan.ok) {
+  if (!plan.ok && !opts?.allowPartial) {
     return {
       ok: false,
-      error: `Berkas masih memuat ${plan.issues.length} masalah. Perbaiki dulu di sumbernya — impor separuh lebih sulit dibereskan daripada impor yang ditolak.`,
+      error: `Berkas memuat ${plan.issues.length} masalah. Perbaiki di sumbernya, atau terapkan sebagian dengan sadar — ${plan.issues.length} baris itu akan dilewati.`,
     };
   }
 
@@ -405,6 +422,7 @@ export async function applyCatalogImport(
     skippedItems: plan.willSkipItems,
     openingTxNumber: null,
     openingUnits: 0,
+    skippedIssues: plan.ok ? [] : plan.issues,
   };
 
   // Master dan item dalam SATU transaksi basis data. Saldo awal menyusul di
@@ -536,7 +554,8 @@ export async function applyCatalogImport(
       `Impor katalog ke ${plan.warehouseName}: ${outcome.createdItems.length} material baru, ` +
       `${outcome.completedItems.length} dilengkapi, ${outcome.skippedItems} dilewati, ` +
       `${outcome.createdCategories} kategori & ${outcome.createdSuppliers} vendor dibuat` +
-      (outcome.openingTxNumber ? `, saldo awal ${outcome.openingTxNumber} (${outcome.openingUnits} unit)` : ""),
+      (outcome.openingTxNumber ? `, saldo awal ${outcome.openingTxNumber} (${outcome.openingUnits} unit)` : "") +
+      (outcome.skippedIssues.length ? `. DITERAPKAN SEBAGIAN — ${outcome.skippedIssues.length} baris bermasalah dilewati.` : ""),
     metadata: {
       kategoriDibuat: outcome.createdCategories,
       vendorDibuat: outcome.createdSuppliers,
@@ -547,6 +566,8 @@ export async function applyCatalogImport(
       unitSaldoAwal: outcome.openingUnits,
       gudang: plan.warehouseName,
       pergerakanDilewati: plan.skippedMovements,
+      barisBermasalahDilewati: outcome.skippedIssues.length,
+      diterapkanSebagian: !plan.ok,
     },
   });
 

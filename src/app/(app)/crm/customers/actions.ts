@@ -79,7 +79,9 @@ export async function previewCustomerImportAction(formData: FormData) {
 
 export async function applyCustomerImportAction(formData: FormData) {
   const user = await requirePermission(PERMISSIONS.CUSTOMERS_CREATE);
-  const result = await applyCustomerImport(user, formData.get("file") as File);
+  const result = await applyCustomerImport(user, formData.get("file") as File, {
+    allowPartial: formData.get("allowPartial") === "1",
+  });
   if (result.ok) {
     revalidatePath("/crm/customers");
     revalidatePath("/crm/subscriptions");

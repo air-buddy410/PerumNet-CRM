@@ -79,6 +79,8 @@ export interface ImportOutcome {
   createdSubscriptions: number;
   linkedOdpPorts: number;
   skipped: number;
+  /** Baris bermasalah yang DILEWATI karena penerapan dijalankan sebagian. */
+  skippedIssues: RowIssue[];
 }
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -187,13 +189,27 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
   const sales = new Map<string, string>();
   const unknownSales: string[] = [];
   for (const nama of new Set(parsed.rows.map((r) => r.salesRef).filter((x): x is string => !!x))) {
-    // Nama sales di berkas hanya nama panggilan ("Satria", "Ayu"). Dicocokkan
-    // sebagai kata pertama maupun bagian dari nama lengkap, tetapi HANYA bila
-    // hasilnya tepat satu orang — dua "Ayu" berarti tidak ada yang dipilih.
+    // Nama sales di berkas hanya julukan ("Satria", "Ayu", "Dwi Pranata").
+    // Dicocokkan sebagai kata utuh maupun penggalan berurutan dari nama
+    // lengkap — julukan dua kata seperti "Dwi Pranata" tidak akan pernah
+    // cocok kalau hanya kata tunggal yang diperiksa.
+    //
+    // Kecocokan diterima HANYA bila hasilnya tepat satu orang. "Komang"
+    // cocok dengan tiga karyawan, jadi tidak ada yang dipilih: memasang
+    // sales yang salah merusak atribusi penjualan dan komisi, dan salahnya
+    // tidak kelihatan sampai bonus dihitung.
+    //
+    // Ejaan yang berbeda TIDAK dijembatani. "Tri Jerry" dan "Komang Try
+    // Jerry" hampir pasti orang yang sama, tetapi menebak seberapa jauh
+    // ejaan boleh meleset adalah pintu masuk kesalahan yang senyap.
     const p = nama.trim().toLowerCase();
     const kandidat = userDb.filter((u) => {
       const n = u.name.trim().toLowerCase();
-      return n === p || n.split(/\s+/).includes(p) || n.startsWith(p + " ");
+      const kata = n.split(/\s+/);
+      if (n === p) return true;
+      if (!p.includes(" ")) return kata.includes(p);
+      // Julukan majemuk: harus muncul sebagai deretan kata yang berurutan.
+      return ` ${n} `.includes(` ${p} `);
     });
     if (kandidat.length === 1) sales.set(nama, kandidat[0].id);
     else unknownSales.push(kandidat.length ? `${nama} (${kandidat.length} orang bernama sama)` : nama);
@@ -285,7 +301,18 @@ export async function previewCustomerImport(user: CurrentUser, file: File): Prom
 
 // ── Penerapan ───────────────────────────────────────────────────
 
-export async function applyCustomerImport(user: CurrentUser, file: File): Promise<Result<ImportOutcome>> {
+/**
+ * @param opts.allowPartial Lihat penjelasan yang sama di
+ *   `applyCatalogImport`. Menjalankan ulang berkas yang sama aman: pelanggan
+ *   dicocokkan lewat NIK atau telepon, langganan lewat nomor layanan, dan ODP
+ *   lewat kodenya — ketiganya stabil, jadi baris yang sudah masuk tidak akan
+ *   digandakan ketika sisanya menyusul.
+ */
+export async function applyCustomerImport(
+  user: CurrentUser,
+  file: File,
+  opts?: { allowPartial?: boolean }
+): Promise<Result<ImportOutcome>> {
   const sheet = await toRows(user, file);
   if (!sheet.ok) return sheet;
 
@@ -293,16 +320,26 @@ export async function applyCustomerImport(user: CurrentUser, file: File): Promis
   if (!rencana.ok) return rencana;
   const { plan, rows, paket, sales } = rencana.data;
 
-  if (!plan.ok) {
+  // Paket yang tidak dikenal TETAP menahan, bahkan pada penerapan sebagian:
+  // tanpa paket tidak ada harga, dan langganan tanpa harga adalah baris yang
+  // tampak sah tetapi tidak bisa ditagih.
+  if (plan.unknownPackages.length) {
     return {
       ok: false,
-      error: `Berkas masih memuat ${plan.issues.length} masalah. Perbaiki dulu di sumbernya — impor pelanggan yang separuh jauh lebih sulit dibereskan daripada yang ditolak.`,
+      error: `Paket berikut belum ada di master: ${plan.unknownPackages.join(", ")}. Buat dulu — langganan tanpa harga tidak bisa ditagih.`,
+    };
+  }
+  if (!plan.ok && !opts?.allowPartial) {
+    return {
+      ok: false,
+      error: `Berkas memuat ${plan.issues.length} masalah. Perbaiki di sumbernya, atau terapkan sebagian dengan sadar — ${plan.issues.length} baris itu akan dilewati.`,
     };
   }
 
   const outcome: ImportOutcome = {
     createdOdps: [], createdCustomers: [], completedCustomers: [],
     createdSubscriptions: 0, linkedOdpPorts: 0, skipped: plan.willSkipCustomers,
+    skippedIssues: plan.ok ? [] : plan.issues,
   };
 
   await db.$transaction(async (prisma) => {
@@ -432,7 +469,8 @@ export async function applyCustomerImport(user: CurrentUser, file: File): Promis
     description:
       `Impor pelanggan: ${outcome.createdCustomers.length} pelanggan baru, ` +
       `${outcome.completedCustomers.length} dilengkapi, ${outcome.createdSubscriptions} langganan, ` +
-      `${outcome.createdOdps.length} ODP dibuat, ${outcome.linkedOdpPorts} port tertaut.`,
+      `${outcome.createdOdps.length} ODP dibuat, ${outcome.linkedOdpPorts} port tertaut.` +
+      (outcome.skippedIssues.length ? ` DITERAPKAN SEBAGIAN — ${outcome.skippedIssues.length} baris bermasalah dilewati.` : ""),
     metadata: {
       pelangganDibuat: outcome.createdCustomers.length,
       pelangganDilengkapi: outcome.completedCustomers.length,
@@ -440,6 +478,8 @@ export async function applyCustomerImport(user: CurrentUser, file: File): Promis
       odpDibuat: outcome.createdOdps,
       portTertaut: outcome.linkedOdpPorts,
       salesTidakDikenali: plan.unknownSales,
+      barisBermasalahDilewati: outcome.skippedIssues.length,
+      diterapkanSebagian: !plan.ok,
     },
   });
 

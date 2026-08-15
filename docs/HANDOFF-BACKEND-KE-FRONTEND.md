@@ -1884,3 +1884,43 @@ Perbedaannya dilaporkan di `notes`, tidak diterapkan.
   tidak dikenal, bukan salah memasangkan.
 - Master paket kini berisi lima paket **sebenarnya** (Personal, Berdua,
   Keluarga, Natah, Banjar). Empat paket contoh lama sudah dihapus.
+
+## 36. Kedua importir kini punya "terapkan sebagian" (Fase 69)
+
+Sheet sumber **tidak akan diperbaiki**. Menolak seluruh berkas karena beberapa
+baris cacat berarti tidak ada yang pernah masuk — jelas lebih buruk daripada
+memasukkan yang sehat.
+
+Karena itu `applyCatalogImportAction` dan `applyCustomerImportAction` kini
+membaca field `allowPartial` dari FormData:
+
+```html
+<input type="checkbox" name="allowPartial" value="1">
+```
+
+**Bawaannya mati, dan itu disengaja.** Melewati baris bermasalah adalah
+keputusan operator, bukan kelonggaran diam-diam. Tanpa centang, berkas
+bermasalah tetap ditolak dengan pesan yang menyebut berapa baris akan
+dilewati bila diteruskan.
+
+### Yang perlu ada di layar
+
+1. Ketika `plan.ok === false`, jangan hanya matikan tombol Terapkan.
+   Tampilkan pilihan kedua: **"Terapkan sebagian — lewati N baris bermasalah"**,
+   dengan N = `plan.issues.length`, dan daftar barisnya bisa dibaca.
+2. Sesudah penerapan, `ImportOutcome.skippedIssues[]` berisi baris yang
+   benar-benar dilewati. **Tampilkan, jangan sembunyikan** — itu satu-satunya
+   kesempatan operator melihat apa yang tidak masuk.
+3. Menjalankan ulang berkas yang sama **aman**. Pencocokannya stabil: item
+   lewat kode, pelanggan lewat NIK atau telepon, langganan lewat nomor
+   layanan, ODP lewat kode. Katakan itu di layar supaya orang tidak takut
+   mengulang setelah sebagian datanya diperbaiki.
+
+### Satu pengecualian yang tetap menahan
+
+Paket yang tidak ada padanannya di master **tetap menggagalkan penerapan**,
+bahkan dengan `allowPartial`. Tanpa paket tidak ada harga, dan langganan tanpa
+harga adalah baris yang tampak sah tetapi tidak bisa ditagih.
+
+Rencana lengkap memasukkan data ada di
+[`docs/RENCANA-MASUKKAN-DATA.md`](RENCANA-MASUKKAN-DATA.md).
