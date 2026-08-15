@@ -24,6 +24,7 @@ import {
   cropRejection,
   type CardPhotoCrop,
 } from "@/lib/employee-card";
+import { clientFileSizeError } from "@/components/client-file-upload-guard";
 
 type PhotoUploadAction = (formData: FormData) => void | Promise<void>;
 
@@ -159,6 +160,18 @@ export function EmployeePhotoCropper({
       setCrop(null);
       setPreviewUrl("");
       setFileError("Pilih foto JPG, PNG, atau WebP.");
+      event.currentTarget.value = "";
+      return;
+    }
+
+    const sizeError = clientFileSizeError(nextFile, undefined, "Ukuran foto maksimal 5 MB.");
+    if (sizeError) {
+      setFile(null);
+      setSource(null);
+      setBaseCrop(null);
+      setCrop(null);
+      setPreviewUrl("");
+      setFileError(sizeError);
       event.currentTarget.value = "";
       return;
     }
@@ -317,7 +330,7 @@ export function EmployeePhotoCropper({
             required
             className="employee-photo-file-input"
             onChange={handleFileChange}
-            aria-describedby={instructionId}
+            aria-describedby={`${instructionId}${validationError ? ` ${inputId}-error` : ""}`}
           />
           <p id={instructionId} className="employee-photo-cropper-help">
             JPG, PNG, atau WebP. Area minimum {CARD_CROP_MIN_WIDTH}×{CARD_CROP_MIN_HEIGHT} piksel pada foto asli.
@@ -413,7 +426,7 @@ export function EmployeePhotoCropper({
       </div>
 
       {validationError ? (
-        <p className="employee-photo-cropper-error" role="alert">{validationError}</p>
+        <p id={`${inputId}-error`} className="employee-photo-cropper-error" role="alert">{validationError}</p>
       ) : source && crop ? (
         <p className="employee-photo-cropper-status" role="status">
           Area terpilih {formatPercent(crop.width)} × {formatPercent(crop.height)} dari foto asli.

@@ -70,6 +70,11 @@ stock.
 - **Butuh:** `saveItemAction` atau kontrak action resmi yang menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
 - **Kenapa tidak bisa di sisi frontend:** action saat ini hanya menerima field master dasar. Frontend menampilkan empat nilai hasil impor secara read-only dan sengaja tidak mengirim field yang belum didukung agar UI tidak memberi kesan perubahan tersimpan padahal diabaikan.
 
+### Form edit Customer perlu kontrak PII resmi (§34)
+- **Layar:** `/crm/customers/[id]`
+- **Butuh:** `updateCustomerAction` menerima `identityNumber` dan `birthDate` secara opsional. Field yang tidak dikirim harus dipertahankan; nilai kosong hanya menghapus data bila user memang sengaja mengosongkannya. Backend perlu memvalidasi NIK tepat 16 digit, keunikan NIK, dan tanggal lahir yang valid.
+- **Kenapa tidak bisa di sisi frontend:** data raw hanya boleh dibaca dan ditulis oleh user yang memiliki izin edit customer serta `customers.pii_view`, dengan audit log perubahan. User tanpa izin PII tidak boleh menerima nilai raw atau mengirim kembali nomor telepon/email yang sudah dimasking dari form. Frontend tidak menambahkan input NIK/tanggal lahir sampai loader dan action resmi siap.
+
 ---
 
 ## Selesai

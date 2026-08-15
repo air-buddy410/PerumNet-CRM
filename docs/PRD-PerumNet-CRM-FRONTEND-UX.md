@@ -926,3 +926,27 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Tidak boleh ada koordinat yang hilang saat edit, warning parsial yang tidak
   terlihat, preview impor keluar card, status pecah satu huruf per baris,
   tombol apply aktif ketika ada issue, atau horizontal overflow.
+
+## 35. Guard Upload Browser dan Handoff PII Customer
+
+### Guard upload lampiran operasional
+
+- Form lampiran operasional memeriksa ukuran file di browser sebelum Server Action dikirim. Batas default adalah `5 * 1024 * 1024` byte (5 MB).
+- Ukuran yang melewati batas menampilkan pesan inline, mencegah submit, mempertahankan file yang dipilih, dan mengembalikan fokus ke input file. Pesan dapat dibaca oleh assistive technology melalui status alert.
+- Guard digunakan pada foto resmi kartu pegawai, bukti recovery, tanda tangan recovery, gambar tanda tangan dokumen gudang, dokumentasi proyek, foto/bukti work order, foto/bukti survey, dan bukti transaksi finance. Validasi avatar profile yang sudah ada tetap dipertahankan.
+- Import Excel pegawai/katalog dan import KML tidak memakai guard lampiran generik karena masing-masing memiliki aturan ukuran, tipe, dan parsing tersendiri.
+- Pemeriksaan MIME, magic byte, permission, dan batas server tetap menjadi validasi final. Browser guard hanya mengurangi upload yang jelas terlalu besar dan tidak menggantikan pemeriksaan backend.
+- Error harus tetap berada di dalam form/card, tidak menutupi tombol, dan bekerja pada desktop, tablet, mobile, pointer, keyboard, serta kamera mobile.
+
+### Status dependency Customer PII
+
+- Frontend belum menampilkan input NIK (`identityNumber`) atau tanggal lahir (`birthDate`) pada form customer.
+- Input baru hanya boleh diaktifkan setelah `updateCustomerAction` dan loader menyediakan kontrak raw PII yang permission-scoped dengan izin `customers.pii_view` dan izin edit customer.
+- Kontrak backend wajib mempertahankan field yang tidak dikirim, hanya menghapus nilai pada empty value yang disengaja, memvalidasi NIK 16 digit/unik serta tanggal lahir, dan mencatat audit log.
+- User tanpa akses PII tidak boleh menerima raw value atau mengirim kembali nilai telepon/email yang sudah dimasking. Tidak ada kontrol palsu yang terlihat tersimpan tetapi diabaikan oleh action.
+
+### Acceptance dan bukti QA
+
+- File tepat 5 MB diterima oleh guard; file di atas 5 MB ditolak sebelum action dikirim. File invalid tetap ditangani oleh validasi backend secara aman tanpa blank page.
+- Semua route upload operasional diaudit pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+- Bukti QA mencakup static scan input file, pesan error inline, focus state, tidak ada teks keluar card, tidak ada tombol tertutup, dan tidak ada horizontal overflow.

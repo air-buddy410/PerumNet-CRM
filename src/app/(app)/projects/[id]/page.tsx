@@ -10,6 +10,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 import { formatUiDate } from "@/components/ui-formatters";
 import { projectReconciliation } from "@/lib/project";
 import {
@@ -284,7 +285,7 @@ export default async function ProjectDetailPage({
           <div className="card p-5">
             <h2 className="mb-3 text-sm font-medium">Dokumentasi ({docs.length})</h2>
             {isOpen && canManage && (
-              <form action={uploadProjectDocAction} className="mb-3 space-y-2">
+              <ClientFileUploadGuard action={uploadProjectDocAction} className="mb-3 space-y-2">
                 <input type="hidden" name="projectId" value={project.id} />
                 <input
                   type="file"
@@ -296,7 +297,7 @@ export default async function ProjectDetailPage({
                 <button type="submit" className="btn-secondary w-full justify-center">
                   Unggah
                 </button>
-              </form>
+              </ClientFileUploadGuard>
             )}
             {docs.length === 0 ? (
               <p className="text-xs text-slate-400">

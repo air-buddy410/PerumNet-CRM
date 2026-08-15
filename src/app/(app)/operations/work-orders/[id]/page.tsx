@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, statusLabel, formatDateTime } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 import { outstandingDevices } from "@/lib/workorder";
 import {
   assignWorkOrderAction,
@@ -265,7 +266,7 @@ export default async function WorkOrderDetailPage({
               Foto & Bukti ({attachments.length})
             </div>
             {!isFinal && canExecute && (
-              <form
+              <ClientFileUploadGuard
                 action={uploadWoPhotoAction}
                 className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4"
               >
@@ -278,7 +279,7 @@ export default async function WorkOrderDetailPage({
                   required
                 />
                 <button type="submit" className="btn-secondary">Unggah</button>
-              </form>
+              </ClientFileUploadGuard>
             )}
             {attachments.length === 0 ? (
               <EmptyState message="Belum ada foto — WO tidak dapat ditutup tanpa foto bukti." />

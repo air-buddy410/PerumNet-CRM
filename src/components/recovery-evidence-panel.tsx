@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatUiDateTime } from "@/components/ui-formatters";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 
 type FormAction = (formData: FormData) => Promise<void>;
 
@@ -56,7 +57,7 @@ export function RecoveryEvidencePanel({
         </ul>
       )}
       {canUpload && (
-        <form action={action} encType="multipart/form-data" className="recovery-evidence-upload">
+        <ClientFileUploadGuard action={action} className="recovery-evidence-upload">
           <input type="hidden" name="recoveryId" value={recoveryId} />
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="entityId" value={entityId} />
@@ -65,7 +66,7 @@ export function RecoveryEvidencePanel({
           <input id={`evidence-${kind}-${entityId}`} name="file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" capture="environment" required />
           <small>JPG, PNG, WebP, atau PDF · maksimal 5 MB.</small>
           <button type="submit" className="btn-secondary">Unggah bukti</button>
-        </form>
+        </ClientFileUploadGuard>
       )}
       {!canUpload && items.length === 0 && <p className="text-xs text-slate-500">Belum ada bukti pada bagian ini.</p>}
     </section>
