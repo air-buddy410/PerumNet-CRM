@@ -197,7 +197,23 @@ export async function applyOdpImport(
 ): Promise<Result<ImportOutcome>> {
   const b = await toBlocks(user, file);
   if (!b.ok) return b;
-  const r = await buildOdpPlan(b.data);
+  return applyOdpFromBlocks(user, b.data, opts);
+}
+
+/**
+ * Jalur yang sama, tetapi menerima tabel teks langsung.
+ *
+ * Dipakai oleh perkakas baris perintah yang sumbernya bukan berkas unggahan —
+ * salinan sistem lain, misalnya. Sengaja BERBAGI seluruh badan dengan jalur
+ * unggahan: kalau keduanya bercabang, aturan yang diuji hanya berlaku untuk
+ * salah satunya dan tidak ada yang menyadarinya.
+ */
+export async function applyOdpFromBlocks(
+  user: CurrentUser,
+  blocks: string[][][],
+  opts?: { allowPartial?: boolean }
+): Promise<Result<ImportOutcome>> {
+  const r = await buildOdpPlan(blocks);
   if (!r.ok) return r;
   const { plan, rows } = r.data;
 

@@ -361,8 +361,19 @@ export async function applyCustomerImport(
 ): Promise<Result<ImportOutcome>> {
   const sheet = await toRows(user, file);
   if (!sheet.ok) return sheet;
+  return applyCustomerFromRows(user, sheet.data, opts);
+}
 
-  const rencana = await buildPlan(sheet.data);
+/**
+ * Jalur yang sama, tetapi menerima tabel teks langsung. Lihat catatan pada
+ * `applyOdpFromBlocks` — keduanya sengaja tidak bercabang.
+ */
+export async function applyCustomerFromRows(
+  user: CurrentUser,
+  sheetRows: string[][],
+  opts?: { allowPartial?: boolean }
+): Promise<Result<ImportOutcome>> {
+  const rencana = await buildPlan(sheetRows);
   if (!rencana.ok) return rencana;
   const { plan, rows, paket, sales } = rencana.data;
 
