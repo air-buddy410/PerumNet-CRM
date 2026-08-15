@@ -23,11 +23,23 @@ import { db } from "@/lib/db";
  */
 const PETA: { ip: string; code: string; name: string; type: string }[] = [
   { ip: "192.168.100.1", code: "NGB", name: "Nagabasukih", type: "POP" },
-  { ip: "192.168.100.11", code: "SRYB", name: "Seraya Barat", type: "MINI_POP" },
-  { ip: "192.168.100.12", code: "SRYT", name: "Seraya Tengah", type: "MINI_POP" },
   { ip: "192.168.100.30", code: "PSG", name: "Pesagi", type: "MINI_POP" },
   { ip: "192.168.100.60", code: "KCC", name: "Kecicang", type: "POP" },
   { ip: "192.168.100.61", code: "ABG", name: "Abang", type: "MINI_POP" },
+  // PERIKSA URUTAN KEDUANYA sebelum --terapkan.
+  //
+  // Daftar dari lapangan menyebut 192.168.10.11 dan 192.168.10.12, tetapi
+  // alamat itu tidak ada di LibreNMS; yang dipantau `192.168.100.11` dan
+  // `.12` — kurang satu nol, dan jumlahnya persis cocok dengan dua OLT HSGQ
+  // Seraya. Yang TIDAK bisa disimpulkan dari mana pun adalah mana yang Barat
+  // dan mana yang Tengah, jadi urutan di bawah ini menuruti urutan daftarnya
+  // dan harus dibenarkan orang yang tahu.
+  { ip: "192.168.100.11", code: "SRYB", name: "Seraya Barat", type: "MINI_POP" },
+  { ip: "192.168.100.12", code: "SRYT", name: "Seraya Tengah", type: "MINI_POP" },
+  // OLT HSGQ Kecicang (192.168.100.10) sengaja TIDAK ada di sini: SNMP-nya
+  // tidak bisa diaktifkan karena batasan firmware, jadi LibreNMS tidak
+  // memantaunya dan ia tidak akan pernah muncul lewat sinkron. Ia perlu
+  // didaftarkan manual bila ingin tercatat di CRM.
 ];
 
 const terapkan = process.argv.includes("--terapkan");
