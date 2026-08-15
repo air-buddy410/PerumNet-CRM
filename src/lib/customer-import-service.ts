@@ -189,8 +189,18 @@ export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
     // itu; kalau tidak, `Paket-Hemat(175000)` akan diam-diam menjadi
     // "Personal" padahal itu paket yang berbeda dengan harga kebetulan sama.
     const harga = priceFromPlan(nama);
-    const cocokHarga = harga === null ? undefined : paketDb.find((p) => Number(p.monthlyPrice) === harga);
-    if (cocokHarga && nama.toLowerCase().includes(cocokHarga.name.toLowerCase())) {
+    // SELURUH paket berharga sama diperiksa, bukan hanya yang pertama
+    // ditemukan. Empat paket berbeda sama-sama berharga Rp175.000; mengambil
+    // yang pertama lalu menolaknya karena namanya bukan itu membuat impor
+    // membuat paket BARU padahal padanannya sudah ada — dan setiap kali
+    // dijalankan ulang, satu salinan lagi lahir.
+    const cocokHarga =
+      harga === null
+        ? undefined
+        : paketDb
+            .filter((p) => Number(p.monthlyPrice) === harga)
+            .find((p) => nama.toLowerCase().includes(p.name.toLowerCase()));
+    if (cocokHarga) {
       paket.set(nama, cocokHarga.id);
       continue;
     }
@@ -576,18 +586,31 @@ export async function applyCustomerFromRows(
     antrean.set(pt.odpId, a);
   }
 
+  // Langganan yang SUDAH menempati port dilewati. `OdpPort.subscriptionId`
+  // bersifat unik — satu langganan hanya boleh di satu port — jadi tanpa
+  // penyaring ini, menjalankan impor untuk kedua kalinya langsung menabrak
+  // batasan itu dan menggagalkan seluruh penautan. Klaim "aman diulang"
+  // hanya benar bila yang sudah tertaut memang dilewati.
+  const sudahBerport = new Set(
+    (await db.odpPort.findMany({
+      where: { subscriptionId: { not: null } },
+      select: { subscriptionId: true },
+    })).map((p) => p.subscriptionId!)
+  );
+
   const tersentuh = new Set<string>();
   for (const r of rows) {
     if (!r.odpRef) continue;
     const oid = odpId2.get(r.odpRef);
     const sid = subId2.get(r.cid);
-    if (!oid || !sid) continue;
+    if (!oid || !sid || sudahBerport.has(sid)) continue;
     const a = antrean.get(oid);
     // Port habis TIDAK menggagalkan impor: kapasitasnya berasal dari sumber
     // yang bisa saja tertinggal, jadi kehabisan port lebih menandakan
     // kapasitas yang perlu dikoreksi daripada pelanggan yang salah.
     if (!a || a.length === 0) continue;
     await db.odpPort.update({ where: { id: a.shift()! }, data: { subscriptionId: sid, status: "USED" } });
+    sudahBerport.add(sid);
     tersentuh.add(oid);
     outcome.linkedOdpPorts++;
   }

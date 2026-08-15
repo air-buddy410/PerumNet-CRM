@@ -189,6 +189,13 @@ function cell(row: string[], i: number | undefined): string {
 export function parseOdpBlocks(blocks: string[][][]): ParsedOdp {
   const out: ParsedOdp = { rows: [], issues: [], skipped: 0, ignoredBlocks: 0 };
   const terlihat = new Map<string, number>();
+  /**
+   * Simpul yang DILAHIRKAN dari rujukan induk, bukan dibaca dari barisnya
+   * sendiri. Ia hanya penampung sementara: begitu baris aslinya muncul, isinya
+   * harus diganti. Tanpa penandaan ini bayangan mengalahkan yang asli — dan
+   * yang hilang justru kapasitas, koordinat, dan redaman sungguhannya.
+   */
+  const bayangan = new Map<string, OdpRow>();
 
   for (const rows of blocks) {
     if (rows.length < 2) {
@@ -218,7 +225,7 @@ export function parseOdpBlocks(blocks: string[][][]): ParsedOdp {
       }
 
       const sudah = terlihat.get(code);
-      if (sudah !== undefined) {
+      if (sudah !== undefined && !bayangan.has(code)) {
         // Blok yang berbeda memang memuat ODP yang sama pada tahap berbeda
         // (pembuatan, lalu kunjungan). Yang pertama menang, dan itu bukan
         // masalah yang perlu dilaporkan — hanya dicatat sebagai dilewati.
@@ -268,7 +275,7 @@ export function parseOdpBlocks(blocks: string[][][]): ParsedOdp {
         const koordMs = parseCoordinatePair(cell(r, head.msCoordinate));
         const sah = koordMs && !coordinateRejection(koordMs) ? koordMs : null;
         terlihat.set(parentRef, rowNumber);
-        out.rows.push({
+        const simpul: OdpRow = {
           rowNumber,
           code: parentRef,
           role: "MS",
@@ -283,11 +290,13 @@ export function parseOdpBlocks(blocks: string[][][]): ParsedOdp {
           portCapacity: null,
           occupants: [],
           notes: [`Dibuat dari rujukan "${parentRef}" pada ODP ${code}; tidak punya barisnya sendiri di berkas.`],
-        });
+        };
+        bayangan.set(parentRef, simpul);
+        out.rows.push(simpul);
       }
 
       terlihat.set(code, rowNumber);
-      out.rows.push({
+      const baris: OdpRow = {
         rowNumber,
         code,
         role: roleOf(cell(r, head.role), code),
@@ -302,7 +311,18 @@ export function parseOdpBlocks(blocks: string[][][]): ParsedOdp {
         portCapacity: intOf(cell(r, head.capacity)),
         occupants,
         notes,
-      });
+      };
+
+      const lama = bayangan.get(code);
+      if (lama) {
+        // Baris aslinya akhirnya muncul. Isi penampungnya DIGANTI di tempat —
+        // bukan ditambah sebagai baris kedua — supaya kaitan induk yang sudah
+        // menunjuk objek itu tetap sah, dan perannya tetap MS bila memang MS.
+        Object.assign(lama, baris, { role: lama.role === "MS" ? "MS" : baris.role });
+        bayangan.delete(code);
+        continue;
+      }
+      out.rows.push(baris);
     }
   }
 

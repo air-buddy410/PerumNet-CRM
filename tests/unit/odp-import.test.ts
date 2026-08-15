@@ -97,3 +97,34 @@ describe("parseOdpBlocks", () => {
     assert.ok(h.rows.some((r) => r.code === "BSM 01DC01"));
   });
 });
+
+describe("bayangan induk vs baris asli", () => {
+  test("baris asli MENGGANTI penampung yang dilahirkan dari rujukan induk", () => {
+    // ODP disebut sebagai induk lebih dulu, barisnya sendiri menyusul. Tanpa
+    // penggantian, penampung yang kapasitas & koordinatnya kosong menang —
+    // dan kapasitas sungguhan dari berkas hilang tanpa jejak.
+    const anak = baris({ 0: "BSM 02", 5: "MS BSM 01" });
+    const induk = baris({ 0: "MS BSM 01", 1: "MS", 5: "", 10: "16", 3: "-9" });
+    const h = parseOdpBlocks([[H, anak, induk]]);
+
+    const ms = h.rows.filter((r) => r.code === "MS BSM 01");
+    assert.equal(ms.length, 1, "tidak boleh jadi dua baris");
+    assert.equal(ms[0].portCapacity, 16, "kapasitas asli harus menang");
+    assert.equal(ms[0].opticPowerDbm, -9, "redaman asli harus terbaca");
+    assert.equal(ms[0].role, "MS");
+  });
+
+  test("kaitan induk tetap sah sesudah penggantian", () => {
+    const anak = baris({ 0: "BSM 02", 5: "MS BSM 01" });
+    const induk = baris({ 0: "MS BSM 01", 1: "MS", 5: "", 10: "16" });
+    const h = parseOdpBlocks([[H, anak, induk]]);
+    assert.equal(h.rows.find((r) => r.code === "BSM 02")!.parentRef, "MS BSM 01");
+  });
+
+  test("induk yang memang tidak punya baris sendiri tetap dilahirkan", () => {
+    const h = parseOdpBlocks([[H, baris({ 0: "BSM 03", 5: "MS BSM 99" })]]);
+    const ms = h.rows.find((r) => r.code === "MS BSM 99");
+    assert.ok(ms);
+    assert.match(ms!.notes.join(" "), /tidak punya barisnya sendiri/);
+  });
+});

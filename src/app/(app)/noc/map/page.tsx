@@ -3,7 +3,12 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
 import { PageHeader, EmptyState } from "@/components/ui";
-import { NetworkMap } from "@/components/network-map";
+import {
+  NetworkMap,
+  type NetworkTopology,
+  type NetworkTopologyEdge,
+  type NetworkTopologyNode,
+} from "@/components/network-map";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import {
   loadNetworkMap,
@@ -12,6 +17,7 @@ import {
   OCCUPANCY_LABEL,
   SUBSCRIPTION_COLOR,
   type LinkStatus,
+  type MapBounds,
   type NetworkMapData,
   type OccupancyLevel,
 } from "@/lib/noc-map";
@@ -51,6 +57,7 @@ const LINK_STATUS_COLOR: Record<LinkStatus, string> = {
 const SITE_COLOR: Record<string, string> = {
   POP: "#0e7490",
   MINI_POP: "#38bdf8",
+  ODC: "#7c3aed",
   DEFAULT: "#0f766e",
 };
 const ROUTE_COLOR: Record<string, string> = {
@@ -97,17 +104,20 @@ export default async function NetworkMapPage({
   ]);
 
   const selected = sp.odp ? data.odps.find((o) => o.id === sp.odp) ?? null : null;
-  const selectedPorts = selected
-    ? await db.odpPort.findMany({
-        where: { odpId: selected.id },
-        orderBy: { portNumber: "asc" },
-        include: {
-          subscription: {
-            select: { serviceNumber: true, status: true, customer: { select: { name: true } } },
+  const [topology, selectedPorts] = await Promise.all([
+    loadNetworkTopology(data, { siteId: sp.site || null, oltId: sp.olt || null }),
+    selected
+      ? db.odpPort.findMany({
+          where: { odpId: selected.id },
+          orderBy: { portNumber: "asc" },
+          include: {
+            subscription: {
+              select: { serviceNumber: true, status: true, customer: { select: { name: true } } },
+            },
           },
-        },
-      })
-    : [];
+        })
+      : Promise.resolve([]),
+  ]);
 
   const totalPorts = data.odps.reduce((s, o) => s + o.capacity, 0);
   const usedPorts = data.odps.reduce((s, o) => s + o.used, 0);
@@ -203,12 +213,14 @@ export default async function NetworkMapPage({
         <div className="card overflow-x-auto p-3">
           <NetworkMap
             data={data}
+            topology={topology}
             selectedOdpId={selected?.id ?? null}
             palette={{ occupancy: OCCUPANCY_COLOR, subscription: SUBSCRIPTION_COLOR, linkStatus: LINK_STATUS_COLOR, site: SITE_COLOR, route: ROUTE_COLOR }}
             occupancyLabels={OCCUPANCY_LABEL}
             fallback={
               <NetworkMapSvg
                 data={data}
+                topology={topology}
                 selectedOdpId={selected?.id ?? null}
                 odpHrefs={odpHrefs}
                 linkPalette={LINK_STATUS_COLOR}
@@ -257,6 +269,22 @@ export default async function NetworkMapPage({
                 Jalur {routeType.toLowerCase()}
               </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: SITE_COLOR.ODC }} />
+              ODC
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: "#2563eb" }} />
+              OLT
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-1.5 w-5 rounded-full" style={{ backgroundColor: "#0f766e" }} />
+              Topologi solid
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-0 w-5 border-t-2 border-dashed border-slate-400" />
+              ODP → customer
+            </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rotate-45 rounded-sm bg-amber-500" />
               MS
@@ -328,6 +356,7 @@ export default async function NetworkMapPage({
 
 function NetworkMapSvg({
   data,
+  topology,
   selectedOdpId,
   odpHrefs,
   linkPalette,
@@ -335,20 +364,56 @@ function NetworkMapSvg({
   routePalette,
 }: {
   data: NetworkMapData;
+  topology: NetworkTopology;
   selectedOdpId: string | null;
   odpHrefs: Record<string, string>;
   linkPalette: Record<LinkStatus, string>;
   sitePalette: Record<string, string>;
   routePalette: Record<string, string>;
 }) {
-  const project = data.bounds ? projector(data.bounds, WIDTH, HEIGHT) : null;
+  const bounds = topology.bounds ?? data.bounds;
+  const project = bounds ? projector(bounds, WIDTH, HEIGHT) : null;
   const hasRoutes = data.routes.some((route) => route.coordinates.length >= 2);
-  const hasDrawableData = data.odps.length > 0 || data.customers.length > 0 || data.sites.length > 0 || hasRoutes;
+  const fallbackNodes: NetworkTopologyNode[] = [
+    ...data.sites.map((site) => ({
+      id: `site:${site.id}`,
+      refId: site.id,
+      kind: site.type === "ODC" ? ("ODC" as const) : ("POP" as const),
+      label: site.name,
+      latitude: site.latitude,
+      longitude: site.longitude,
+      status: site.status,
+      siteType: site.type,
+    })),
+    ...data.odps.map((odp) => ({
+      id: `odp:${odp.id}`,
+      refId: odp.id,
+      kind: odp.role === "MS" ? ("MS" as const) : ("ODP" as const),
+      label: odp.code,
+      latitude: odp.latitude,
+      longitude: odp.longitude,
+      status: odp.status,
+    })),
+  ];
+  const nodes = topology.nodes.length ? topology.nodes : fallbackNodes;
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
+  const topologyEdges = [
+    ...topology.edges,
+    ...(topology.edges.some((edge) => edge.kind === "ODP_CASCADE")
+      ? []
+      : data.cascades.map((cascade) => ({
+          id: `${cascade.fromId}-${cascade.toId}`,
+          fromId: `odp:${cascade.fromId}`,
+          toId: `odp:${cascade.toId}`,
+          kind: "ODP_CASCADE" as const,
+          label: `${cascade.fromId} → ${cascade.toId}`,
+        }))),
+  ];
+  const hasDrawableData = nodes.length > 0 || data.customers.length > 0 || hasRoutes;
   if (!project || !hasDrawableData) {
     return <EmptyState message="Belum ada titik atau jalur berkoordinat untuk digambar. Isi koordinat jaringan di modul FTTH." />;
   }
-
-  const odpById = new Map(data.odps.map((odp) => [odp.id, odp]));
 
   return (
     <svg
@@ -380,42 +445,33 @@ function NetworkMapSvg({
         );
       })}
 
-      {/* POP dan Mini-POP tidak memiliki port/okupansi. */}
-      {data.sites.map((site) => {
-        const point = project(site.latitude, site.longitude);
-        const radius = site.type === "POP" ? 8 : 6;
-        return (
-          <circle key={site.id} cx={point.x} cy={point.y} r={radius} fill={sitePalette[site.type] ?? sitePalette.DEFAULT} stroke="#ffffff" strokeWidth={2}>
-            <title>{`${site.name} · ${site.type} · ${site.status}`}</title>
-          </circle>
-        );
-      })}
-
-      {/* Kaskade ODP → ODP induk */}
-      {data.cascades.map((cascade) => {
-        const from = odpById.get(cascade.fromId);
-        const to = odpById.get(cascade.toId);
-        if (!from || !to) return null;
+      {/* Semua relasi jaringan bersifat solid: POP/OLT/MS/ODC/ODP. */}
+      {topologyEdges.map((edge) => {
+        const from = nodeById.get(edge.fromId);
+        const to = nodeById.get(edge.toId);
+        if (!from || !to || (from.latitude === to.latitude && from.longitude === to.longitude)) return null;
         const a = project(from.latitude, from.longitude);
         const b = project(to.latitude, to.longitude);
         return (
           <line
-            key={`${cascade.fromId}-${cascade.toId}`}
+            key={edge.id}
             x1={a.x}
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke="#94a3b8"
+            stroke="#0f766e"
             strokeWidth={1.5}
-            strokeDasharray="4 3"
-          />
+            strokeLinecap="round"
+          >
+            <title>{edge.label}</title>
+          </line>
         );
       })}
 
-      {/* Garis pelanggan → ODP tempat port-nya berada */}
+      {/* Garis ODP → pelanggan selalu putus-putus. */}
       {data.customers.map((customer) => {
         const odp = customer.odpId ? odpById.get(customer.odpId) : null;
-        if (!odp) return null;
+        if (!odp || (customer.latitude === odp.latitude && customer.longitude === odp.longitude)) return null;
         const a = project(customer.latitude, customer.longitude);
         const b = project(odp.latitude, odp.longitude);
         return (
@@ -425,8 +481,9 @@ function NetworkMapSvg({
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke="#cbd5e1"
+            stroke={linkPalette[customer.linkStatus]}
             strokeWidth={0.75}
+            strokeDasharray="5 4"
           />
         );
       })}
@@ -450,40 +507,287 @@ function NetworkMapSvg({
         );
       })}
 
-      {/* ODP — diwarnai menurut okupansi port */}
-      {data.odps.map((odp) => {
-        const point = project(odp.latitude, odp.longitude);
-        const isSelected = selectedOdpId === odp.id;
-        const isMs = odp.role === "MS";
-        return (
-          <Link key={odp.id} href={odpHrefs[odp.id] ?? `/noc/map?odp=${encodeURIComponent(odp.id)}`}>
-            <g>
-              {isMs ? (
-                <polygon
-                  points={`${point.x},${point.y - 10} ${point.x + 10},${point.y} ${point.x},${point.y + 10} ${point.x - 10},${point.y}`}
-                  fill="#f59e0b"
-                  stroke={isSelected ? "#0f172a" : "#ffffff"}
-                  strokeWidth={isSelected ? 3 : 1.5}
-                />
-              ) : (
-                <rect
-                  x={point.x - 7}
-                  y={point.y - 7}
-                  width={14}
-                  height={14}
-                  rx={3}
-                  fill={OCCUPANCY_COLOR[odp.occupancy]}
-                  stroke={isSelected ? "#0f172a" : "#ffffff"}
-                  strokeWidth={isSelected ? 3 : 1.5}
-                />
-              )}
-              <title>{`${odp.code} · ${isMs ? "MS" : "ODP"} · ${odp.used}/${odp.capacity} port · ${OCCUPANCY_LABEL[odp.occupancy]}`}</title>
-            </g>
+      {/* Marker infrastruktur dibedakan berdasarkan jenis simpul. */}
+      {nodes.map((node) => {
+        const point = project(node.latitude, node.longitude);
+        const odp = odpById.get(node.refId);
+        const isOdp = node.kind === "ODP" || node.kind === "MS";
+        const isSelected = selectedOdpId === node.refId;
+        const marker = (
+          <g>
+            {node.kind === "MS" ? (
+              <polygon
+                points={`${point.x},${point.y - 10} ${point.x + 10},${point.y} ${point.x},${point.y + 10} ${point.x - 10},${point.y}`}
+                fill="#f59e0b"
+                stroke={isSelected ? "#0f172a" : "#ffffff"}
+                strokeWidth={isSelected ? 3 : 1.5}
+              />
+            ) : node.kind === "ODP" && odp ? (
+              <rect
+                x={point.x - 7}
+                y={point.y - 7}
+                width={14}
+                height={14}
+                rx={3}
+                fill={OCCUPANCY_COLOR[odp.occupancy]}
+                stroke={isSelected ? "#0f172a" : "#ffffff"}
+                strokeWidth={isSelected ? 3 : 1.5}
+              />
+            ) : (
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={node.kind === "OLT" ? 7 : node.kind === "ODC" ? 9 : 8}
+                fill={node.kind === "OLT" ? "#2563eb" : sitePalette[node.siteType ?? node.kind] ?? sitePalette.DEFAULT}
+                stroke="#ffffff"
+                strokeWidth={2}
+              />
+            )}
+            <title>
+              {isOdp && odp
+                ? `${node.label} · ${node.kind} · ${odp.used}/${odp.capacity} port · ${OCCUPANCY_LABEL[odp.occupancy]}`
+                : `${node.label} · ${node.kind}${node.siteType ? ` · ${node.siteType}` : ""} · ${node.status}`}
+            </title>
+          </g>
+        );
+        return isOdp ? (
+          <Link key={node.id} href={odpHrefs[node.refId] ?? `/noc/map?odp=${encodeURIComponent(node.refId)}`}>
+            {marker}
           </Link>
+        ) : (
+          <g key={node.id}>{marker}</g>
         );
       })}
     </svg>
   );
+}
+
+async function loadNetworkTopology(
+  data: NetworkMapData,
+  filter: { siteId: string | null; oltId: string | null },
+): Promise<NetworkTopology> {
+  const visibleOdpIds = data.odps.map((odp) => odp.id);
+  const [siteRows, oltRows, odpRows, linkRows] = await Promise.all([
+    db.networkSite.findMany({
+      where: {
+        latitude: { not: null },
+        longitude: { not: null },
+        type: { in: ["POP", "MINI_POP", "ODC"] },
+        ...(filter.siteId ? { id: filter.siteId } : {}),
+      },
+      select: {
+        id: true,
+        siteCode: true,
+        name: true,
+        type: true,
+        latitude: true,
+        longitude: true,
+        status: true,
+      },
+    }),
+    db.oltDevice.findMany({
+      where: {
+        ...(filter.oltId ? { id: filter.oltId } : {}),
+        networkDevice: {
+          ...(filter.siteId ? { siteId: filter.siteId } : {}),
+          site: { latitude: { not: null }, longitude: { not: null } },
+        },
+      },
+      select: {
+        id: true,
+        networkDevice: {
+          select: {
+            hostname: true,
+            status: true,
+            siteId: true,
+            site: {
+              select: { id: true, name: true, type: true, latitude: true, longitude: true },
+            },
+          },
+        },
+        ponPorts: {
+          select: {
+            label: true,
+            odps: { select: { id: true } },
+          },
+        },
+      },
+    }),
+    db.odp.findMany({
+      where: { id: { in: visibleOdpIds } },
+      select: { id: true, siteId: true },
+    }),
+    db.networkLink.findMany({
+      where: filter.siteId
+        ? { OR: [{ siteAId: filter.siteId }, { siteBId: filter.siteId }] }
+        : {},
+      select: {
+        id: true,
+        linkCode: true,
+        name: true,
+        status: true,
+        siteA: { select: { id: true, name: true } },
+        siteB: { select: { id: true, name: true } },
+      },
+    }),
+  ]);
+  const dataOdpById = new Map(data.odps.map((odp) => [odp.id, odp]));
+  const siteRowById = new Map(siteRows.map((site) => [site.id, site]));
+
+  const nodesById = new Map<string, NetworkTopologyNode>();
+  const siteNodeId = new Map<string, string>();
+  const siteKind = new Map<string, string>();
+  const odpNodeId = new Map<string, string>();
+
+  const addNode = (node: NetworkTopologyNode) => {
+    if (!nodesById.has(node.id)) nodesById.set(node.id, node);
+  };
+
+  for (const site of data.sites) {
+    const id = `site:${site.id}`;
+    siteNodeId.set(site.id, id);
+    siteKind.set(site.id, site.type);
+    addNode({
+      id,
+      refId: site.id,
+      kind: site.type === "ODC" ? "ODC" : "POP",
+      label: site.name,
+      latitude: site.latitude,
+      longitude: site.longitude,
+      status: site.status,
+      siteType: site.type,
+    });
+  }
+
+  for (const site of siteRows) {
+    const id = `site:${site.id}`;
+    siteNodeId.set(site.id, id);
+    siteKind.set(site.id, site.type);
+    addNode({
+      id,
+      refId: site.id,
+      kind: site.type === "ODC" ? "ODC" : "POP",
+      label: site.name,
+      latitude: site.latitude!,
+      longitude: site.longitude!,
+      status: site.status,
+      siteType: site.type,
+    });
+  }
+
+  for (const odp of data.odps) {
+    const id = `odp:${odp.id}`;
+    odpNodeId.set(odp.id, id);
+    addNode({
+      id,
+      refId: odp.id,
+      kind: odp.role === "MS" ? "MS" : "ODP",
+      label: odp.code,
+      latitude: odp.latitude,
+      longitude: odp.longitude,
+      status: odp.status,
+    });
+  }
+
+  const oltNodeId = new Map<string, string>();
+  for (const olt of oltRows) {
+    const site = olt.networkDevice.site;
+    if (site.latitude === null || site.longitude === null) continue;
+    const id = `olt:${olt.id}`;
+    oltNodeId.set(olt.id, id);
+    addNode({
+      id,
+      refId: olt.id,
+      kind: "OLT",
+      label: olt.networkDevice.hostname,
+      latitude: site.latitude,
+      longitude: site.longitude,
+      status: olt.networkDevice.status,
+      siteType: site.type,
+    });
+  }
+
+  const edges: NetworkTopologyEdge[] = [];
+  const edgeKeys = new Set<string>();
+  const addEdge = (
+    fromId: string | undefined,
+    toId: string | undefined,
+    kind: NetworkTopologyEdge["kind"],
+    label: string,
+  ) => {
+    if (!fromId || !toId || fromId === toId) return;
+    const from = nodesById.get(fromId);
+    const to = nodesById.get(toId);
+    if (!from || !to || (from.latitude === to.latitude && from.longitude === to.longitude)) return;
+    const pair = kind === "SITE_LINK" ? [fromId, toId].sort().join(":") : `${fromId}:${toId}`;
+    const key = `${kind}:${pair}`;
+    if (edgeKeys.has(key)) return;
+    edgeKeys.add(key);
+    edges.push({ id: `topology:${key}`, fromId, toId, kind, label });
+  };
+
+  for (const link of linkRows) {
+    addEdge(
+      siteNodeId.get(link.siteA.id),
+      siteNodeId.get(link.siteB.id),
+      "SITE_LINK",
+      `${link.siteA.name} → ${link.siteB.name}${link.name ? ` · ${link.name}` : ` · ${link.linkCode}`}`,
+    );
+  }
+
+  for (const olt of oltRows) {
+    const nodeId = oltNodeId.get(olt.id);
+    addEdge(
+      siteNodeId.get(olt.networkDevice.siteId),
+      nodeId,
+      "SITE_OLT",
+      `${olt.networkDevice.site.name} → ${olt.networkDevice.hostname}`,
+    );
+    for (const pon of olt.ponPorts) {
+      for (const odp of pon.odps) {
+        addEdge(nodeId, odpNodeId.get(odp.id), "OLT_ODP", `${olt.networkDevice.hostname} · PON ${pon.label}`);
+      }
+    }
+  }
+
+  for (const odp of odpRows) {
+    if (odp.siteId && siteKind.get(odp.siteId) === "ODC") {
+      const site = siteRowById.get(odp.siteId);
+      addEdge(
+        siteNodeId.get(odp.siteId),
+        odpNodeId.get(odp.id),
+        "SITE_ODP",
+        `${site?.name ?? "ODC"} → ${dataOdpById.get(odp.id)?.code ?? "ODP"}`,
+      );
+    }
+  }
+
+  for (const cascade of data.cascades) {
+    const from = dataOdpById.get(cascade.fromId);
+    const to = dataOdpById.get(cascade.toId);
+    addEdge(
+      odpNodeId.get(cascade.fromId),
+      odpNodeId.get(cascade.toId),
+      "ODP_CASCADE",
+      `${from?.code ?? cascade.fromId} → ${to?.code ?? cascade.toId}`,
+    );
+  }
+
+  const coordinates = [
+    ...Array.from(nodesById.values()).map((node) => ({ latitude: node.latitude, longitude: node.longitude })),
+    ...data.odps.map((odp) => ({ latitude: odp.latitude, longitude: odp.longitude })),
+    ...data.customers.map((customer) => ({ latitude: customer.latitude, longitude: customer.longitude })),
+  ];
+  const bounds: MapBounds | null = coordinates.length
+    ? {
+        minLat: Math.min(...coordinates.map((point) => point.latitude)),
+        maxLat: Math.max(...coordinates.map((point) => point.latitude)),
+        minLng: Math.min(...coordinates.map((point) => point.longitude)),
+        maxLng: Math.max(...coordinates.map((point) => point.longitude)),
+      }
+    : null;
+
+  return { nodes: Array.from(nodesById.values()), edges, bounds };
 }
 
 function isLinkStatus(value: string | undefined): value is LinkStatus {

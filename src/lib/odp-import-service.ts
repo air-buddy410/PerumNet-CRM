@@ -271,7 +271,19 @@ export async function applyOdpFromBlocks(
         else if (c.startsWith("Ditandai")) ubah.role = row.role;
       }
       if (Object.keys(ubah).length) {
-        await prisma.odp.update({ where: { code: row.code }, data: ubah });
+        const kini = await prisma.odp.update({ where: { code: row.code }, data: ubah, select: { id: true, portCapacity: true } });
+        // Menaikkan angka kapasitas tanpa membuat barisnya menghasilkan ODP
+        // yang MENGAKU punya ruang tetapi tidak punya port untuk ditempati —
+        // pelanggan tetap menganggur, dan angkanya justru menutupi sebabnya.
+        const ada = new Set(
+          (await prisma.odpPort.findMany({ where: { odpId: kini.id }, select: { portNumber: true } }))
+            .map((x) => x.portNumber)
+        );
+        const kurang = Array.from({ length: kini.portCapacity }, (_, i) => i + 1).filter((n) => !ada.has(n));
+        if (kurang.length) {
+          await prisma.odpPort.createMany({ data: kurang.map((portNumber) => ({ odpId: kini.id, portNumber })) });
+          outcome.createdPorts += kurang.length;
+        }
         outcome.completed.push({ code: row.code, fields: Object.keys(ubah) });
       }
     }
