@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Expand, LocateFixed, Minimize2 } from "lucide-react";
 import type {
   GeoJSONSource,
   Map as MapLibreMap,
@@ -375,6 +376,7 @@ export function NetworkMap({
   styleUrl,
 }: NetworkMapProps) {
   const router = useRouter();
+  const shellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const selectedOdpIdRef = useRef(selectedOdpId);
@@ -384,12 +386,46 @@ export function NetworkMap({
   const mapReadyRef = useRef(false);
   const [status, setStatus] = useState<MapStatus>(data.bounds ? "loading" : "unavailable");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const resolvedStyleUrl = styleUrlFromEnvironment(styleUrl);
 
   selectedOdpIdRef.current = selectedOdpId;
   dataRef.current = data;
   paletteRef.current = palette;
   occupancyLabelsRef.current = occupancyLabels;
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      setIsFullscreen(document.fullscreenElement === shellRef.current);
+      window.requestAnimationFrame(() => mapRef.current?.resize());
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+
+  const focusMap = useCallback(() => {
+    if (!mapReadyRef.current || !mapRef.current) return;
+    mapRef.current.resize();
+    fitMapToData(mapRef.current, dataRef.current);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    setFullscreenError(null);
+    const shell = shellRef.current;
+    if (!shell || !document.fullscreenEnabled) {
+      setFullscreenError("Fullscreen tidak tersedia di browser ini.");
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === shell) await document.exitFullscreen();
+      else await shell.requestFullscreen();
+    } catch {
+      setFullscreenError("Fullscreen tidak dapat dibuka. Gunakan kontrol fullscreen browser.");
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -556,7 +592,7 @@ export function NetworkMap({
         : null;
 
   return (
-    <div className={`crm-network-map-shell is-${status}`}>
+    <div ref={shellRef} className={`crm-network-map-shell is-${status}`}>
       <div
         ref={containerRef}
         className="crm-network-map-canvas"
@@ -564,10 +600,39 @@ export function NetworkMap({
         aria-label="Peta jaringan interaktif"
         aria-hidden={status !== "ready"}
       />
+      <div className="crm-network-map-toolbar" aria-label="Kontrol tampilan peta">
+        <button
+          type="button"
+          className="crm-network-map-tool"
+          onClick={focusMap}
+          disabled={status !== "ready"}
+          aria-label="Pusatkan peta ke semua data"
+          title="Pusatkan peta"
+          data-testid="network-map-fit"
+        >
+          <LocateFixed aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="crm-network-map-tool"
+          onClick={() => void toggleFullscreen()}
+          aria-label={isFullscreen ? "Keluar dari fullscreen" : "Buka fullscreen"}
+          aria-pressed={isFullscreen}
+          title={isFullscreen ? "Keluar dari fullscreen" : "Buka fullscreen"}
+          data-testid="network-map-fullscreen"
+        >
+          {isFullscreen ? <Minimize2 aria-hidden="true" /> : <Expand aria-hidden="true" />}
+        </button>
+      </div>
       {status !== "ready" && <div className="crm-network-map-fallback">{fallback}</div>}
       {statusLabel && (
         <div className="crm-network-map-status" role="status">
           {statusLabel}
+        </div>
+      )}
+      {fullscreenError && (
+        <div className="crm-network-map-status is-error" role="status">
+          {fullscreenError}
         </div>
       )}
       <p className="sr-only" aria-live="polite">

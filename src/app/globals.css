@@ -155,9 +155,21 @@
 .crm-network-map-shell.is-ready .crm-network-map-canvas { opacity: 1; }
 .crm-network-map-fallback { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto; background: #fff; }
 .crm-network-map-fallback > svg { display: block; width: 100%; min-height: 360px; height: 100%; }
-.crm-network-map-status { position: absolute; z-index: 4; top: 10px; left: 10px; max-width: calc(100% - 20px); padding: 7px 10px; color: #6e5a2c; background: #fffbf2e8; border: 1px solid #efdfb9; border-radius: 8px; font-size: 10px; font-weight: 750; line-height: 1.35; box-shadow: 0 6px 16px #25413a12; }
+.crm-network-map-toolbar { position: absolute; z-index: 5; top: 10px; left: 10px; display: inline-flex; gap: 6px; padding: 4px; background: #ffffffdf; border: 1px solid #dce8e5; border-radius: 10px; box-shadow: 0 7px 18px #25413a18; backdrop-filter: blur(8px); }
+.crm-network-map-tool { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; color: #526767; background: transparent; border: 0; border-radius: 7px; cursor: pointer; transition: color .18s ease, background .18s ease, transform .18s ease; }
+.crm-network-map-tool:hover:not(:disabled), .crm-network-map-tool:focus-visible { color: #007e76; background: #edf8f6; outline: none; }
+.crm-network-map-tool:focus-visible { box-shadow: 0 0 0 3px #04a99f3d; }
+.crm-network-map-tool:active:not(:disabled) { transform: scale(.94); }
+.crm-network-map-tool:disabled { color: #aab8b5; cursor: not-allowed; }
+.crm-network-map-tool svg { width: 17px; height: 17px; }
+.crm-network-map-status { position: absolute; z-index: 4; top: 58px; left: 10px; max-width: min(420px, calc(100% - 20px)); padding: 7px 10px; color: #6e5a2c; background: #fffbf2e8; border: 1px solid #efdfb9; border-radius: 8px; font-size: 10px; font-weight: 750; line-height: 1.35; box-shadow: 0 6px 16px #25413a12; }
+.crm-network-map-status.is-error { color: #9f443e; background: #fff7f6e8; border-color: #f0ccc8; }
 .crm-network-map-shell.is-loading .crm-network-map-status { color: #526767; background: #ffffffed; border-color: #dce8e5; }
 .crm-network-map-shell.is-ready .crm-network-map-status { display: none; }
+.crm-network-map-shell.is-ready .crm-network-map-status.is-error { display: block; }
+.crm-network-map-shell:fullscreen { width: 100vw; height: 100vh; min-height: 100vh; border-radius: 0; }
+.crm-network-map-shell:fullscreen .crm-network-map-canvas, .crm-network-map-shell:fullscreen .crm-network-map-fallback { min-height: 100vh; }
+.crm-network-map-shell:fullscreen .crm-network-map-status { top: 58px; }
 .crm-network-map-canvas .maplibregl-canvas { outline: none; }
 .crm-network-map-canvas .maplibregl-ctrl-group { overflow: hidden; border: 1px solid #dce8e5; border-radius: 9px; box-shadow: 0 6px 16px #25413a18; }
 .crm-network-map-canvas .maplibregl-ctrl button { width: 34px; height: 34px; }
@@ -658,7 +670,7 @@
 .crm-sortable-header svg { flex: 0 0 auto; width: 13px; height: 13px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .crm-sidebar, .crm-nav-group-toggle svg, .crm-nav-list.is-collapsible, .crm-nav-link, .crm-metric-card, .crm-topbar-profile, .crm-profile-menu-link, .crm-signout-button, .crm-login-form .input, .crm-login-form .btn-primary, .crm-global-search, .crm-search-input, .crm-search-result, .crm-notification-button, .crm-notification-item, .crm-network-map-canvas, .employee-photo-crop-box { animation: none; transition-duration: .01ms; }
+  .crm-sidebar, .crm-nav-group-toggle svg, .crm-nav-list.is-collapsible, .crm-nav-link, .crm-metric-card, .crm-topbar-profile, .crm-profile-menu-link, .crm-signout-button, .crm-login-form .input, .crm-login-form .btn-primary, .crm-global-search, .crm-search-input, .crm-search-result, .crm-notification-button, .crm-notification-item, .crm-network-map-canvas, .crm-network-map-tool, .employee-photo-crop-box { animation: none; transition-duration: .01ms; }
 }
 
 /* Existing CRM pages use Tailwind slate utilities. These scoped aliases keep all

@@ -95,6 +95,7 @@ Basemap geografis menggunakan **MapLibre GL JS 5.24.0** sebagai renderer dengan 
 Behavior MapLibre:
 
 - pan, zoom, navigation control, fit-to-data, dan attribution OpenStreetMap melalui `AttributionControl`;
+- kontrol tampilan eksplisit untuk memusatkan ulang data dan masuk/keluar fullscreen, dengan target sentuh dan keyboard yang aman;
 - overlay GeoJSON untuk ODP, customer, cascade, dan customer-to-ODP link;
 - warna marker mengikuti occupancy ODP dan status subscription;
 - klik ODP/customer membuka popup; popup ODP menyediakan akses ke detail ODP;
