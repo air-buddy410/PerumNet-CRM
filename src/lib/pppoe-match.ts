@@ -56,13 +56,26 @@ export function wordsIn(username: string): string[] {
  * muncul di ribuan nama Bali dan tidak membuktikan apa pun.
  */
 export function nameCorroborates(username: string, customerName: string): boolean {
-  const u = username.toLowerCase().replace(/[^a-z]/g, "");
-  if (!u) return false;
+  // Angka dibuang dari KEDUA sisi. Sistem sumber menempelkan urutan pada
+  // sebagian nama ("Salin01", "Dewi01"), dan angka itu tidak pernah ikut
+  // tertulis di username — tanpa dibuang, nama yang justru identik jadi
+  // tidak pernah cocok.
+  const ruas = username.toLowerCase().split(/[^a-z0-9]+/).map((r) => r.replace(/\d+/g, "")).filter(Boolean);
+  const gabung = ruas.join("");
+  if (!gabung) return false;
+
   const kata = customerName
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length >= 5 && !UMUM.has(w));
-  return kata.some((w) => u.includes(w));
+    .map((w) => w.replace(/[^a-z]/g, ""))
+    .filter((w) => w.length >= 3 && !UMUM.has(w));
+
+  return kata.some((w) =>
+    // Nama pendek (3 huruf: Rai, Eni, Ani, Adi) hanya diterima bila ia
+    // menjadi RUAS UTUH pada username — `sryte_030018_rai`. Sebagai
+    // potongan di tengah kata, tiga huruf terlalu mudah muncul kebetulan.
+    w.length <= 3 ? ruas.includes(w) : gabung.includes(w)
+  );
 }
 
 /**
@@ -73,8 +86,15 @@ export function nameCorroborates(username: string, customerName: string): boolea
  * pasangan sama saja dengan tidak memeriksa nama sama sekali.
  */
 const UMUM = new Set([
+  // Urutan kelahiran & sapaan — muncul pada ratusan pelanggan.
   "wayan", "kadek", "komang", "ketut", "putu", "gede", "made", "nyoman",
-  "dewa", "gusti", "agus", "ayu", "luh", "nengah",
+  "nengah", "gusti", "dewa", "ayu", "luh", "ida", "ngurah", "bagus",
+  // Empat huruf yang lolos ambang tetapi sama seringnya. Daftar ini
+  // sengaja PENDEK: yang dibuang hanya gelar dan sapaan, bukan nama.
+  // "Sari", "Suka", "Rayu" terdengar umum tetapi justru itulah bagian yang
+  // membedakan satu orang dari yang lain — dan pengaman terhadap kandidat
+  // ganda sudah bekerja terpisah, jadi tidak perlu dibuang di sini.
+  "anak", "agus", "sang", "jero",
 ]);
 
 /**

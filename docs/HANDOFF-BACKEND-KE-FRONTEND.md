@@ -2044,3 +2044,129 @@ Jangan diperlakukan sebagai bug:
 - **22 paket berkecepatan 0 Mbps** — harga diambil dari nama paket di sistem
   sumber, kecepatannya tidak ada di mana pun. Tampilkan sebagai "belum
   diketahui", bukan "0 Mbps".
+
+## 39. Peta ODP — OpenStreetMap, dan HANYA OpenStreetMap
+
+Diminta langsung oleh pemilik produk: petanya memakai OpenStreetMap, dan
+**atribusi yang muncul di peta hanya OpenStreetMap** — tidak ada logo, merek,
+atau watermark penyedia lain.
+
+### Yang dipakai
+
+Ubin dari OSM, dirender Leaflet. Sudah ada di aplikasi (`/noc/map`,
+`/noc/ftth`), jadi ikuti pola yang sama alih-alih menambah pustaka baru.
+
+```
+https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+```
+
+Atribusinya **wajib** dan tidak boleh dihapus — itu syarat lisensi ODbL, bukan
+hiasan. Yang diminta bukan menghilangkannya, melainkan memastikan **hanya itu**
+yang muncul:
+
+```
+&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
+```
+
+Jangan tambahkan Mapbox, Google, Carto, Stadia, atau penyedia ubin lain —
+masing-masing menuntut atribusinya sendiri muncul di peta, dan itu persis yang
+tidak diinginkan.
+
+### Aturan yang tetap berlaku
+
+**Koordinat pelanggan dan ODP TIDAK BOLEH dikirim ke geocoder publik.**
+Mengambil ubin peta aman — server ubin hanya menerima nomor petak (`z/x/y`)
+dan tidak pernah tahu titik kita. Yang dilarang adalah *pencarian alamat*
+(Nominatim dan sejenisnya) atas data pelanggan: di sana koordinat atau
+alamatnya benar-benar dikirim keluar.
+
+Kalau butuh pencarian di peta, cari di **data kita sendiri** — kode ODP, nama
+pelanggan, nomor layanan — bukan lewat layanan geocoding.
+
+### Data yang tersedia (sudah ada di produksi)
+
+| | |
+|---|---|
+| ODP berkoordinat | **526** dari 577 |
+| Berinduk (kaskade MS) | **526** |
+| Port terisi | 1.677 dari 8.607 |
+| Site | 5 |
+
+Hierarkinya: `NetworkSite` → `Odp` (role `MS`) → `Odp` (role `ODP`) →
+`OdpPort` → `Subscription` → `Customer`.
+
+### Urutan yang paling berguna
+
+1. **Titik ODP diwarnai menurut okupansi** — `portUsed` / `portCapacity`.
+   Itu satu-satunya hal yang langsung dipakai orang lapangan.
+2. **Garis ke induk** (`parentId`) — yang membuat kaskade Master Splitter
+   terlihat sebagai jaringan, bukan sekumpulan titik.
+3. **Klik titik → daftar pelanggan** di port-portnya.
+4. `opticPowerDbm` sebagai label. **Nilainya negatif dan itu normal** —
+   jangan diabsolutkan; membuang tandanya mengubah "sinyal lemah" jadi
+   "sinyal kuat".
+
+### Yang tidak punya koordinat
+
+51 ODP tanpa titik. **Tampilkan sebagai daftar peringatan di samping peta,
+jangan ditaruh di koordinat tebakan.** Titik yang mengarang lokasi lebih
+berbahaya daripada titik yang hilang — teknisi akan mendatanginya.
+
+## 40. Peta sudah lengkap kecuali peta dasarnya
+
+Pemeriksaan `src/components/network-map.tsx`: seluruh lapisannya **sudah ada** —
+`perumnet-odps`, `perumnet-network-sites`, `perumnet-customers`,
+`perumnet-odp-cascades`, `perumnet-fiber-routes`, `perumnet-customer-links`.
+
+Yang tidak ada cuma **peta dasarnya**. Komponen menunjuk `/maps/style.json`,
+dan berkas itu tidak pernah dibuat — jadi seluruh titik dan garis melayang di
+atas latar kosong.
+
+**Tidak perlu membangun ulang apa pun.** Cukup buat `public/maps/style.json`:
+
+```json
+{
+  "version": 8,
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+    }
+  },
+  "layers": [{ "id": "osm", "type": "raster", "source": "osm" }]
+}
+```
+
+### Kenapa hanya satu sumber
+
+Diminta pemilik produk: **hanya atribusi OpenStreetMap yang muncul.** Menambah
+Mapbox, Carto, Stadia, atau MapTiler berarti menambah atribusi mereka juga —
+masing-masing mensyaratkannya. Satu sumber, satu atribusi.
+
+Atribusi OSM itu sendiri **wajib** dan tidak boleh dihapus: syarat lisensi
+ODbL, bukan hiasan. MapLibre menampilkannya otomatis dari properti
+`attribution` di atas.
+
+### Yang perlu diperhatikan
+
+- **Sub-domain `a/b/c` sudah tidak dipakai OSM.** Pakai `tile.openstreetmap.org`
+  langsung; pola `{s}.tile...` sudah usang.
+- **Kebijakan pemakaian ubin OSM** melarang pra-unduh massal dan menuntut
+  `User-Agent` yang jelas. Untuk peta operasional dengan beberapa puluh
+  pengguna ini aman; kalau nanti dipakai jauh lebih ramai, pindah ke penyedia
+  ubin berbayar — dan saat itu atribusinya ikut berubah.
+- **Koordinat pelanggan tidak boleh dikirim ke geocoder publik.** Mengambil
+  ubin aman: server ubin hanya menerima nomor petak `z/x/y` dan tidak pernah
+  tahu titik kita. Yang dilarang pencarian alamat.
+
+### Data yang menunggu ditampilkan
+
+| | |
+|---|---|
+| ODP berkoordinat | **526** dari 577 |
+| Kaskade MS→ODP | **526** kaitan induk |
+| Port terisi | 1.677 dari 8.615 |
+| Kapasitas | 77 ODP 1:8 · 500 ODP 1:16 |

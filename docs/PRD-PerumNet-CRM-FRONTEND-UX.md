@@ -90,19 +90,19 @@ State collapsed memakai key `perumnet-crm.sidebar-collapsed`. Nilai ini hanya pr
 
 Fungsi jaringan pada `/noc/map` sudah tersedia sebagai peta SVG relatif berbasis data database nyata: ODP, customer, cascade ODP, koneksi customer, occupancy, status subscription, filter permission-scoped, detail port, legenda, dan missing-coordinate state.
 
-Basemap geografis fase berikutnya menggunakan **MapLibre GL JS 5.24.0** dengan style/vector tiles dari server internal. Default style URL adalah `/maps/style.json` dan dapat dioverride melalui `NEXT_PUBLIC_MAP_STYLE_URL`. Frontend tidak boleh mengarah ke Google Maps, Mapbox, atau public OSM tile.
+Basemap geografis menggunakan **MapLibre GL JS 5.24.0** sebagai renderer dengan style default di `/maps/style.json`. Style default memakai satu sumber raster OpenStreetMap dan dapat dioverride melalui `NEXT_PUBLIC_MAP_STYLE_URL`. Frontend tidak memakai Google Maps, Mapbox, atau provider tile lain.
 
 Behavior MapLibre:
 
-- pan, zoom, navigation control, fit-to-data, dan attribution dari style internal;
+- pan, zoom, navigation control, fit-to-data, dan attribution OpenStreetMap melalui `AttributionControl`;
 - overlay GeoJSON untuk ODP, customer, cascade, dan customer-to-ODP link;
 - warna marker mengikuti occupancy ODP dan status subscription;
 - klik ODP/customer membuka popup; popup ODP menyediakan akses ke detail ODP;
 - data tetap berasal dari `src/lib/noc-map.ts`, tanpa business rule atau query baru di frontend;
-- jika style/tile internal belum tersedia atau gagal dimuat, SVG jaringan mandiri tetap ditampilkan dengan pesan status yang jujur;
+- jika style/tile basemap gagal dimuat, SVG jaringan mandiri tetap ditampilkan dengan pesan status yang jujur;
 - geocoding, current location, realtime tracking, dan entity search bukan bagian fase ini.
 
-Dependency Opus/infrastruktur: sediakan style JSON, vector tile source internal, TLS/CORS yang sesuai, dan attribution/licensing. CRM frontend tidak membuat tile, tidak menyimpan token provider, dan tidak mengubah loader data maps.
+Dependency peta: penggunaan tile OpenStreetMap harus mematuhi attribution dan kebijakan penggunaan OSM. CRM frontend tidak melakukan geocoding, tidak mengirim koordinat customer ke layanan pencarian publik, tidak menyimpan token provider, dan tidak mengubah loader data maps.
 
 ## 8. Search MVP
 
@@ -284,7 +284,7 @@ Opus menangani query profile + relasi Employee, update nama/telepon, verifikasi/
 | `CurrentUser` belum memuat phone/Employee | Profile page membaca data presentation secara read-only sampai DTO profile tersedia. |
 | Build/dev server berbagi `.next` dengan Opus | Gunakan server/build bersih dan isolated untuk QA. |
 | Route baru atau permission berubah | Icon registry memiliki fallback group icon; groups tetap menjadi source of truth. |
-| Style/vector tile internal belum tersedia | Gunakan fallback SVG, tampilkan status dependency, dan jangan mengirim request ke provider publik. |
+| Basemap OpenStreetMap gagal dimuat | Gunakan fallback SVG dan tampilkan status dependency secara jujur. |
 | Tabel/form lama mempunyai utility Tailwind yang beragam | Scoped design aliases, `min-width: 0`, wrapping, dan overflow wrapper diaudit per viewport. |
 
 ## 16. Definition of done frontend
