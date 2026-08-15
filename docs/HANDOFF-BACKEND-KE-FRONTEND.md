@@ -2308,3 +2308,26 @@ loadRingkasanPort(table.query.device)   // bukan loadRingkasanPort()
 
 Bentuk kembaliannya tetap array, jadi `.find(...)` yang sudah ada tetap
 bekerja tanpa diubah.
+
+### 41.6 Angka ONU itu "sedang online", BUKAN inventaris
+
+Terlihat setelah pemangkasan port berjalan di produksi: dari 667 baris ONU,
+**667 berstatus `up` dan nol berstatus turun.** Bukan kebetulan — LibreNMS
+tampaknya MENGHAPUS port ONU dari daftarnya ketika ONU-nya mati, alih-alih
+menandainya turun. Jumlahnya memang bergerak: 670 pada satu sinkron, 667 pada
+sinkron berikutnya sejam kemudian.
+
+Akibatnya untuk tampilan:
+
+- **Jangan tulis "667 ONU terpasang" atau apa pun yang berbunyi inventaris.**
+  Yang benar "667 ONU online". Pelanggan yang mencabut listrik router-nya
+  hilang dari daftar, lalu muncul kembali sendiri saat dinyalakan.
+- **Jangan pakai angka ini untuk menghitung pelanggan.** Jumlah pelanggan per
+  OLT ada di `Subscription` dan `OdpPort`, bukan di sini.
+- Kolom "status operasional" pada baris ONU akan selalu berbunyi Aktif. Itu
+  bukan bug tampilan; memang tidak ada ONU turun yang pernah sampai ke sini.
+
+Sebelum pemangkasan, tabel ini menumpuk setiap ONU yang pernah terlihat dan
+tidak pernah menunjukkan satu pun turun — jadi angkanya dulu bukan inventaris
+maupun jumlah online, melainkan "pernah ada". Sekarang setidaknya ia berarti
+sesuatu yang bisa dijelaskan.
