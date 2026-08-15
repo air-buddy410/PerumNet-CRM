@@ -541,29 +541,63 @@ export async function applyCustomerFromRows(
       });
       outcome.createdSubscriptions++;
 
-      // ── Port ODP ──
-      if (r.odpRef) {
-        const odpId = odpByCode.get(r.odpRef);
-        if (odpId) {
-          const kosong = await prisma.odpPort.findFirst({
-            where: { odpId, subscriptionId: null, status: "FREE" },
-            orderBy: { portNumber: "asc" },
-          });
-          // Port habis TIDAK menggagalkan impor. Kapasitasnya sendiri dugaan,
-          // jadi kehabisan port di sini lebih menandakan angka dugaannya yang
-          // kurang daripada ada yang salah dengan pelanggannya.
-          if (kosong) {
-            await prisma.odpPort.update({
-              where: { id: kosong.id },
-              data: { subscriptionId: sub.id, status: "USED" },
-            });
-            await prisma.odp.update({ where: { id: odpId }, data: { portUsed: { increment: 1 } } });
-            outcome.linkedOdpPorts++;
-          }
-        }
-      }
+      void sub;
     }
-  });
+    },
+    // Bawaan lima detik dibuat untuk transaksi biasa, bukan untuk memuat
+    // basis pelanggan pertama kali.
+    { timeout: 900_000, maxWait: 60_000 }
+  );
+
+  // ── Penautan port ODP: DI LUAR transaksi, dan itu disengaja ──
+  //
+  // Membuat pelanggan dan langganannya harus utuh — separuh basis pelanggan
+  // jauh lebih sulit dibereskan daripada nol. Menautkan port tidak: ia
+  // idempoten (port yang sudah terisi dilewati), bisa diulang kapan saja, dan
+  // menahannya di dalam transaksi yang sama justru menggagalkan seluruh impor
+  // demi langkah yang paling tidak kritis. Percobaan kedua mati persis di
+  // sini.
+  const odpId2 = new Map(
+    (await db.odp.findMany({ select: { id: true, code: true } })).map((o) => [o.code, o.id])
+  );
+  const subId2 = new Map(
+    (await db.subscription.findMany({ select: { id: true, serviceNumber: true } })).map((x) => [x.serviceNumber, x.id])
+  );
+  // Port kosong dimuat SEKALI lalu dibagikan dari memori, bukan dicari ulang
+  // per pelanggan.
+  const antrean = new Map<string, string[]>();
+  for (const pt of await db.odpPort.findMany({
+    where: { subscriptionId: null, status: "FREE" },
+    select: { id: true, odpId: true },
+    orderBy: { portNumber: "asc" },
+  })) {
+    const a = antrean.get(pt.odpId) ?? [];
+    a.push(pt.id);
+    antrean.set(pt.odpId, a);
+  }
+
+  const tersentuh = new Set<string>();
+  for (const r of rows) {
+    if (!r.odpRef) continue;
+    const oid = odpId2.get(r.odpRef);
+    const sid = subId2.get(r.cid);
+    if (!oid || !sid) continue;
+    const a = antrean.get(oid);
+    // Port habis TIDAK menggagalkan impor: kapasitasnya berasal dari sumber
+    // yang bisa saja tertinggal, jadi kehabisan port lebih menandakan
+    // kapasitas yang perlu dikoreksi daripada pelanggan yang salah.
+    if (!a || a.length === 0) continue;
+    await db.odpPort.update({ where: { id: a.shift()! }, data: { subscriptionId: sid, status: "USED" } });
+    tersentuh.add(oid);
+    outcome.linkedOdpPorts++;
+  }
+
+  // `portUsed` dihitung dari kenyataan, bukan ditambah bertahap — penjumlahan
+  // bertahap meleset begitu impor dijalankan dua kali.
+  for (const oid of tersentuh) {
+    const dipakai = await db.odpPort.count({ where: { odpId: oid, subscriptionId: { not: null } } });
+    await db.odp.update({ where: { id: oid }, data: { portUsed: dipakai } });
+  }
 
   await logAudit({
     userId: user.id,
