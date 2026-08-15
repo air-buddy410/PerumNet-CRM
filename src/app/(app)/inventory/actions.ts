@@ -22,7 +22,26 @@ const itemSchema = z.object({
   unit: z.enum(ITEM_UNITS),
   trackingType: z.enum(TRACKING_TYPES.map(([v]) => v) as [string, ...string[]]),
   minStock: z.coerce.number().int().nonnegative().default(0),
+  // Fase 74 — bidang katalog. Sudah terisi dari Impor Katalog, tetapi sampai
+  // sekarang belum bisa disunting dari formulir.
+  supplierId: z.string().optional(),
+  purchaseCost: z.string().optional(),
+  salePrice: z.string().optional(),
+  condition: z.enum(["GOOD", "SECOND"]).optional(),
 });
+
+/**
+ * Rupiah dari formulir menjadi BigInt.
+ *
+ * `undefined` bila bidangnya tidak dikirim sama sekali — Prisma membacanya
+ * sebagai "jangan sentuh". Formulir yang tidak menampilkan harga tidak boleh
+ * menghapus harga hasil impor hanya karena ia tidak mengirimkannya.
+ */
+function rupiah(nilai: string | undefined, dikirim: boolean): bigint | null | undefined {
+  if (!dikirim) return undefined;
+  const bersih = (nilai ?? "").replace(/[^\d]/g, "");
+  return bersih ? BigInt(bersih) : null;
+}
 
 export async function saveItemAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
@@ -64,6 +83,15 @@ export async function saveItemAction(formData: FormData): Promise<void> {
     }
   }
 
+  // Pemasok yang disebut harus benar-benar ada. Menyimpan `supplierId` yang
+  // tidak dikenal membuat Prisma menolak dengan galat relasi yang mentah.
+  if (d.supplierId) {
+    const ada = await db.supplier.findUnique({ where: { id: d.supplierId }, select: { id: true } });
+    if (!ada) {
+      redirect("/inventory/items?error=" + encodeURIComponent("Pemasok yang dipilih tidak ditemukan."));
+    }
+  }
+
   const data = {
     code,
     name: d.name,
@@ -73,6 +101,10 @@ export async function saveItemAction(formData: FormData): Promise<void> {
     unit: d.unit,
     trackingType: d.trackingType,
     minStock: d.minStock,
+    supplierId: formData.get("supplierId") === null ? undefined : d.supplierId || null,
+    purchaseCost: rupiah(d.purchaseCost, formData.get("purchaseCost") !== null),
+    salePrice: rupiah(d.salePrice, formData.get("salePrice") !== null),
+    condition: d.condition,
   };
   const item = d.id
     ? await db.item.update({ where: { id: d.id }, data })

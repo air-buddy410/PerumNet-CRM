@@ -2200,9 +2200,31 @@ supaya bentrokannya kelihatan sebelum disimpan.
 NIK **tidak wajib**: 1.711 pelanggan hasil impor tidak punya NIK, dan
 mewajibkannya membuat tiap penyuntingan kecil pada mereka mustahil disimpan.
 
-Nilainya ditampilkan tersamar (`3271****...****1234`) bagi peran tanpa izin
-lihat PII — penyamaran terjadi di lapisan data, jadi halaman tidak perlu
-mengurusnya. Lihat §34.
+NIK dicek keunikannya lebih dulu; bentrok kembali dengan kalimat yang menyebut
+siapa pemakainya, bukan galat Prisma mentah.
+
+Nilainya ditampilkan tersamar (`3271••••••••1234`) bagi peran tanpa izin lihat
+PII — penyamaran terjadi di lapisan data, jadi halaman tidak perlu mengurusnya.
+Lihat §34.
+
+**Penjaga sisi tulis — ini yang paling penting untuk diketahui frontend.**
+Telepon, email, dan NIK ikut tersamar bagi petugas tanpa `customers.pii_view`.
+Berarti formulir yang ia buka berisi `••••••5678` pada kolom telepon, dan
+begitu ia menyimpan — walau yang diubahnya cuma alamat — nilai bertopeng itu
+terkirim balik. Tanpa penjaga, nomor aslinya tertimpa bintang: tidak ada galat,
+penyimpanan berhasil, dan nomornya hilang tanpa ada yang tahu sampai seseorang
+mencoba menelepon.
+
+Backend sekarang menolak nilai bertopeng dan memperlakukannya sebagai "tidak
+diubah" (`bertopeng()` di `src/lib/customer-pii.ts`). Dua hal yang tetap
+menjadi tanggung jawab halaman:
+
+- **Bidang yang tidak dikirim dibiarkan apa adanya**, bukan dikosongkan.
+  Formulir yang lebih pendek aman — ia tidak akan menghapus kolom yang tidak
+  ditampilkannya.
+- **NIK dan tanggal lahir hanya ditulis oleh yang berizin PII.** Kiriman dari
+  peran lain diabaikan diam-diam, jadi jangan tampilkan kolomnya kepada mereka
+  seolah bisa disunting.
 
 ### 41.2 Master pemasok
 
@@ -2255,3 +2277,21 @@ jangan dirapikan atau dipotong.
 Kecepatan kosong berarti perangkat tidak melaporkan, dan itu bukan hal yang
 sama dengan nol. `speedText` mengembalikan `null` — tampilkan sebagai strip,
 bukan "0 bps".
+
+### 41.4 Bidang katalog pada Item Master
+
+`saveItemAction` sekarang menerima empat bidang yang selama ini hanya terisi
+lewat Impor Katalog dan tampil read-only:
+
+| name | bentuk |
+|---|---|
+| `supplierId` | id `Supplier`; diperiksa keberadaannya sebelum disimpan |
+| `purchaseCost` | rupiah; titik, koma, dan "Rp" dibersihkan sendiri |
+| `salePrice` | sama |
+| `condition` | `GOOD` atau `SECOND` |
+
+Aturan yang sama seperti §41.1 berlaku: **bidang yang tidak dikirim dibiarkan
+apa adanya.** Formulir item yang tidak menampilkan harga tidak akan menghapus
+harga hasil impor.
+
+Kosongkan nilainya secara sengaja (kirim string kosong) untuk menghapus.
