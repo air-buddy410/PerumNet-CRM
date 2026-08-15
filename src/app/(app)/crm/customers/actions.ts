@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/constants";
+import { previewCustomerImport, applyCustomerImport } from "@/lib/customer-import-service";
 
 const schema = z.object({
   customerId: z.string().min(1),
@@ -63,4 +64,28 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
   redirect(
     `/crm/customers/${customerId}?ok=` + encodeURIComponent("Data customer tersimpan.")
   );
+}
+
+// ── Impor pelanggan & langganan (Fase 68) ───────────────────────
+//
+// Keduanya MENGEMBALIKAN nilai alih-alih redirect: hasil pratinjau adalah
+// tabel yang harus dibaca dulu. Penerapan mengunggah ULANG berkasnya, bukan
+// mengirim baris hasil pratinjau.
+
+export async function previewCustomerImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_CREATE);
+  return previewCustomerImport(user, formData.get("file") as File);
+}
+
+export async function applyCustomerImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_CREATE);
+  const result = await applyCustomerImport(user, formData.get("file") as File, {
+    allowPartial: formData.get("allowPartial") === "1",
+  });
+  if (result.ok) {
+    revalidatePath("/crm/customers");
+    revalidatePath("/crm/subscriptions");
+    revalidatePath("/noc/ftth");
+  }
+  return result;
 }

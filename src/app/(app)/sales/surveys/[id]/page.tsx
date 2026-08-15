@@ -10,6 +10,7 @@ import {
   formatRupiah,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 import {
   scheduleSurveyAction,
   completeSurveyAction,
@@ -245,7 +246,7 @@ export default async function SurveyDetailPage({
               Foto & Bukti ({attachments.length})
             </div>
             {(canExecute || canManage) && isOpen !== null && (
-              <form
+              <ClientFileUploadGuard
                 action={uploadSurveyPhotoAction}
                 className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4"
               >
@@ -253,7 +254,7 @@ export default async function SurveyDetailPage({
                 <input type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="text-sm" required />
                 <button type="submit" className="btn-secondary">Unggah</button>
                 <span className="text-xs text-slate-400">JPG/PNG/WebP/PDF, maks 5MB</span>
-              </form>
+              </ClientFileUploadGuard>
             )}
             {attachments.length === 0 ? (
               <EmptyState message="Belum ada foto/bukti." />

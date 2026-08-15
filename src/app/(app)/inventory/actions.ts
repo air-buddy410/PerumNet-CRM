@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS, TRACKING_TYPES, ITEM_UNITS } from "@/lib/constants";
+import { previewCatalogImport, applyCatalogImport } from "@/lib/item-import-service";
 
 const itemSchema = z.object({
   id: z.string().optional(),
@@ -166,4 +167,32 @@ export async function toggleWarehouseAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/inventory/warehouses");
   redirect("/inventory/warehouses?ok=" + encodeURIComponent(`Gudang ${warehouse.code} diperbarui.`));
+}
+
+// ── Impor katalog material (Fase 61) ────────────────────────────
+//
+// Keduanya MENGEMBALIKAN nilai alih-alih redirect: hasil pratinjau adalah
+// tabel yang harus dibaca dulu sebelum admin gudang memutuskan.
+//
+// Penerapan mengunggah ULANG berkasnya, bukan mengirim baris hasil pratinjau.
+// Pratinjau yang teliti tidak ada gunanya kalau penerapannya percaya begitu
+// saja pada apa yang datang dari peramban.
+
+export async function previewCatalogImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
+  return previewCatalogImport(user, formData.get("file") as File, String(formData.get("warehouseId") ?? ""));
+}
+
+export async function applyCatalogImportAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.ITEMS_MANAGE);
+  // `allowPartial` HARUS datang dari centang yang sadar di layar, bukan
+  // nilai bawaan. Melewati baris bermasalah adalah keputusan operator.
+  const result = await applyCatalogImport(user, formData.get("file") as File, String(formData.get("warehouseId") ?? ""), {
+    allowPartial: formData.get("allowPartial") === "1",
+  });
+  if (result.ok) {
+    revalidatePath("/inventory/items");
+    revalidatePath("/inventory/stock");
+  }
+  return result;
 }

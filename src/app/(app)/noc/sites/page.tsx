@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, SITE_TYPES, statusLabel } from "@/lib/constants";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
 import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
+import { FtthCoordinatePicker } from "@/components/ftth-coordinate-picker";
 import { saveSiteAction } from "../actions";
 
 export const metadata = { title: "Network Sites" };
@@ -129,6 +130,10 @@ export default async function SitesPage({
                 <label className="label" htmlFor="address">Alamat</label>
                 <textarea id="address" name="address" rows={2} className="input" defaultValue={editRow?.address ?? ""} />
               </div>
+              <FtthCoordinatePicker
+                initialLatitude={editRow?.latitude}
+                initialLongitude={editRow?.longitude}
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label" htmlFor="areaId">Area</label>

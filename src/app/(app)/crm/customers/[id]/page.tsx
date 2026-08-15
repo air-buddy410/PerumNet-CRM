@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { redactCustomer } from "@/lib/customer-pii";
 import {
   PERMISSIONS,
   CUSTOMER_TYPES,
@@ -25,7 +26,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [customer, areas, users] = await Promise.all([
+  const [rawCustomer, areas, users] = await Promise.all([
     db.customer.findUnique({
       where: { id },
       include: {
@@ -45,7 +46,12 @@ export default async function CustomerDetailPage({
     db.area.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
-  if (!customer) notFound();
+  if (!rawCustomer) notFound();
+
+  // Penyamaran di JALUR DATA, bukan di JSX — lihat src/lib/customer-pii.ts.
+  // Halaman di bawah menerima bentuk yang persis sama, jadi tidak ada
+  // percabangan "kalau boleh lihat" yang harus dipelihara di tiap kolom.
+  const customer = redactCustomer(rawCustomer, user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW));
 
   const canEdit = user.permissions.has(PERMISSIONS.CUSTOMERS_EDIT);
   const canCreateSub = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_CREATE);

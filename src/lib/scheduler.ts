@@ -7,6 +7,7 @@ import { sweepOverdueRecoveries } from "@/lib/device-recovery";
 import { applyDueTerminations } from "@/lib/termination";
 import { sweepEmploymentLifecycle } from "@/lib/employment-lifecycle";
 import { sweepGroupDrift } from "@/lib/identity-groups";
+import { syncLibrenmsDevices } from "@/lib/librenms-sync";
 
 // ── Penjadwal Pekerjaan Berkala (Fase 27) ───────────────────────
 //
@@ -204,6 +205,33 @@ export const TASKS: TaskDefinition[] = [
       // dilihat manusia — bukan efek samping cron jam tiga pagi.
       const detail = await sweepGroupDrift();
       return { detail };
+    },
+  },
+  {
+    // Sepuluh menit, bukan dua menit seperti polling PPPoE. Inventaris
+    // perangkat hampir tidak pernah berubah; yang berubah cepat adalah
+    // statusnya, dan itu sudah ditangani webhook alarm.
+    code: "librenms.sync",
+    name: "Tarik inventaris perangkat LibreNMS",
+    description: "Menyelaraskan NetworkDevice dengan daftar perangkat yang dipantau LibreNMS.",
+    defaultIntervalSec: 600,
+    enabledByDefault: true,
+    run: async () => {
+      const r = await syncLibrenmsDevices();
+      // Kegagalan DILEMPAR, mengikuti tugas lain: penjadwal yang menangkapnya
+      // dan menandai putaran ini FAILED beserta pesannya.
+      if (!r.ok) throw new Error(r.error);
+      const d = r.data;
+      return {
+        detail:
+          `${d.fetched} perangkat (${d.created} baru, ${d.updated} diperbarui)` +
+          (d.skipped ? ` · ${d.skipped} dilewati` : "") +
+          (d.missing.length ? ` · ${d.missing.length} tidak lagi dipantau` : "") +
+          ` · ${d.portsFetched} port (${d.portsCreated} baru, ${d.portsUpdated} diperbarui)` +
+          (Object.keys(d.portsByKind).length
+            ? ` — ${Object.entries(d.portsByKind).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}:${n}`).join(" ")}`
+            : ""),
+      };
     },
   },
   {

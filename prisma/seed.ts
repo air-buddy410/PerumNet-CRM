@@ -154,6 +154,8 @@ const PERMISSIONS: { code: string; module: string; action: string; description: 
   // Phase 15 — Kanal Pelanggan
   { code: "channels.view", module: "channels", action: "view", description: "Melihat template pesan, antrian kirim, dan pengumuman" },
   { code: "channels.manage", module: "channels", action: "manage", description: "Mengelola template, blast pesan, pengumuman, dan antrian" },
+  // Phase 66 — Data pribadi pelanggan
+  { code: "customers.pii_view", module: "crm", action: "view", description: "Melihat NIK, telepon, email, dan tanggal lahir pelanggan tanpa samaran" },
   // Phase 47 — Arsip terpadu
   { code: "archive.view", module: "archive", action: "view", description: "Melihat arsip lintas modul beserta alasan pengarsipannya" },
   { code: "archive.restore", module: "archive", action: "restore", description: "Memulihkan baris yang sudah diarsipkan" },
@@ -183,7 +185,12 @@ const SALES_CORE = [
 const INV_VIEW = ["inventory.view", "custody.view", "work_orders.view"];
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   super_admin: ALL,
-  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate", "archive.view", "archive.restore"],
+  // customers.pii_view sengaja TIDAK masuk CRM_VIEW: seluruh divisi yang
+  // melihat daftar pelanggan tidak perlu melihat NIK-nya. Sales menutup
+  // penjualan tanpa itu, teknisi memasang tanpa itu. Yang butuh nomor utuh
+  // hanya yang menangani sengketa identitas — dan itu keputusan sadar,
+  // bukan efek samping punya akses CRM.
+  management: [...BASE, "approvals.act", "audit_log.view", "users.view", "roles.view", "master_data.view", "customers.pii_view", ...CRM_VIEW, ...INV_VIEW, "finance.view", "projects.view", "noc.view", "it.view", "billing.view", "gl.view", "ctickets.view", "hrd.view", "channels.view", "termination.view", "termination.approve", "device_recovery.dispose", "device_recovery.escalate", "archive.view", "archive.restore"],
   finance: [...BASE, "approvals.act", "master_data.view", ...CRM_VIEW, "inventory.view", "finance.view", "cash.post", "cash.reverse", "cash.manage", "closings.manage", "projects.view", "billing.view", "billing.manage", "invoices.create", "invoices.post", "merchants.manage", "payments.create", "payments.post", "payments.reverse", "dunning.manage", "gl.view", "gl.manage", "gl.post"],
   sales_manager: [...BASE, "approvals.act", ...SALES_CORE, "leads.assign"],
   // Fase 22: noc_manager + noc_engineer dilebur. Permission = gabungan keduanya.
@@ -277,13 +284,44 @@ const AREAS: [string, string][] = [
 ];
 
 const PACKAGES: {
-  code: string; name: string; down: number; up: number; price: number; install: number;
+  code: string; name: string; down: number; up: number; price: number; install: number; desc: string;
 }[] = [
-  { code: "HOME-10", name: "Home 10 Mbps", down: 10, up: 5, price: 150_000, install: 250_000 },
-  { code: "HOME-20", name: "Home 20 Mbps", down: 20, up: 10, price: 200_000, install: 250_000 },
-  { code: "HOME-50", name: "Home 50 Mbps", down: 50, up: 25, price: 300_000, install: 250_000 },
-  { code: "BIZ-100", name: "Business 100 Mbps", down: 100, up: 50, price: 1_000_000, install: 500_000 },
+  // Fase 67 — paket SEBENARNYA, disalin dari https://perumnet.id (15 Agustus
+  // 2026). Sebelumnya di sini ada empat paket karangan (HOME-10 … BIZ-100)
+  // yang tidak pernah dijual; lihat NONAKTIFKAN_PAKET_LAMA di bawah.
+  //
+  // Kecepatan SIMETRIS — dikonfirmasi pemilik produk, bukan disimpulkan dari
+  // situs yang hanya menyebut satu angka.
+  //
+  // Paket Personal punya biaya registrasi Rp50.000. Kewajiban bayar tiga
+  // bulan di muka yang tertulis di situs BUKAN sifat paketnya — itu promo
+  // bundling, dan promo berubah tanpa paketnya berubah. Menaruhnya di sini
+  // akan membuat setiap langganan Personal di masa depan mewarisi syarat yang
+  // barangkali sudah berakhir. Ia menunggu modul promo; sampai itu ada,
+  // penegakannya di penagihan.
+  { code: "PERSONAL", name: "Personal", down: 27, up: 27, price: 175_000, install: 50_000,
+    desc: "Registrasi Rp50.000." },
+  { code: "BERDUA", name: "Berdua", down: 47, up: 47, price: 225_000, install: 0,
+    desc: "Registrasi gratis. Paket paling populer." },
+  { code: "KELUARGA", name: "Keluarga", down: 77, up: 77, price: 275_000, install: 0,
+    desc: "Registrasi gratis." },
+  { code: "NATAH", name: "Natah", down: 107, up: 107, price: 325_000, install: 0,
+    desc: "Registrasi gratis." },
+  { code: "BANJAR", name: "Banjar", down: 177, up: 177, price: 500_000, install: 0,
+    desc: "Registrasi gratis." },
 ];
+
+/**
+ * Paket karangan dari seed awal — dihapus.
+ *
+ * Penghapusan tetap DIJAGA: hanya terjadi bila paketnya belum pernah dipakai
+ * satu langganan, quotation, survey, atau lead pun. Master yang sudah
+ * tersambung ke transaksi tidak akan dihapus meski namanya ada di daftar ini,
+ * sebab menghapusnya memutus riwayat harga pelanggan lama dan itu tidak bisa
+ * dibatalkan. Daftar ini pun sengaja tidak dikosongkan setelah dipakai: seed
+ * harus tetap idempoten pada basis data yang belum pernah dijalankan.
+ */
+const HAPUS_PAKET_LAMA = ["HOME-10", "HOME-20", "HOME-50", "BIZ-100"];
 
 // Approval matrix (PRD §48) dengan struktur organisasi staff -> supervisor -> owner:
 // SUPERVISOR = supervisor divisi pengaju (dinamis), OWNER = pemilik,
@@ -481,8 +519,31 @@ async function main() {
         uploadMbps: p.up,
         monthlyPrice: BigInt(p.price),
         installationFee: BigInt(p.install),
+        description: p.desc,
       },
     });
+  }
+
+  // Paket karangan dari seed awal dihapus — tetapi hanya yang benar-benar
+  // belum tersentuh transaksi apa pun. Seluruh relasi diperiksa, bukan hanya
+  // langganan: sebuah quotation lama yang menunjuk paket terhapus akan
+  // meledak saat dibuka, dan itu baru ketahuan berbulan-bulan kemudian.
+  for (const code of HAPUS_PAKET_LAMA) {
+    const lama = await db.package.findUnique({
+      where: { code },
+      select: {
+        id: true,
+        _count: { select: { subscriptions: true, quotations: true, surveys: true, interestedLeads: true } },
+      },
+    });
+    if (!lama) continue;
+    const dipakai = Object.entries(lama._count).filter(([, n]) => n > 0);
+    if (dipakai.length) {
+      console.log(`  ! Paket ${code} masih dipakai (${dipakai.map(([k, n]) => `${k}=${n}`).join(", ")}) — tidak dihapus.`);
+      continue;
+    }
+    await db.package.delete({ where: { id: lama.id } });
+    console.log(`  - Paket contoh ${code} dihapus (tidak pernah dipakai).`);
   }
 
   console.log("Seeding inventory master...");

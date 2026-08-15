@@ -1,0 +1,626 @@
+import { db } from "@/lib/db";
+import { logAudit } from "@/lib/audit";
+import { PERMISSIONS } from "@/lib/constants";
+import { MAX_UPLOAD_BYTES } from "@/lib/upload-rules";
+import { readSheetRows, XlsxError } from "@/lib/xlsx-read";
+import { parseCustomerSheet, priceFromPlan, type CustomerRow, type RowIssue } from "@/lib/customer-import";
+import { codeFromName } from "@/lib/item-import-service";
+import type { CurrentUser } from "@/lib/rbac";
+
+// ── Impor pelanggan & langganan: pratinjau & penerapan (Fase 68) ─
+//
+// Dua sifat yang sama dengan importir katalog dan pegawai, dan keduanya
+// disengaja: PENERAPAN MEMBACA ULANG BERKASNYA, dan SEMUA ATAU TIDAK SAMA
+// SEKALI. Impor pelanggan yang separuh jauh lebih sulit dibereskan daripada
+// yang ditolak — yang separuh sudah punya nomor layanan, sudah menempati port
+// ODP, dan menjalankan ulang berkas yang sama akan menabrak keunikannya.
+//
+// Yang KHAS di sini: impor ini membuat MASTER JARINGAN sebagai efek samping.
+// ODP yang disebut pelanggan belum tentu ada di aplikasi, dan tanpa ODP tidak
+// ada port untuk ditempati. ODP dibuat dengan kapasitas dugaan yang ditandai
+// terang-terangan — lihat KAPASITAS_ODP_DUGAAN di bawah.
+
+/**
+ * Kapasitas port bawaan untuk ODP yang dibuat lewat impor.
+ *
+ * Sumbernya TIDAK memuat kapasitas ODP sama sekali. Delapan dipilih karena
+ * itu ukuran ODP terkecil yang lazim, dan karena pada data yang ada tidak ada
+ * satu pun ODP yang melayani lebih dari lima pelanggan.
+ *
+ * Angka ini HAMPIR PASTI TERLALU KECIL untuk sebagian ODP: ekspor ini hanya
+ * memuat pelanggan 2026, sedangkan tiang yang sama juga melayani pelanggan
+ * lama yang datanya ada di Wifinetbill. Karena itu tiap ODP yang dibuat
+ * lewat jalur ini diberi catatan yang menyebut angkanya dugaan — supaya
+ * okupansi yang terlihat "penuh" tidak dikira kenyataan.
+ */
+export const KAPASITAS_ODP_DUGAAN = 8;
+
+const CATATAN_ODP = "Dibuat dari impor pelanggan; kapasitas port masih dugaan dan perlu diverifikasi di lapangan.";
+
+export type Tindakan = "CREATE" | "LENGKAPI" | "SKIP";
+
+export interface CustomerPlan {
+  rowNumber: number;
+  cid: string;
+  name: string;
+  action: Tindakan;
+  reason: string | null;
+  changes: string[];
+  notes: string[];
+}
+
+export interface OdpPlan {
+  code: string;
+  action: "CREATE" | "SKIP";
+  /** Berapa pelanggan pada berkas ini yang menunjuk ODP tersebut. */
+  customers: number;
+}
+
+export interface ImportPlan {
+  ok: boolean;
+  customers: CustomerPlan[];
+  odps: OdpPlan[];
+  issues: RowIssue[];
+  skipped: number;
+  willCreateCustomers: number;
+  willCompleteCustomers: number;
+  willSkipCustomers: number;
+  willCreateOdps: number;
+  willCreateSubscriptions: number;
+  /** Paket pada berkas yang tidak ada padanannya di master. */
+  unknownPackages: string[];
+  /** Paket yang akan DIBUAT dari nama di berkas; harga dari angka di dalamnya. */
+  newPackages: { plan: string; code: string; price: number; customers: number }[];
+  /** Nama sales pada berkas yang tidak ada padanannya di tabel User. */
+  unknownSales: string[];
+}
+
+export interface ImportOutcome {
+  createdPackages: string[];
+  createdOdps: string[];
+  createdCustomers: { cid: string; customerNumber: string; name: string }[];
+  completedCustomers: { cid: string; fields: string[] }[];
+  createdSubscriptions: number;
+  linkedOdpPorts: number;
+  skipped: number;
+  /** Baris bermasalah yang DILEWATI karena penerapan dijalankan sebagian. */
+  skippedIssues: RowIssue[];
+}
+
+type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
+// ── Pembacaan berkas ────────────────────────────────────────────
+
+async function toRows(user: CurrentUser, file: File): Promise<Result<string[][]>> {
+  if (!user.permissions.has(PERMISSIONS.CUSTOMERS_CREATE)) {
+    return { ok: false, error: "Anda tidak memiliki izin membuat pelanggan." };
+  }
+  if (!user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_CREATE)) {
+    return { ok: false, error: "Impor ini juga membuat langganan — izin subscriptions.create wajib." };
+  }
+  if (!file || file.size === 0) return { ok: false, error: "Berkas kosong." };
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { ok: false, error: `Berkas terlalu besar (maksimal ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB).` };
+  }
+  try {
+    return { ok: true, data: readSheetRows(Buffer.from(await file.arrayBuffer())) };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof XlsxError ? e.message : `Berkas tidak terbaca: ${(e as Error).message}`,
+    };
+  }
+}
+
+// ── Penyusunan rencana ──────────────────────────────────────────
+
+/** Bidang pelanggan yang BOLEH ditulis lewat impor — daftar tertutup. */
+const KOLOM_PELANGGAN = ["identityNumber", "birthDate", "email", "latitude", "longitude"] as const;
+
+function pelangganChanges(
+  lama: {
+    identityNumber: string | null;
+    birthDate: Date | null;
+    email: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  },
+  baru: CustomerRow
+): { key: (typeof KOLOM_PELANGGAN)[number]; ringkas: string }[] {
+  const out: { key: (typeof KOLOM_PELANGGAN)[number]; ringkas: string }[] = [];
+  // Hanya MENGISI yang kosong. Nama, telepon, dan alamat tidak pernah ditimpa
+  // lewat impor: data di aplikasi bisa saja hasil koreksi CS yang lebih baru
+  // daripada spreadsheet, dan mengembalikannya ke versi lama tanpa diminta
+  // adalah kerusakan yang tidak meninggalkan jejak.
+  if (!lama.identityNumber && baru.identityNumber) out.push({ key: "identityNumber", ringkas: "NIK diisi" });
+  if (!lama.birthDate && baru.birthDate) out.push({ key: "birthDate", ringkas: "Tanggal lahir diisi" });
+  if (!lama.email && baru.email) out.push({ key: "email", ringkas: "Email diisi" });
+  if (lama.latitude === null && baru.latitude !== null) out.push({ key: "latitude", ringkas: "Koordinat diisi" });
+  if (lama.longitude === null && baru.longitude !== null) out.push({ key: "longitude", ringkas: "Koordinat diisi" });
+  return out;
+}
+
+interface Rencana {
+  plan: ImportPlan;
+  rows: CustomerRow[];
+  /** id Package per nama paket di berkas. */
+  paket: Map<string, string>;
+  /** id User per nama sales di berkas. */
+  sales: Map<string, string>;
+}
+
+/**
+ * Menyusun rencana dari tabel teks — TANPA menulis apa pun.
+ *
+ * Diekspor supaya bisa diuji kering terhadap ekspor asli tanpa membangun
+ * berkas xlsx tiruan lebih dulu. Pratinjau dan penerapan sama-sama lewat
+ * sini, jadi yang diuji memang jalur yang dipakai.
+ */
+export async function buildPlan(sheet: string[][]): Promise<Result<Rencana>> {
+  const parsed = parseCustomerSheet(sheet);
+
+  const [paketDb, userDb, customerDb, odpDb] = await Promise.all([
+    db.package.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true, monthlyPrice: true, downloadMbps: true, uploadMbps: true } }),
+    db.user.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+    db.customer.findMany({
+      select: { id: true, customerNumber: true, identityNumber: true, birthDate: true, email: true, latitude: true, longitude: true, phone: true, name: true },
+    }),
+    db.odp.findMany({ select: { id: true, code: true } }),
+  ]);
+
+  // Paket dicocokkan lewat HARGA yang tertulis di namanya, bukan namanya.
+  // Berkas menulis `Paket-225k`; master menyebutnya `Berdua`. Yang menjadi
+  // jembatan adalah angka 225 — dan itu satu-satunya bagian dari nama di
+  // berkas yang benar-benar membawa makna.
+  const paket = new Map<string, string>();
+  const unknownPackages: string[] = [];
+  const perHarga = new Map<number, string>();
+  for (const p of paketDb) perHarga.set(Number(p.monthlyPrice), p.id);
+  for (const nama of new Set(parsed.rows.map((r) => r.packageRef))) {
+    const cocokNama = paketDb.find(
+      (p) => p.name.toLowerCase() === nama.trim().toLowerCase() || p.code.toLowerCase() === nama.trim().toLowerCase()
+    );
+    if (cocokNama) {
+      paket.set(nama, cocokNama.id);
+      continue;
+    }
+    // `Paket-Berdua(225000)` — harga ada di dalam kurung. Dicocokkan ke
+    // paket yang harganya sama HANYA bila namanya juga mengandung nama paket
+    // itu; kalau tidak, `Paket-Hemat(175000)` akan diam-diam menjadi
+    // "Personal" padahal itu paket yang berbeda dengan harga kebetulan sama.
+    const harga = priceFromPlan(nama);
+    const cocokHarga = harga === null ? undefined : paketDb.find((p) => Number(p.monthlyPrice) === harga);
+    if (cocokHarga && nama.toLowerCase().includes(cocokHarga.name.toLowerCase())) {
+      paket.set(nama, cocokHarga.id);
+      continue;
+    }
+    const m = /(\d+)\s*k$/i.exec(nama.trim());
+    const id = m ? perHarga.get(Number(m[1]) * 1000) : undefined;
+    if (id) paket.set(nama, id);
+    else unknownPackages.push(nama);
+  }
+
+  const sales = new Map<string, string>();
+  const unknownSales: string[] = [];
+  for (const nama of new Set(parsed.rows.map((r) => r.salesRef).filter((x): x is string => !!x))) {
+    // Nama sales di berkas hanya julukan ("Satria", "Ayu", "Dwi Pranata").
+    // Dicocokkan sebagai kata utuh maupun penggalan berurutan dari nama
+    // lengkap — julukan dua kata seperti "Dwi Pranata" tidak akan pernah
+    // cocok kalau hanya kata tunggal yang diperiksa.
+    //
+    // Kecocokan diterima HANYA bila hasilnya tepat satu orang. "Komang"
+    // cocok dengan tiga karyawan, jadi tidak ada yang dipilih: memasang
+    // sales yang salah merusak atribusi penjualan dan komisi, dan salahnya
+    // tidak kelihatan sampai bonus dihitung.
+    //
+    // Ejaan yang berbeda TIDAK dijembatani. "Tri Jerry" dan "Komang Try
+    // Jerry" hampir pasti orang yang sama, tetapi menebak seberapa jauh
+    // ejaan boleh meleset adalah pintu masuk kesalahan yang senyap.
+    const p = nama.trim().toLowerCase();
+    const kandidat = userDb.filter((u) => {
+      const n = u.name.trim().toLowerCase();
+      const kata = n.split(/\s+/);
+      if (n === p) return true;
+      if (!p.includes(" ")) return kata.includes(p);
+      // Julukan majemuk: harus muncul sebagai deretan kata yang berurutan.
+      return ` ${n} `.includes(` ${p} `);
+    });
+    if (kandidat.length === 1) sales.set(nama, kandidat[0].id);
+    else unknownSales.push(kandidat.length ? `${nama} (${kandidat.length} orang bernama sama)` : nama);
+  }
+
+  const byIdentity = new Map(customerDb.filter((c) => c.identityNumber).map((c) => [c.identityNumber!, c]));
+  const byPhone = new Map(customerDb.filter((c) => c.phone).map((c) => [c.phone, c]));
+  // Nomor layanan adalah jangkar KETIGA, dan pada ekspor sistem tagihan ia
+  // satu-satunya yang tersedia: di sana tidak ada kolom telepon maupun NIK.
+  const byService = new Map(
+    (await db.subscription.findMany({ select: { serviceNumber: true, customerId: true } })).map((x) => [
+      x.serviceNumber,
+      x.customerId,
+    ])
+  );
+  const odpAda = new Set(odpDb.map((o) => o.code));
+
+  const customers: CustomerPlan[] = [];
+  let willCreateSubscriptions = 0;
+  for (const r of parsed.rows) {
+    // Dicocokkan lewat NIK dulu, lalu telepon. NIK unik menurut skema, jadi
+    // ia jangkar yang paling kuat; telepon menyusul karena pelanggan lama
+    // dari Wifinetbill belum tentu punya NIK tercatat.
+    const viaService = byService.get(r.cid);
+    const lama =
+      (r.identityNumber ? byIdentity.get(r.identityNumber) : undefined) ??
+      (r.phone ? byPhone.get(r.phone) : undefined) ??
+      (viaService ? customerDb.find((c) => c.id === viaService) : undefined);
+    if (!lama) {
+      customers.push({
+        rowNumber: r.rowNumber, cid: r.cid, name: r.name,
+        action: "CREATE", reason: null, changes: [], notes: r.notes,
+      });
+      willCreateSubscriptions++;
+      continue;
+    }
+    const changes = pelangganChanges(lama, r);
+    const notes = [...r.notes];
+    if (lama.name.trim().toLowerCase() !== r.name.trim().toLowerCase()) {
+      notes.push(`Nama di aplikasi "${lama.name}" berbeda dari berkas "${r.name}" — tidak diubah.`);
+    }
+    customers.push({
+      rowNumber: r.rowNumber, cid: r.cid, name: lama.name,
+      action: changes.length ? "LENGKAPI" : "SKIP",
+      reason: changes.length ? null : "Sudah ada dan lengkap.",
+      changes: changes.map((c) => c.ringkas),
+      notes,
+    });
+  }
+
+  const perOdp = new Map<string, number>();
+  for (const r of parsed.rows) if (r.odpRef) perOdp.set(r.odpRef, (perOdp.get(r.odpRef) ?? 0) + 1);
+  const odps: OdpPlan[] = [...perOdp].map(([code, customers]) => ({
+    code,
+    action: odpAda.has(code) ? "SKIP" : "CREATE",
+    customers,
+  }));
+
+  // Paket yang belum ada DIBUAT dari namanya sendiri, sebab sistem sumber
+  // menaruh harganya di dalam nama dan tidak menyediakan kolom harga. Yang
+  // TIDAK ada di mana pun adalah kecepatannya — dan itu dibiarkan nol, bukan
+  // ditebak dari harga: dua paket berharga sama di sumber ini terbukti punya
+  // kecepatan berbeda, dan angka karangan pada kolom kecepatan akan dipakai
+  // orang untuk menjanjikan sesuatu kepada pelanggan.
+  const issues = [...parsed.issues];
+  const jumlahPerPaket = new Map<string, number>();
+  for (const r of parsed.rows) jumlahPerPaket.set(r.packageRef, (jumlahPerPaket.get(r.packageRef) ?? 0) + 1);
+  const dipakaiKode = new Set(paketDb.map((p) => p.code));
+  const newPackages: ImportPlan["newPackages"] = [];
+  for (const nama of unknownPackages) {
+    const harga = priceFromPlan(nama);
+    if (harga === null) {
+      issues.push({
+        rowNumber: 0, column: "Paket",
+        message: `Paket "${nama}" tidak memuat harga di namanya dan tidak ada padanannya di master.`,
+      });
+      continue;
+    }
+    let code = codeFromName(nama.replace(/\s*\([^)]*\)\s*$/, ""));
+    let n = 2;
+    while (dipakaiKode.has(code)) code = `${codeFromName(nama.replace(/\s*\([^)]*\)\s*$/, "")).slice(0, 20)}_${n++}`;
+    dipakaiKode.add(code);
+    newPackages.push({ plan: nama, code, price: harga, customers: jumlahPerPaket.get(nama) ?? 0 });
+  }
+
+  return {
+    ok: true,
+    data: {
+      plan: {
+        ok: issues.length === 0,
+        customers,
+        odps,
+        issues,
+        skipped: parsed.skipped,
+        willCreateCustomers: customers.filter((c) => c.action === "CREATE").length,
+        willCompleteCustomers: customers.filter((c) => c.action === "LENGKAPI").length,
+        willSkipCustomers: customers.filter((c) => c.action === "SKIP").length,
+        willCreateOdps: odps.filter((o) => o.action === "CREATE").length,
+        willCreateSubscriptions,
+        unknownPackages: unknownPackages.filter((n) => !newPackages.some((x) => x.plan === n)),
+        newPackages,
+        // Sales yang tidak dikenali BUKAN masalah yang menahan: pelanggannya
+        // tetap sah, hanya pemiliknya kosong dan bisa ditetapkan belakangan.
+        unknownSales,
+      },
+      rows: parsed.rows,
+      paket,
+      sales,
+    },
+  };
+}
+
+// ── Pratinjau ───────────────────────────────────────────────────
+
+export async function previewCustomerImport(user: CurrentUser, file: File): Promise<Result<ImportPlan>> {
+  const rows = await toRows(user, file);
+  if (!rows.ok) return rows;
+  const rencana = await buildPlan(rows.data);
+  return rencana.ok ? { ok: true, data: rencana.data.plan } : rencana;
+}
+
+// ── Penerapan ───────────────────────────────────────────────────
+
+/**
+ * @param opts.allowPartial Lihat penjelasan yang sama di
+ *   `applyCatalogImport`. Menjalankan ulang berkas yang sama aman: pelanggan
+ *   dicocokkan lewat NIK atau telepon, langganan lewat nomor layanan, dan ODP
+ *   lewat kodenya — ketiganya stabil, jadi baris yang sudah masuk tidak akan
+ *   digandakan ketika sisanya menyusul.
+ */
+export async function applyCustomerImport(
+  user: CurrentUser,
+  file: File,
+  opts?: { allowPartial?: boolean }
+): Promise<Result<ImportOutcome>> {
+  const sheet = await toRows(user, file);
+  if (!sheet.ok) return sheet;
+  return applyCustomerFromRows(user, sheet.data, opts);
+}
+
+/**
+ * Jalur yang sama, tetapi menerima tabel teks langsung. Lihat catatan pada
+ * `applyOdpFromBlocks` — keduanya sengaja tidak bercabang.
+ */
+export async function applyCustomerFromRows(
+  user: CurrentUser,
+  sheetRows: string[][],
+  opts?: { allowPartial?: boolean }
+): Promise<Result<ImportOutcome>> {
+  const rencana = await buildPlan(sheetRows);
+  if (!rencana.ok) return rencana;
+  const { plan, rows, paket, sales } = rencana.data;
+
+  // Paket yang tidak dikenal DAN tidak bisa dibuat tetap menahan: tanpa harga,
+  // langganan adalah baris yang tampak sah tetapi tidak bisa ditagih.
+  if (plan.unknownPackages.length) {
+    return {
+      ok: false,
+      error: `Paket berikut belum ada di master: ${plan.unknownPackages.join(", ")}. Buat dulu — langganan tanpa harga tidak bisa ditagih.`,
+    };
+  }
+  if (!plan.ok && !opts?.allowPartial) {
+    return {
+      ok: false,
+      error: `Berkas memuat ${plan.issues.length} masalah. Perbaiki di sumbernya, atau terapkan sebagian dengan sadar — ${plan.issues.length} baris itu akan dilewati.`,
+    };
+  }
+
+  const outcome: ImportOutcome = {
+    createdPackages: [], createdOdps: [], createdCustomers: [], completedCustomers: [],
+    createdSubscriptions: 0, linkedOdpPorts: 0, skipped: plan.willSkipCustomers,
+    skippedIssues: plan.ok ? [] : plan.issues,
+  };
+
+  // Semua pencarian berulang dimuat SEKALI di sini, bukan per baris di dalam
+  // transaksi. Dengan 1.711 pelanggan, satu query per baris berarti ribuan
+  // perjalanan bolak-balik — dan transaksi yang menahan kunci selama itu
+  // kehabisan waktu sebelum separuh datanya masuk. Itu bukan hipotesis:
+  // percobaan pertama mati di detik kelima.
+  const nomorTerakhir = await db.customer.findFirst({
+    where: { customerNumber: { startsWith: "CST-" } },
+    orderBy: { customerNumber: "desc" },
+    select: { customerNumber: true },
+  });
+  let urut = Number(nomorTerakhir?.customerNumber.split("-")[1] ?? 0);
+  if (!Number.isFinite(urut)) urut = 0;
+
+  const layananAda = new Set(
+    (await db.subscription.findMany({ select: { serviceNumber: true } })).map((x) => x.serviceNumber)
+  );
+
+  await db.$transaction(
+    async (prisma) => {
+    // ── Paket dulu: langganan tidak bisa dibuat tanpa harganya ──
+    for (const np of plan.newPackages) {
+      const p = await prisma.package.create({
+        data: {
+          code: np.code,
+          name: np.plan.replace(/\s*\([^)]*\)\s*$/, "").trim() || np.code,
+          monthlyPrice: BigInt(np.price),
+          // Kecepatan TIDAK ditebak dari harga. Dua paket berharga sama di
+          // sumber ini terbukti berbeda kecepatan, dan angka karangan akan
+          // dipakai orang untuk menjanjikan sesuatu kepada pelanggan.
+          downloadMbps: 0,
+          uploadMbps: 0,
+          description: `Dibuat dari impor (${np.plan}). Kecepatan belum diketahui — isi sebelum dipakai untuk penawaran.`,
+        },
+        select: { id: true },
+      });
+      paket.set(np.plan, p.id);
+      outcome.createdPackages.push(np.code);
+    }
+
+    const hargaPaket = new Map(
+      (await prisma.package.findMany({
+        select: { id: true, monthlyPrice: true, downloadMbps: true, uploadMbps: true },
+      })).map((x) => [x.id, x])
+    );
+
+    // ── ODP: port tidak bisa ditempati sebelum tiangnya ada ──
+    for (const o of plan.odps) {
+      if (o.action !== "CREATE") continue;
+      const odp = await prisma.odp.create({
+        data: { code: o.code, portCapacity: KAPASITAS_ODP_DUGAAN, notes: CATATAN_ODP },
+      });
+      await prisma.odpPort.createMany({
+        data: Array.from({ length: KAPASITAS_ODP_DUGAAN }, (_, i) => ({ odpId: odp.id, portNumber: i + 1 })),
+      });
+      outcome.createdOdps.push(o.code);
+    }
+
+    const odpByCode = new Map(
+      (await prisma.odp.findMany({ select: { id: true, code: true } })).map((o) => [o.code, o.id])
+    );
+
+    for (const r of rows) {
+      const rencanaBaris = plan.customers.find((c) => c.cid === r.cid);
+      if (!rencanaBaris || rencanaBaris.action === "SKIP") continue;
+
+      let customerId: string;
+      if (rencanaBaris.action === "CREATE") {
+        const nomor = `CST-${String(++urut).padStart(5, "0")}`;
+        const c = await prisma.customer.create({
+          data: {
+            customerNumber: nomor,
+            name: r.name,
+            // Pelanggan tanpa telepon tetap dibuat; kolomnya wajib di skema,
+            // jadi diisi penanda yang jelas TIDAK menyerupai nomor asli.
+            phone: r.phone ?? "-",
+            email: r.email,
+            identityNumber: r.identityNumber,
+            birthDate: r.birthDate,
+            address: r.address || "-",
+            latitude: r.latitude,
+            longitude: r.longitude,
+            salesOwnerId: r.salesRef ? (sales.get(r.salesRef) ?? null) : null,
+            source: "IMPOR_SHEET",
+            createdById: user.id,
+          },
+        });
+        customerId = c.id;
+        outcome.createdCustomers.push({ cid: r.cid, customerNumber: nomor, name: r.name });
+      } else {
+        const lama = await prisma.customer.findFirst({
+          where: r.identityNumber
+            ? { identityNumber: r.identityNumber }
+            : r.phone
+              ? { phone: r.phone }
+              : { subscriptions: { some: { serviceNumber: r.cid } } },
+          select: { id: true },
+        });
+        if (!lama) continue;
+        customerId = lama.id;
+        const ubah: Record<string, unknown> = {};
+        for (const c of rencanaBaris.changes) {
+          if (c.startsWith("NIK")) ubah.identityNumber = r.identityNumber;
+          else if (c.startsWith("Tanggal lahir")) ubah.birthDate = r.birthDate;
+          else if (c.startsWith("Email")) ubah.email = r.email;
+          else if (c.startsWith("Koordinat")) {
+            ubah.latitude = r.latitude;
+            ubah.longitude = r.longitude;
+          }
+        }
+        if (Object.keys(ubah).length) {
+          await prisma.customer.update({ where: { id: customerId }, data: ubah });
+          outcome.completedCustomers.push({ cid: r.cid, fields: Object.keys(ubah) });
+        }
+      }
+
+      // ── Langganan ──
+      const packageId = paket.get(r.packageRef);
+      if (!packageId) continue;
+      if (layananAda.has(r.cid)) continue;
+      layananAda.add(r.cid);
+      const p = hargaPaket.get(packageId);
+      if (!p) continue;
+      const sub = await prisma.subscription.create({
+        data: {
+          // Nomor layanan MEMAKAI CID dari sistem sumber, bukan nomor baru.
+          // Itulah yang tertulis di router sebagai username PPPoE, dan
+          // menerbitkan nomor kedua akan memutus satu-satunya jembatan antara
+          // aplikasi ini dan sesi yang benar-benar hidup.
+          serviceNumber: r.cid,
+          customerId,
+          packageId,
+          monthlyPrice: p.monthlyPrice,
+          downloadMbps: p.downloadMbps,
+          uploadMbps: p.uploadMbps,
+          pppoeUsername: r.pppoeUsername,
+          billingCycleDay: r.billingStartAt ? r.billingStartAt.getUTCDate() : 1,
+          activatedAt: r.billingStartAt,
+          status: r.status,
+          createdById: user.id,
+        },
+      });
+      outcome.createdSubscriptions++;
+
+      void sub;
+    }
+    },
+    // Bawaan lima detik dibuat untuk transaksi biasa, bukan untuk memuat
+    // basis pelanggan pertama kali.
+    { timeout: 900_000, maxWait: 60_000 }
+  );
+
+  // ── Penautan port ODP: DI LUAR transaksi, dan itu disengaja ──
+  //
+  // Membuat pelanggan dan langganannya harus utuh — separuh basis pelanggan
+  // jauh lebih sulit dibereskan daripada nol. Menautkan port tidak: ia
+  // idempoten (port yang sudah terisi dilewati), bisa diulang kapan saja, dan
+  // menahannya di dalam transaksi yang sama justru menggagalkan seluruh impor
+  // demi langkah yang paling tidak kritis. Percobaan kedua mati persis di
+  // sini.
+  const odpId2 = new Map(
+    (await db.odp.findMany({ select: { id: true, code: true } })).map((o) => [o.code, o.id])
+  );
+  const subId2 = new Map(
+    (await db.subscription.findMany({ select: { id: true, serviceNumber: true } })).map((x) => [x.serviceNumber, x.id])
+  );
+  // Port kosong dimuat SEKALI lalu dibagikan dari memori, bukan dicari ulang
+  // per pelanggan.
+  const antrean = new Map<string, string[]>();
+  for (const pt of await db.odpPort.findMany({
+    where: { subscriptionId: null, status: "FREE" },
+    select: { id: true, odpId: true },
+    orderBy: { portNumber: "asc" },
+  })) {
+    const a = antrean.get(pt.odpId) ?? [];
+    a.push(pt.id);
+    antrean.set(pt.odpId, a);
+  }
+
+  const tersentuh = new Set<string>();
+  for (const r of rows) {
+    if (!r.odpRef) continue;
+    const oid = odpId2.get(r.odpRef);
+    const sid = subId2.get(r.cid);
+    if (!oid || !sid) continue;
+    const a = antrean.get(oid);
+    // Port habis TIDAK menggagalkan impor: kapasitasnya berasal dari sumber
+    // yang bisa saja tertinggal, jadi kehabisan port lebih menandakan
+    // kapasitas yang perlu dikoreksi daripada pelanggan yang salah.
+    if (!a || a.length === 0) continue;
+    await db.odpPort.update({ where: { id: a.shift()! }, data: { subscriptionId: sid, status: "USED" } });
+    tersentuh.add(oid);
+    outcome.linkedOdpPorts++;
+  }
+
+  // `portUsed` dihitung dari kenyataan, bukan ditambah bertahap — penjumlahan
+  // bertahap meleset begitu impor dijalankan dua kali.
+  for (const oid of tersentuh) {
+    const dipakai = await db.odpPort.count({ where: { odpId: oid, subscriptionId: { not: null } } });
+    await db.odp.update({ where: { id: oid }, data: { portUsed: dipakai } });
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "CUSTOMER_IMPORT",
+    module: "crm",
+    entityType: "Customer",
+    description:
+      `Impor pelanggan: ${outcome.createdCustomers.length} pelanggan baru, ` +
+      `${outcome.completedCustomers.length} dilengkapi, ${outcome.createdSubscriptions} langganan, ` +
+      `${outcome.createdPackages.length} paket & ${outcome.createdOdps.length} ODP dibuat, ${outcome.linkedOdpPorts} port tertaut.` +
+      (outcome.skippedIssues.length ? ` DITERAPKAN SEBAGIAN — ${outcome.skippedIssues.length} baris bermasalah dilewati.` : ""),
+    metadata: {
+      pelangganDibuat: outcome.createdCustomers.length,
+      pelangganDilengkapi: outcome.completedCustomers.length,
+      langgananDibuat: outcome.createdSubscriptions,
+      odpDibuat: outcome.createdOdps,
+      portTertaut: outcome.linkedOdpPorts,
+      salesTidakDikenali: plan.unknownSales,
+      barisBermasalahDilewati: outcome.skippedIssues.length,
+      diterapkanSebagian: !plan.ok,
+    },
+  });
+
+  return { ok: true, data: outcome };
+}
+

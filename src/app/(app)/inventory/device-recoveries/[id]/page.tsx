@@ -13,6 +13,7 @@ import {
 } from "@/lib/constants";
 import { notReturnedBlocker } from "@/lib/recovery";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 import { RecoveryInspectionForm } from "@/components/recovery-inspection-form";
 import { RecoveryAttemptForm } from "@/components/recovery-attempt-form";
 import { RecoveryEvidencePanel, type RecoveryEvidenceItem } from "@/components/recovery-evidence-panel";
@@ -298,7 +299,7 @@ export default async function RecoveryDetailPage({
               </ul>
             )}
             {can(PERMISSIONS.RECOVERY_PICKUP) ? (
-              <form action={signPickupAction} encType="multipart/form-data" className="space-y-3">
+              <ClientFileUploadGuard action={signPickupAction} inputName="signatureFile" className="space-y-3">
                 <input type="hidden" name="recoveryId" value={dri.id} />
                 <select name="role" className="input" defaultValue="CUSTOMER">
                   {RECOVERY_SIGNATURE_ROLES.map((role) => <option key={role} value={role}>{role === "CUSTOMER" ? "Pelanggan" : "Teknisi"}</option>)}
@@ -308,7 +309,7 @@ export default async function RecoveryDetailPage({
                 <input id="backoffice-signature-file" name="signatureFile" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" />
                 <p className="text-xs text-slate-500">Nama tetap wajib. Gambar PNG/JPG dapat ditambahkan bila tersedia.</p>
                 <button type="submit" className="btn-secondary w-full justify-center">Simpan tanda tangan</button>
-              </form>
+              </ClientFileUploadGuard>
             ) : signatures.length === 0 ? <p className="text-xs text-slate-500">Belum ada tanda tangan.</p> : null}
           </div>
 

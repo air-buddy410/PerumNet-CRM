@@ -3,8 +3,10 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, NET_DEVICE_TYPES, CRITICALITY, statusLabel } from "@/lib/constants";
+import { portKind as classifyPortKind } from "@/lib/librenms";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
-import { parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
+import { formatUiDateTime } from "@/components/ui-formatters";
+import { buildTableHref, parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
 import { saveNetDeviceAction } from "../actions";
 
 export const metadata = { title: "Perangkat Jaringan" };
@@ -13,6 +15,36 @@ const sortOptions: readonly TableSortOption[] = [
   { value: "deviceType", label: "Jenis" },
   { value: "status", label: "Status" },
 ];
+
+const PORT_KIND_LABELS: Record<string, string> = {
+  PON: "PON",
+  ETHERNET: "Ethernet",
+  ONU: "ONU",
+  VLAN: "VLAN",
+  PPP: "PPP",
+  LAIN: "Lainnya",
+};
+
+function formatPortSpeed(value: bigint | null) {
+  if (value === null || value <= 0n) return "—";
+  const gigabit = 1_000_000_000n;
+  const megabit = 1_000_000n;
+  if (value < megabit) return "< 1 Mbps";
+  const divisor = value >= gigabit ? gigabit : megabit;
+  const unit = value >= gigabit ? "Gbps" : "Mbps";
+  const whole = value / divisor;
+  const decimal = (value % divisor) * 10n / divisor;
+  return decimal > 0n ? `${whole}.${decimal} ${unit}` : `${whole} ${unit}`;
+}
+
+function portStatus(value: string | null) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "up") return { value: "ACTIVE", label: "Aktif" };
+  if (normalized === "down" || normalized === "lowerlayerdown") return { value: "DOWN", label: "Down" };
+  if (normalized === "testing") return { value: "PENDING", label: "Pengujian" };
+  if (!normalized) return { value: "UNKNOWN", label: "Belum tersedia" };
+  return { value: "UNKNOWN", label: value ?? "Belum tersedia" };
+}
 
 export default async function NetDevicesPage({
   searchParams,
@@ -29,9 +61,9 @@ export default async function NetDevicesPage({
       ? [{ status: table.direction }, { id: "asc" }]
       : [{ hostname: table.direction }, { id: "asc" }];
 
-  const [devices, total, sites, users, editRow] = await Promise.all([
+  const [devices, total, sites, users, editRow, selectedDevice] = await Promise.all([
     db.networkDevice.findMany({
-      include: { site: true, owner: true },
+      include: { site: true, owner: true, _count: { select: { ports: true } } },
       orderBy,
       skip: (table.page - 1) * table.pageSize,
       take: table.pageSize,
@@ -40,8 +72,44 @@ export default async function NetDevicesPage({
     db.networkSite.findMany({ where: { status: { not: "INACTIVE" } }, orderBy: { siteCode: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     table.query.edit ? db.networkDevice.findUnique({ where: { id: table.query.edit } }) : Promise.resolve(null),
+    table.query.device
+      ? db.networkDevice.findUnique({
+        where: { id: table.query.device },
+        include: {
+          site: true,
+          ports: { orderBy: [{ ifName: "asc" }, { librenmsPortId: "asc" }] },
+        },
+      })
+      : Promise.resolve(null),
   ]);
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
+  const requestedPortFilter = table.query.portKind;
+  const portFilter = requestedPortFilter === "ONU" || requestedPortFilter === "OTHER"
+    ? requestedPortFilter
+    : "DEFAULT";
+  const selectedPorts = selectedDevice?.ports ?? [];
+  const portCounts = selectedPorts.reduce<Record<string, number>>((counts, port) => {
+    const kind = classifyPortKind(port.ifType, port.ifName);
+    counts[kind] = (counts[kind] ?? 0) + 1;
+    return counts;
+  }, {});
+  const visiblePorts = selectedPorts.filter((port) => {
+    const kind = classifyPortKind(port.ifType, port.ifName);
+    if (portFilter === "ONU") return kind === "ONU";
+    if (portFilter === "OTHER") return kind !== "PON" && kind !== "ETHERNET" && kind !== "ONU";
+    return kind === "PON" || kind === "ETHERNET";
+  });
+  const latestPortSync = selectedPorts.reduce<Date | null>((latest, port) => (
+    !latest || port.lastSyncAt > latest ? port.lastSyncAt : latest
+  ), null);
+  const portSummary = [
+    { key: "PON", label: "PON" },
+    { key: "ETHERNET", label: "Ethernet" },
+    { key: "ONU", label: "ONU" },
+    { key: "VLAN", label: "VLAN" },
+    { key: "PPP", label: "PPP" },
+    { key: "LAIN", label: "Lainnya" },
+  ];
 
   return (
     <div>
@@ -57,7 +125,7 @@ export default async function NetDevicesPage({
           {devices.length === 0 ? (
             <EmptyState message="Belum ada perangkat jaringan." />
           ) : (
-            <table className="w-full">
+            <table className="w-full min-w-[760px]">
               <thead className="border-b border-slate-100 bg-slate-50/60">
                 <tr>
                   <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Hostname" query={table.query} sortKey="hostname" /></th>
@@ -65,6 +133,7 @@ export default async function NetDevicesPage({
                   <th className="th">Site</th>
                   <th className="th">Mgmt IP</th>
                   <th className="th">Kritikalitas</th>
+                  <th className="th">Port</th>
                   <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
                   {canManage && <th className="th"></th>}
                 </tr>
@@ -82,6 +151,14 @@ export default async function NetDevicesPage({
                         label={d.criticality}
                       />
                     </td>
+                    <td className="td whitespace-nowrap text-xs">
+                      <Link
+                        href={buildTableHref("/noc/devices", table.query, { device: d.id, portKind: null, edit: null })}
+                        className="text-brand-600 hover:underline"
+                      >
+                        {d._count.ports} port
+                      </Link>
+                    </td>
                     <td className="td"><Badge value={d.status} label={statusLabel(d.status)} /></td>
                     {canManage && (
                       <td className="td text-right text-xs">
@@ -95,8 +172,115 @@ export default async function NetDevicesPage({
               </tbody>
             </table>
           )}
-          </div>
+        </div>
         <TableControls basePath="/noc/devices" direction={table.direction} page={table.page} pageSize={table.pageSize} query={table.query} sort={table.sort} sortOptions={sortOptions} total={total} />
+
+        {table.query.device && (
+          <section className="card overflow-hidden" aria-labelledby="network-port-panel-title">
+            <div className="flex flex-wrap items-start justify-between gap-3 p-5">
+              <div className="min-w-0">
+                <h2 id="network-port-panel-title" className="text-base font-semibold text-slate-800">
+                  Port perangkat{selectedDevice ? ` · ${selectedDevice.hostname}` : ""}
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {selectedDevice
+                    ? `Site ${selectedDevice.site.siteCode} · Sinkronisasi terakhir ${formatUiDateTime(latestPortSync, "belum tersedia")}`
+                    : "Perangkat yang dipilih tidak ditemukan."}
+                </p>
+              </div>
+              <Link
+                href={buildTableHref("/noc/devices", table.query, { device: null, portKind: null })}
+                className="btn-secondary"
+              >
+                Tutup panel
+              </Link>
+            </div>
+
+            {selectedDevice ? (
+              <>
+                <div className="grid gap-2 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-6">
+                  {portSummary.map((item) => {
+                    const href = item.key === "ONU"
+                      ? buildTableHref("/noc/devices", table.query, { portKind: "ONU" })
+                      : item.key === "VLAN" || item.key === "PPP" || item.key === "LAIN"
+                        ? buildTableHref("/noc/devices", table.query, { portKind: "OTHER" })
+                        : null;
+                    const content = (
+                      <>
+                        <span className="block text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-500">{item.label}</span>
+                        <strong className="mt-1 block text-xl text-slate-800">{portCounts[item.key] ?? 0}</strong>
+                        {href && <span className="mt-1 block text-[10px] font-semibold text-brand-600">Lihat daftar</span>}
+                      </>
+                    );
+                    return href ? (
+                      <Link key={item.key} href={href} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 transition hover:border-brand-200 hover:bg-brand-50">
+                        {content}
+                      </Link>
+                    ) : (
+                      <div key={item.key} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+                  <span>
+                    {portFilter === "DEFAULT" ? "Menampilkan PON dan Ethernet." : portFilter === "ONU" ? "Menampilkan ONU." : "Menampilkan VLAN, PPP, dan port lainnya."}
+                  </span>
+                  {portFilter !== "DEFAULT" && (
+                    <Link href={buildTableHref("/noc/devices", table.query, { portKind: null })} className="font-semibold text-brand-600 hover:underline">
+                      Kembali ke PON &amp; Ethernet
+                    </Link>
+                  )}
+                </div>
+
+                {visiblePorts.length === 0 ? (
+                  <div className="border-t border-slate-100 p-5">
+                    <EmptyState message="Belum ada port pada tampilan ini." />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border-t border-slate-100">
+                    <table className="w-full min-w-[760px]">
+                      <thead className="bg-slate-50/60">
+                        <tr>
+                          <th className="th">Nama Port</th>
+                          <th className="th">Alias Operator</th>
+                          <th className="th">Jenis</th>
+                          <th className="th">Status Operasional</th>
+                          <th className="th">Status Admin</th>
+                          <th className="th">Kecepatan</th>
+                          <th className="th">Sinkronisasi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {visiblePorts.map((port) => {
+                          const kind = classifyPortKind(port.ifType, port.ifName);
+                          const operational = portStatus(port.operStatus);
+                          return (
+                            <tr key={port.id} className="hover:bg-slate-50">
+                              <td className="td whitespace-nowrap font-mono text-xs font-semibold">{port.ifName}</td>
+                              <td className="td max-w-[18rem] text-xs">{port.ifAlias ?? "—"}</td>
+                              <td className="td whitespace-nowrap text-xs">{PORT_KIND_LABELS[kind] ?? kind}</td>
+                              <td className="td"><Badge value={operational.value} label={operational.label} /></td>
+                              <td className="td whitespace-nowrap text-xs">{portStatus(port.adminStatus).label}</td>
+                              <td className="td whitespace-nowrap text-xs">{formatPortSpeed(port.ifSpeedBps)}</td>
+                              <td className="td whitespace-nowrap text-xs">{formatUiDateTime(port.lastSyncAt, "belum tersedia")}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="border-t border-slate-100 p-5">
+                <EmptyState message="Perangkat yang dipilih tidak tersedia atau sudah dihapus." />
+              </div>
+            )}
+          </section>
+        )}
         </div>
 
         {canManage && (

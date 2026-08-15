@@ -1640,3 +1640,407 @@ kalau baru satu yang terisi.
 Yang ditolak backend: di luar jangkauan (termasuk lintang & bujur **tertukar**,
 yang di Indonesia selalu tertangkap karena bujur kita di atas 90), dan **(0,0)**
 — itu keluaran khas GPS yang gagal mengunci, bukan lokasi.
+
+## 33. Impor katalog material dari workbook gudang (Fase 61) — PERLU HALAMAN
+
+Backend sudah siap. Yang belum ada: halamannya.
+
+**Server action** (di `src/app/(app)/inventory/actions.ts`):
+
+```ts
+previewCatalogImportAction(formData)   // { file, warehouseId } → ImportPlan
+applyCatalogImportAction(formData)     // { file, warehouseId } → ImportOutcome
+```
+
+Keduanya **mengembalikan nilai**, bukan redirect — hasil pratinjau adalah tabel
+yang harus dibaca dulu. Izin: `items.manage`. Penerapan juga butuh
+`stock.create` + `stock.post` bila ada saldo awal.
+
+**Penerapan mengunggah ULANG berkasnya.** Jangan kirim baris hasil pratinjau;
+kirim `File` yang sama. Kalau tidak, siapa pun yang bisa memanggil action ini
+bisa menulis katalog apa saja tanpa melewati satu pun pemeriksaan.
+
+### Bentuk `ImportPlan`
+
+| Bidang | Isi |
+|---|---|
+| `ok` | boolean — false bila ada satu saja `issues`. Tombol Terapkan harus mati. |
+| `warehouseName` | nama gudang tujuan saldo awal |
+| `categories[]`, `suppliers[]` | `{ code, name, action }` — `action` = `CREATE` \| `SKIP` |
+| `items[]` | `{ rowNumber, code, name, action, reason, changes[], notes[] }` |
+| `stock[]` | `{ itemCode, quantity, action, reason }` |
+| `issues[]` | `{ rowNumber, column, message }` |
+| `willCreateItems`, `willCompleteItems`, `willSkipItems` | angka ringkasan |
+| `willCreateCategories`, `willCreateSuppliers` | angka ringkasan |
+| `openingUnits` | total unit yang akan masuk sebagai saldo awal |
+| `skippedMovements` | baris pergerakan stok yang **sengaja** dilewati |
+| `ignoredSheets` | lembar yang judulnya tidak dikenali |
+
+`action` pada item ada tiga, sama seperti impor pegawai:
+
+- **CREATE** — kodenya belum ada, material baru dibuat.
+- **LENGKAPI** — kodenya sudah ada; hanya bidang **kosong** yang diisi. Isi
+  `changes[]` adalah daftar perubahannya. Nama, satuan, tracking type,
+  minStock, barcode, dan status aktif **tidak pernah** disentuh impor.
+- **SKIP** — sudah ada dan lengkap; `reason` menjelaskan.
+
+`notes[]` **tidak** menghalangi penerapan — tampilkan sebagai peringatan
+kuning, bukan merah. Contoh nyata dari data PerumNet: *"Harga beli hanya Rp102
+— periksa apakah kurang angka nol"*, *"Tanpa vendor"*, dan *"Nama di aplikasi
+'Bracket A' berbeda dari berkas 'Dead End' — tidak diubah"*.
+
+### Yang perlu ditonjolkan di layar
+
+1. **`issues` harus bisa ditunjuk.** Tiap masalah punya `rowNumber` dan
+   `column` — tampilkan keduanya, sebab admin gudang memperbaikinya di
+   spreadsheet, bukan di aplikasi.
+2. **`skippedMovements` perlu kalimat, bukan angka telanjang.** Berkas
+   PerumNet memuat 206 baris pergerakan stok yang sengaja tidak diimpor —
+   lognya hanya mencakup 59 dari 172 barang dan tidak rekonsiliasi dengan
+   saldo berjalan. Tanpa penjelasan, orang akan mengira datanya hilang.
+   Kalimat yang disarankan: *"206 baris riwayat pergerakan tidak diimpor —
+   lognya tidak lengkap. Saldo awal diambil dari lembar saldo."*
+3. **Pemilih gudang wajib**, dan namanya muncul lagi di ringkasan saldo awal.
+4. Kalau `openingUnits > 0`, sebutkan bahwa akan terbit satu dokumen
+   `GOODS_RECEIPT` — hasilnya ada di `ImportOutcome.openingTxNumber`.
+
+### Bentuk `ImportOutcome`
+
+```ts
+{
+  createdCategories: number;
+  createdSuppliers: number;
+  createdItems: { code, name }[];
+  completedItems: { code, fields: string[] }[];
+  skippedItems: number;
+  openingTxNumber: string | null;   // nomor dokumen saldo awal
+  openingUnits: number;
+}
+```
+
+### Kolom baru pada `Item`
+
+`supplierId`, `purchaseCost` (BigInt, rupiah penuh), `salePrice` (BigInt),
+`condition` (`GOOD` \| `SECOND` — kosakata yang sama dengan
+`SerializedDevice.condition`). Formulir item di `/inventory/items` sebaiknya
+ikut menampilkan keempatnya; kalau tidak, nilai hasil impor tidak akan pernah
+terlihat maupun bisa dikoreksi lewat aplikasi.
+
+**Model baru `Supplier`** — `code`, `name`, `phone`, `email`, `address`,
+`website`, `notes`, `isActive`. Belum ada halaman masternya sama sekali.
+
+## 34. Data pribadi pelanggan kini tersamar otomatis (Fase 66)
+
+Mengikuti aplikasi pembanding — tapi penjaganya diletakkan di tempat berbeda,
+dan bedanya penting untukmu.
+
+**Kamu tidak perlu melakukan apa pun untuk halaman yang sudah ada.**
+
+`Customer` bertambah dua kolom: `identityNumber` (NIK, unik) dan `birthDate`.
+Keduanya, bersama `phone` dan `email`, disamarkan **di jalur data** —
+`src/lib/customer-pii.ts` — bukan di JSX. Baris yang sampai ke halaman sudah
+tersamar, **dengan bentuk yang persis sama** seperti sebelumnya. Tidak ada
+tipe baru, tidak ada percabangan `{boleh ? x : mask(x)}` yang harus ditulis
+di tiap kolom.
+
+Sudah dipasang di tiga pintu keluar:
+
+| Pintu | Berkas |
+|---|---|
+| Daftar pelanggan | `crm/customers/page.tsx` |
+| Detail pelanggan | `crm/customers/[id]/page.tsx` |
+| Ekspor CSV | `api/export/[dataset]/route.ts` |
+
+### Kenapa begini, bukan seperti aplikasi pembanding
+
+Di sana `maskIdentity()` dipanggil di dalam JSX tiap halaman. Akibatnya bisa
+ditebak, dan memang terjadi di kode mereka: fungsinya **terdefinisi di dua
+tempat** dengan karakter bintang berbeda, dan **satu halaman menampilkan NIK
+tanpa samaran** karena penulisnya lupa memanggilnya. Masking yang bergantung
+pada ingatan akan gagal, cepat atau lambat.
+
+### Kalau kamu membuat halaman BARU yang menampilkan pelanggan
+
+Satu aturan: **jangan panggil `db.customer` langsung**. Bungkus hasilnya:
+
+```ts
+import { redactCustomer, redactCustomers } from "@/lib/customer-pii";
+
+const boleh = user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW);
+const rows = redactCustomers(await db.customer.findMany({ ... }), boleh);
+```
+
+Izin barunya `customers.pii_view`, dipegang **hanya** `super_admin` dan
+`management`. Sales, CS, teknisi, dan gudang tetap melihat pelanggannya —
+hanya data pribadinya tersamar. Itu disengaja: sales menutup penjualan tanpa
+perlu NIK, teknisi memasang tanpa perlu NIK.
+
+### Bentuk samarannya
+
+| Bidang | Contoh tersamar |
+|---|---|
+| `identityNumber` | `5107••••••••0001` |
+| `phone` | `••••••••3387` |
+| `email` | `k••••••@gmail.com` |
+| `birthDate` | `null` |
+
+Empat digit awal & akhir NIK sengaja dibiarkan supaya petugas masih bisa
+mencocokkan sekilas. Yang disembunyikan adalah **enam digit tengah** — dan itu
+bukan pilihan sembarangan: enam digit itu **tanggal lahir** pemiliknya (hari
++40 untuk perempuan). Karena itu `birthDate` ikut dikosongkan; menyamarkan
+tanggal lahir di dalam NIK lalu menampilkannya utuh di kolom sebelahnya
+membatalkan seluruh gunanya. Ini satu langkah lebih jauh dari aplikasi
+pembanding, yang menampilkan `birthDate` apa adanya.
+
+### Yang belum ada
+
+Formulir pelanggan belum punya input untuk `identityNumber` dan `birthDate`.
+Selama belum ada, keduanya hanya bisa terisi lewat impor — dan tidak akan
+pernah bisa dikoreksi lewat aplikasi. Menambahkannya ke form
+`/crm/customers` bagian dari pekerjaan ini.
+
+## 35. Impor pelanggan, langganan, dan ODP (Fase 68) — PERLU HALAMAN
+
+Backend siap. Belum ada halamannya.
+
+**Server action** (di `src/app/(app)/crm/customers/actions.ts`):
+
+```ts
+previewCustomerImportAction(formData)   // { file } → ImportPlan
+applyCustomerImportAction(formData)     // { file } → ImportOutcome
+```
+
+Izin: `customers.create` **dan** `subscriptions.create` — impor ini membuat
+langganan, bukan hanya pelanggan. Sama seperti impor katalog, **penerapan
+mengunggah ULANG berkasnya**; jangan kirim baris hasil pratinjau.
+
+### Satu unggahan, tiga hal terbuat sekaligus
+
+Ini yang paling perlu jelas di layar, sebab tidak terduga dari namanya:
+
+1. **ODP** yang belum ada dibuat lebih dulu, lengkap dengan portnya.
+2. **Pelanggan** dibuat atau dilengkapi.
+3. **Langganan** dibuat, lalu **menempati satu port ODP**.
+
+### Bentuk `ImportPlan`
+
+| Bidang | Isi |
+|---|---|
+| `ok` | false bila ada satu saja `issues`; tombol Terapkan harus mati |
+| `customers[]` | `{ rowNumber, cid, name, action, reason, changes[], notes[] }` |
+| `odps[]` | `{ code, action, customers }` — `customers` = berapa baris menunjuk ODP itu |
+| `issues[]` | `{ rowNumber, column, message }` |
+| `willCreateCustomers`, `willCompleteCustomers`, `willSkipCustomers` | angka |
+| `willCreateOdps`, `willCreateSubscriptions` | angka |
+| `unknownPackages[]` | **menahan** — paket tanpa padanan di master |
+| `unknownSales[]` | **TIDAK menahan** — pelanggannya tetap dibuat, pemiliknya kosong |
+
+`action` pada pelanggan sama polanya dengan impor lain: `CREATE`,
+`LENGKAPI` (hanya bidang **kosong** yang diisi), `SKIP`.
+
+**Nama, telepon, dan alamat TIDAK pernah ditimpa lewat impor.** Data di
+aplikasi bisa jadi koreksi CS yang lebih baru daripada spreadsheet.
+Perbedaannya dilaporkan di `notes`, tidak diterapkan.
+
+### Yang perlu ditonjolkan di layar
+
+1. **Kapasitas ODP adalah DUGAAN.** ODP dibuat dengan 8 port
+   (`KAPASITAS_ODP_DUGAAN`) karena sumbernya tidak memuat kapasitas sama
+   sekali. Angka itu hampir pasti terlalu kecil — ekspor hanya memuat
+   pelanggan 2026, sedangkan tiang yang sama juga melayani pelanggan lama.
+   Setiap ODP yang dibuat diberi `notes` yang menyebutnya. **Tampilkan
+   peringatan ini di pratinjau**, jangan biarkan orang mengira okupansi yang
+   terlihat penuh itu kenyataan.
+2. **`unknownSales` bukan error.** Contoh nyata: *"Komang (3 orang bernama
+   sama)"* — pencocokan sengaja menolak bila ambigu. Tampilkan sebagai
+   informasi, dan sediakan cara menetapkan pemilik belakangan.
+3. **`notes` per baris berwarna kuning, bukan merah.** Contoh nyata:
+   *"Tanggal lahir diambil dari NIK (1986-07-31); kolom berkas menulis
+   1982-06-10"*. Itu keputusan yang sudah diambil, bukan kegagalan — tapi
+   peninjau harus bisa melihat dan membalikkannya.
+
+### Bentuk `ImportOutcome`
+
+```ts
+{
+  createdOdps: string[];                                   // kode ODP
+  createdCustomers: { cid, customerNumber, name }[];
+  completedCustomers: { cid, fields: string[] }[];
+  createdSubscriptions: number;
+  linkedOdpPorts: number;
+  skipped: number;
+}
+```
+
+### Catatan yang memengaruhi tampilan lain
+
+- **`Subscription.serviceNumber` memakai CID dari sistem sumber**
+  (`PN260801705`), bukan nomor `SVC-#####` baru. Itu yang tertulis di router
+  sebagai username PPPoE — menerbitkan nomor kedua akan memutus satu-satunya
+  jembatan ke sesi yang benar-benar hidup.
+- **Paket dicocokkan lewat harga di namanya.** Berkas menulis `Paket-225k`,
+  master menyebutnya `Berdua` seharga Rp225.000. Kalau harga paket diubah di
+  aplikasi, jembatan itu putus — impor berikutnya akan melaporkan paketnya
+  tidak dikenal, bukan salah memasangkan.
+- Master paket kini berisi lima paket **sebenarnya** (Personal, Berdua,
+  Keluarga, Natah, Banjar). Empat paket contoh lama sudah dihapus.
+
+## 36. Kedua importir kini punya "terapkan sebagian" (Fase 69)
+
+Sheet sumber **tidak akan diperbaiki**. Menolak seluruh berkas karena beberapa
+baris cacat berarti tidak ada yang pernah masuk — jelas lebih buruk daripada
+memasukkan yang sehat.
+
+Karena itu `applyCatalogImportAction` dan `applyCustomerImportAction` kini
+membaca field `allowPartial` dari FormData:
+
+```html
+<input type="checkbox" name="allowPartial" value="1">
+```
+
+**Bawaannya mati, dan itu disengaja.** Melewati baris bermasalah adalah
+keputusan operator, bukan kelonggaran diam-diam. Tanpa centang, berkas
+bermasalah tetap ditolak dengan pesan yang menyebut berapa baris akan
+dilewati bila diteruskan.
+
+### Yang perlu ada di layar
+
+1. Ketika `plan.ok === false`, jangan hanya matikan tombol Terapkan.
+   Tampilkan pilihan kedua: **"Terapkan sebagian — lewati N baris bermasalah"**,
+   dengan N = `plan.issues.length`, dan daftar barisnya bisa dibaca.
+2. Sesudah penerapan, `ImportOutcome.skippedIssues[]` berisi baris yang
+   benar-benar dilewati. **Tampilkan, jangan sembunyikan** — itu satu-satunya
+   kesempatan operator melihat apa yang tidak masuk.
+3. Menjalankan ulang berkas yang sama **aman**. Pencocokannya stabil: item
+   lewat kode, pelanggan lewat NIK atau telepon, langganan lewat nomor
+   layanan, ODP lewat kode. Katakan itu di layar supaya orang tidak takut
+   mengulang setelah sebagian datanya diperbaiki.
+
+### Satu pengecualian yang tetap menahan
+
+Paket yang tidak ada padanannya di master **tetap menggagalkan penerapan**,
+bahkan dengan `allowPartial`. Tanpa paket tidak ada harga, dan langganan tanpa
+harga adalah baris yang tampak sah tetapi tidak bisa ditagih.
+
+Rencana lengkap memasukkan data ada di
+[`docs/RENCANA-MASUKKAN-DATA.md`](RENCANA-MASUKKAN-DATA.md).
+
+## 37. Sisa pekerjaan frontend per 15 Agustus
+
+Halaman impor katalog dan pelanggan sudah jadi, `allowPartial` sudah
+tertangani. Tiga yang belum:
+
+### 37.1 §34 belum selesai — form pelanggan tanpa NIK & tanggal lahir
+
+`Customer.identityNumber` dan `Customer.birthDate` sudah ada di skema dan
+sudah terisi lewat impor, tetapi **tidak ada input untuk keduanya** di
+`/crm/customers`. Akibatnya: nilai hasil impor tidak akan pernah bisa
+dikoreksi lewat aplikasi.
+
+Ini penting untuk 19 baris yang tanggal lahirnya diambil dari NIK karena
+kolom berkasnya berselisih — catatannya membawa kedua nilai supaya peninjau
+bisa membalik keputusan itu per-orang, dan tanpa form ia tidak bisa
+membalikkannya.
+
+Tampilkan lewat baris yang sudah tersamar (`redactCustomer` menanganinya);
+untuk mengubah, izin `customers.pii_view` yang menentukan apakah nilai
+aslinya terlihat.
+
+### 37.2 Master `Supplier` belum punya halaman sama sekali
+
+Model `Supplier` (code, name, phone, email, address, website, notes,
+isActive) terisi lewat impor katalog — 20 vendor. Belum ada daftar, belum ada
+form. Sekarang satu-satunya cara melihatnya lewat database.
+
+Kaitannya: `Item.supplierId`.
+
+### 37.3 BARU — 817 port jaringan tanpa tempat ditampilkan
+
+`NetworkPort` ditarik dari LibreNMS tiap 10 menit dan sekarang berisi 817
+baris. Belum ada halaman apa pun untuknya.
+
+**Jangan tampilkan sebagai satu daftar panjang.** 817 baris itu tiga jenis
+benda berbeda, dan tanpa penyaring daftarnya tidak terbaca:
+
+| Golongan | Jumlah | Artinya |
+|---|---|---|
+| `ONU` | **669** | satu baris per pelanggan pada OLT HSGQ — 686 hidup |
+| `PON` | 64 | port PON; di sinilah ODP menggantung |
+| `ETHERNET` | 52 | uplink & backbone |
+| `LAIN` / `VLAN` / `PPP` | 32 | sisanya |
+
+Golongannya belum tersimpan sebagai kolom — hitung di sisi baca dengan
+`portKind(ifType, ifName)` dari `@/lib/librenms`.
+
+Yang paling berguna ditampilkan lebih dulu:
+
+1. **Di detail perangkat** (`/noc/devices`): jumlah port per golongan, dan
+   daftar PON + ETHERNET saja. ONU disembunyikan di balik satu tautan.
+2. **`ifAlias`** hanya terisi bila operator benar-benar menuliskannya
+   (`Uplink-2116-Master_Switch`, `TO_Switch_Distribusi`) — salinan `ifName`
+   sudah dibuang di backend. Kolom yang terisi berarti sesuatu; tampilkan.
+3. `operStatus` `up`/`down`, dan `ifSpeedBps` diformat Gbps/Mbps.
+
+## 38. Data produksi sudah terisi — empat halaman kini punya isi
+
+Per 15 Agustus, basis data produksi tidak lagi kosong. Yang kemarin "belum ada
+datanya" sekarang ada, dan itu mengubah urutan pekerjaan frontend.
+
+| Tabel | Isi |
+|---|---|
+| `Customer` | **1.711** |
+| `Subscription` | **1.711** (1.287 sudah punya `pppoeUsername`) |
+| `Package` | 27 |
+| `Odp` | **577** — 526 berkoordinat, 526 berinduk |
+| `OdpPort` | 8.607, **1.677 terisi** |
+| `NetworkDevice` / `NetworkPort` | 6 / 818 |
+
+### 38.1 Peta ODP — sekarang paling bernilai
+
+**526 ODP berkoordinat** siap dipetakan, lengkap dengan hierarki:
+`NetworkSite` → `Odp` (role `MS`) → `Odp` (role `ODP`) → `OdpPort` →
+`Subscription` → `Customer`.
+
+Yang perlu ada di peta, diurut menurut kegunaan:
+
+1. Titik ODP diwarnai menurut okupansi (`portUsed` / `portCapacity`).
+2. Garis ke induknya (`parentId`) — itu yang membuat kaskade MS terlihat.
+3. Klik titik → daftar pelanggan di port-portnya.
+4. `opticPowerDbm` sebagai label; nilainya negatif dan itu normal.
+
+ALUS punya `/distpoint/map` yang bisa jadi acuan bentuk, tetapi datanya sudah
+ada di kita — tidak perlu menunggu apa pun.
+
+### 38.2 Daftar pelanggan — 1.711 baris, perlu filter
+
+Halaman `/crm/customers` sebelumnya menampilkan tabel kosong. Sekarang 1.711
+baris, jadi butuh filter yang berguna: **status**, **paket**, **ODP**, dan
+**punya/tidak punya `pppoeUsername`**.
+
+Yang terakhir itu papan skor operasional: 424 langganan belum punya username
+PPPoE, artinya belum bisa dipantau. Menampilkannya sebagai filter membuat sisa
+pekerjaan itu kelihatan alih-alih tersembunyi.
+
+Ingat `redactCustomer` — semua sudah tersamar di jalur data (§34), jadi
+kolom NIK aman ditampilkan apa adanya.
+
+### 38.3 Yang masih sama seperti §37
+
+- **§34** — form pelanggan masih tanpa input NIK & tanggal lahir
+- **Master `Supplier`** — belum ada halaman
+- **818 `NetworkPort`** — belum ada tampilan; jangan satu daftar panjang,
+  669 di antaranya satu baris per pelanggan
+
+### 38.4 Angka yang sengaja belum sempurna
+
+Jangan diperlakukan sebagai bug:
+
+- **434 sesi PPPoE yatim** — 188 ambigu (nomor cocok, nama tidak) dan 246
+  tanpa kandidat. Dibiarkan yatim dengan sengaja: sesi yang salah pasang
+  terlihat seperti pekerjaan yang sudah beres, dan itu jauh lebih mahal
+  daripada yang jelas belum selesai.
+- **34 pelanggan tanpa port ODP** — kapasitas ODP-nya penuh menurut sumber.
+  Perlu dicek lapangan.
+- **22 paket berkecepatan 0 Mbps** — harga diambil dari nama paket di sistem
+  sumber, kecepatannya tidak ada di mana pun. Tampilkan sebagai "belum
+  diketahui", bukan "0 Mbps".

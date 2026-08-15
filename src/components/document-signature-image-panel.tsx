@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { AlertTriangle, CheckCircle2, FileImage, ImageOff, UploadCloud } from "lucide-react";
 import { formatUiDateTime } from "@/components/ui-formatters";
+import { clientFileSizeError } from "@/components/client-file-upload-guard";
 
 export type DocumentSignatureView = {
   id: string;
@@ -99,7 +100,23 @@ export function DocumentSignatureImagePanel({
 
   const handleFileChange = (signatureId: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
-    if (!file || isAcceptedImage(file)) {
+    if (!file) {
+      setClientErrors((current) => {
+        const next = { ...current };
+        delete next[signatureId];
+        return next;
+      });
+      return;
+    }
+    if (!isAcceptedImage(file)) {
+      setClientErrors((current) => ({
+        ...current,
+        [signatureId]: "Format gambar harus PNG atau JPG.",
+      }));
+      return;
+    }
+    const sizeError = clientFileSizeError(file, undefined, "Ukuran gambar tanda tangan maksimal 5 MB.");
+    if (!sizeError) {
       setClientErrors((current) => {
         const next = { ...current };
         delete next[signatureId];
@@ -109,7 +126,7 @@ export function DocumentSignatureImagePanel({
     }
     setClientErrors((current) => ({
       ...current,
-      [signatureId]: "Format gambar harus PNG atau JPG.",
+      [signatureId]: sizeError,
     }));
   };
 
@@ -119,11 +136,20 @@ export function DocumentSignatureImagePanel({
     if (!file) {
       event.preventDefault();
       setClientErrors((current) => ({ ...current, [signatureId]: "Pilih gambar tanda tangan terlebih dahulu." }));
+      if (fileInput instanceof HTMLInputElement) fileInput.focus();
       return;
     }
     if (!isAcceptedImage(file)) {
       event.preventDefault();
       setClientErrors((current) => ({ ...current, [signatureId]: "Format gambar harus PNG atau JPG." }));
+      if (fileInput instanceof HTMLInputElement) fileInput.focus();
+      return;
+    }
+    const sizeError = clientFileSizeError(file, undefined, "Ukuran gambar tanda tangan maksimal 5 MB.");
+    if (sizeError) {
+      event.preventDefault();
+      setClientErrors((current) => ({ ...current, [signatureId]: sizeError }));
+      if (fileInput instanceof HTMLInputElement) fileInput.focus();
     }
   };
 
@@ -163,6 +189,7 @@ export function DocumentSignatureImagePanel({
                   {canUpload ? (
                     <form
                       action={action}
+                      encType="multipart/form-data"
                       className="crm-document-signature-upload"
                       onSubmit={(event) => handleSubmit(signature.id, event)}
                     >

@@ -12,6 +12,7 @@ import {
   formatDateTime,
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
+import { ClientFileUploadGuard } from "@/components/client-file-upload-guard";
 import { formatUiDate } from "@/components/ui-formatters";
 import {
   submitCashAction,
@@ -270,7 +271,7 @@ export default async function CashTransactionDetailPage({
               Bukti ({attachments.length})
             </div>
             {["DRAFT", "WAITING_APPROVAL"].includes(tx.status) && (isCreator || canPost) && (
-              <form
+              <ClientFileUploadGuard
                 action={uploadCashEvidenceAction}
                 className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4"
               >
@@ -283,7 +284,7 @@ export default async function CashTransactionDetailPage({
                   required
                 />
                 <button type="submit" className="btn-secondary">Unggah Bukti</button>
-              </form>
+              </ClientFileUploadGuard>
             )}
             {attachments.length === 0 ? (
               <EmptyState message="Belum ada bukti. Bukti wajib tersedia sebelum transaksi diajukan atau diposting." />

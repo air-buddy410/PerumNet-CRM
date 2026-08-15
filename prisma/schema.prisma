@@ -597,26 +597,32 @@ model Quotation {
 }
 
 model Customer {
-  id             String   @id @default(cuid())
-  customerNumber String   @unique // CST-#####
+  id             String    @id @default(cuid())
+  customerNumber String    @unique // CST-#####
   name           String
   company        String?
   phone          String
   email          String?
+  /// Fase 66 — NIK. Unik: satu orang satu nomor, dan impor massal harus
+  /// menabrak duplikat alih-alih membuat pelanggan kembar diam-diam.
+  identityNumber String?   @unique
+  /// Enam digit tengah NIK memuat tanggal lahir; keduanya disamarkan bersama
+  /// lewat redactCustomer(). Lihat src/lib/customer-pii.ts.
+  birthDate      DateTime? @db.Date
   address        String
   latitude       Float?
   longitude      Float?
-  customerType   String   @default("RESIDENTIAL")
-  notifyChannel  String   @default("NONE") // NONE|WHATSAPP|EMAIL|APP
+  customerType   String    @default("RESIDENTIAL")
+  notifyChannel  String    @default("NONE") // NONE|WHATSAPP|EMAIL|APP
   areaId         String?
   salesOwnerId   String?
   source         String?
-  leadId         String?  @unique
-  status         String   @default("ACTIVE") // ACTIVE|INACTIVE
+  leadId         String?   @unique
+  status         String    @default("ACTIVE") // ACTIVE|INACTIVE
   notes          String?
   createdById    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   area             Area?                 @relation(fields: [areaId], references: [id])
   salesOwner       User?                 @relation("CustomerOwner", fields: [salesOwnerId], references: [id])
@@ -744,7 +750,19 @@ model Item {
   trackingType String  @default("BULK") // SERIALIZED | BULK
   minStock     Int     @default(0)
   isActive     Boolean @default(true)
+  /// Fase 61 — pemasok utama. Opsional: katalog lama tidak selalu tahu dari
+  /// mana barangnya dibeli, dan menebaknya lebih buruk daripada mengosongkan.
+  supplierId   String?
+  /// Harga dalam rupiah penuh, bukan sen — mengikuti SerializedDevice.acquisitionCost.
+  /// Keduanya opsional: barang hibah dan barang yang tidak dijual ulang itu nyata.
+  purchaseCost BigInt?
+  salePrice    BigInt?
+  /// GOOD | SECOND — sama persis dengan SerializedDevice.condition supaya satu
+  /// kosakata dipakai di seluruh gudang. Barang bekas didaftarkan sebagai kode
+  /// item TERSENDIRI di katalog sumber, jadi ini memang sifat item, bukan stok.
+  condition    String  @default("GOOD")
 
+  supplier             Supplier?              @relation(fields: [supplierId], references: [id])
   category             Category?              @relation(fields: [categoryId], references: [id])
   stockLevels          StockLevel[]
   devices              SerializedDevice[]
@@ -758,6 +776,25 @@ model Item {
   materialRequestLines MaterialRequestLine[]
   slotAllocations      SlotAllocation[]
   slotLedger           SlotLedger[]
+}
+
+/// Fase 61 — pemasok material. Dipisahkan dari `NetworkDevice.vendor`, yang
+/// artinya MEREK perangkat (ZTE, Huawei) dan bukan pihak yang menjualnya.
+/// Satu nama toko bisa memasok belasan kategori barang; menyimpannya sebagai
+/// teks di setiap Item membuat nomor telepon yang sama ditulis ulang puluhan
+/// kali dan berubah di sebagian saja ketika vendornya pindah.
+model Supplier {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  phone    String?
+  email    String?
+  address  String?
+  website  String?
+  notes    String?
+  isActive Boolean @default(true)
+
+  items Item[]
 }
 
 // Saldo stock per gudang — HANYA diubah oleh postTransaction/reverseTransaction.
@@ -1196,6 +1233,41 @@ model NetworkDevice {
   oltDevice      OltDevice?
   mikrotikRouter MikrotikRouter?
   probeTargets   ProbeTarget[]
+  ports          NetworkPort[]
+}
+
+/// Fase 71 — antarmuka jaringan yang ditarik dari LibreNMS.
+///
+/// BUKAN `PonPort` dan bukan `OdpPort`. Keduanya itu model kita sendiri untuk
+/// perencanaan jaringan; yang ini cermin apa adanya dari apa yang perangkatnya
+/// laporkan lewat SNMP, dan isinya campur: uplink backbone, port PON, sampai
+/// satu baris per ONU pelanggan.
+///
+/// `ifType` yang memisahkannya, dan perbedaannya besar:
+///   - `gpon`            → port PON; di sinilah ODP menggantung
+///   - `ethernetCsmacd`  → uplink & backbone
+///   - `other`           → satu per ONU pelanggan pada OLT HSGQ
+model NetworkPort {
+  id             String   @id @default(cuid())
+  deviceId       String
+  /// `port_id` LibreNMS. Jangkar pencocokan yang stabil: ifName bisa berubah
+  /// ketika operator mengganti label, sedangkan port_id tidak.
+  librenmsPortId Int
+  ifName         String
+  /// Label yang diketik operator di perangkatnya. Sering hanya salinan
+  /// ifName, tetapi pada uplink ia membawa keterangan sungguhan
+  /// ("TO_Switch_Distribusi") yang tidak ada di tempat lain mana pun.
+  ifAlias        String?
+  ifType         String?
+  ifSpeedBps     BigInt?
+  operStatus     String? // up | down | lowerLayerDown | ...
+  adminStatus    String?
+  lastSyncAt     DateTime @default(now())
+
+  device NetworkDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, librenmsPortId])
+  @@index([deviceId, ifType])
 }
 
 model NetworkLink {
