@@ -654,6 +654,12 @@ model Subscription {
   popNode         String?
   vlan            String?
   pppoeUsername   String?
+  /// Posisi ONU pada OLT, APA ADANYA dari sistem lama: `1/17/3:2` (ZTE) atau
+  /// `8:0` (HSGQ). Disimpan verbatim karena inilah yang diketik teknisi ke
+  /// konsol OLT — bentuk terurainya boleh berubah, nilai ini tidak.
+  onuPosition     String?
+  /// Nomor ONU pada port PON-nya. NOL itu sah pada HSGQ, bukan ketiadaan.
+  onuIndex        Int?
   routerId        String? // distribution router (NetworkDevice) — jalur isolir
   ipAddress       String?
   contractMonths  Int?
