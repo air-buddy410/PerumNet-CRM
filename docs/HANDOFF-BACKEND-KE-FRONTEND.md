@@ -2491,3 +2491,34 @@ keliru: koordinatnya atau penempatan ODP-nya.
 
 Kalau garis pelanggan→ODP digambar, kelima belas ini akan memanjang melintasi
 peta. **Biarkan terlihat** — justru begitu orang lapangan menemukannya.
+
+### 43.1 Lapisan OLT sudah terisi
+
+Dibangun 16 Agustus 2026. Rantai POP → OLT → ODP → pelanggan kini punya
+mata rantai tengahnya.
+
+| | |
+|---|---|
+| `OltDevice` | **5** — menspesialisasi `NetworkDevice`, lengkap dengan vendor, model, port telnet & SNMP |
+| `PonPort` | **80** — 32 di Kecicang, 16 Pesagi, 16 Abang, 8 Seraya Barat, 8 Seraya Tengah |
+| `Odp.siteId` | **340 dari 577** tersambung |
+
+ODP per site: Kecicang 87 · Pesagi 80 · Seraya Barat 66 · Abang 65 ·
+Seraya Tengah 42.
+
+**237 ODP belum punya site** karena belum ada satu pun pelanggan di sana —
+tautannya disimpulkan lewat pelanggan, jadi ODP kosong tidak bisa disimpulkan.
+Itu bukan kesalahan; tampilkan apa adanya.
+
+**Site masih TIDAK punya koordinat** — nol dari enam. Itu satu-satunya yang
+menahan POP muncul di peta, dan datanya tidak ada di sistem mana pun, termasuk
+sistem lama. Lima titik harus dicatat orang di lapangan; sesudah itu rantainya
+lengkap tanpa perubahan kode apa pun.
+
+**`HSGQ-100-Kecicang` tidak punya lapisan OLT** — 97 pelanggan, tetapi
+perangkatnya tidak ada di LibreNMS karena SNMP-nya mati oleh masalah firmware.
+Itu sudah diketahui pemilik jaringan.
+
+**Lima ODP disuapi lebih dari satu OLT menurut pelanggannya**, jadi site-nya
+tidak disimpulkan: `PSG 240102` (empat OLT sekaligus), `JGS 05120101`,
+`SRY 05J4`, `SRY 0602`, `SSN 03DC01`.
