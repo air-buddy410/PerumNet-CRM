@@ -86,6 +86,7 @@ model User {
   quotations       Quotation[]    @relation("QuotationCreator")
   ownedCustomers   Customer[]     @relation("CustomerOwner")
   createdCustomers Customer[]     @relation("CustomerCreator")
+  pppoeIgnored     PppoeIgnored[] @relation("PppoeIgnoredDecider")
   subscriptions    Subscription[] @relation("SubscriptionCreator")
   attachments      Attachment[]   @relation("AttachmentUploader")
 
@@ -3246,4 +3247,21 @@ model EmployeeCard {
 
   @@index([employeeId, status])
   @@index([status])
+}
+
+/// Username PPPoE yang sudah diputuskan TIDAK DIPAKAI oleh tim.
+///
+/// Berdiri sendiri, tidak menumpang `PppoeSession`, dan itu disengaja: tabel
+/// sesi adalah cermin router yang ditulis ulang tiap 120 detik oleh
+/// `pppoe.poll`, sehingga penanda apa pun di sana akan terhapus sendiri.
+/// Keputusan ini juga melekat pada USERNAME, bukan pada baris sesi di satu
+/// router — kalau pelanggannya berpindah router, keputusannya ikut.
+model PppoeIgnored {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  note        String?
+  decidedById String?
+  decidedAt   DateTime @default(now())
+
+  decidedBy User? @relation("PppoeIgnoredDecider", fields: [decidedById], references: [id])
 }

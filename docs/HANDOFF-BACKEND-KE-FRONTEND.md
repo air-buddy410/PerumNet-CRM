@@ -2331,3 +2331,52 @@ Sebelum pemangkasan, tabel ini menumpuk setiap ONU yang pernah terlihat dan
 tidak pernah menunjukkan satu pun turun — jadi angkanya dulu bukan inventaris
 maupun jumlah online, melainkan "pernah ada". Sekarang setidaknya ia berarti
 sesuatu yang bisa dijelaskan.
+
+---
+
+## §42 — Memasukkan kembali keputusan tim (Fase 75)
+
+Berkas yang dikeluarkan `scripts/_ekspor-tertunda.ts`, sesudah diisi tim,
+dibaca kembali lewat dua fungsi di `src/lib/pemetaan-import-service.ts`:
+
+| | |
+|---|---|
+| `periksaPemetaan(lembar)` | tidak mengubah apa pun; kembalikan rencana |
+| `terapkanPemetaan(lembar, userId)` | terapkan yang berstatus `SIAP` |
+
+Bentuk masukannya sama dengan importir lain: `readAllSheetRows(buf)` menjadi
+`{ nama, baris }[]`.
+
+Tiap keputusan kembali sebagai satu baris berstatus:
+
+- **SIAP** — akan diterapkan
+- **LEWAT** — memang sudah begitu, tidak ada yang dikerjakan
+- **TOLAK** — tidak bisa, dengan alasan yang bisa ditindaklanjuti
+
+Halaman sebaiknya menampilkan ketiganya, bukan hanya SIAP. Yang TOLAK itulah
+yang perlu dibawa kembali ke lapangan, dan menyembunyikannya membuat berkas
+berikutnya mengulang kesalahan yang sama.
+
+`masalah[]` terpisah dari `baris[]`: itu baris yang tidak bisa DIBACA sama
+sekali (jawaban yang tidak dikenali, dua BENAR pada satu username), lengkap
+dengan nomor barisnya di dalam lembar.
+
+`dilewati` adalah baris yang sengaja dikosongkan tim. **Bukan masalah** —
+itu jawaban "ragu", dan petunjuk di berkasnya memang meminta begitu. Jangan
+ditampilkan sebagai kegagalan.
+
+### Yang perlu diketahui frontend
+
+**Menimpa tidak pernah dilakukan diam-diam.** Langganan yang sudah punya
+`pppoeUsername` lain, atau port yang sudah ditempati orang lain, ditolak
+dengan menyebut siapa pemiliknya sekarang. Yang lama bisa saja benar dan yang
+baru salah ketik; keduanya tidak bisa dibedakan dari sini.
+
+**Kapasitas diterapkan sebelum port.** ODP yang dinaikkan dari 1:8 ke 1:16
+langsung mendapat baris port yang kurang, sehingga port 9–16 benar-benar bisa
+ditempati. Tetapi baris port yang ditolak karena "melebihi kapasitas" pada
+berkas yang sama tetap ditolak — perbaikannya baru berlaku pada berkas
+berikutnya.
+
+**Splitter hanya 1:8 dan 1:16.** Angka lain ditolak sebagai salah baca, bukan
+diterima sebagai jenis splitter baru.
