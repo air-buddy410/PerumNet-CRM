@@ -2,9 +2,9 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { simulasiTerbit, simulasiIsolir, bandingkanTagihan } from "@/lib/billing-dryrun";
 
-const aktif = (n: string, harga = 225000, aktifSejak = "2026-01-01") => ({
+const aktif = (n: string, harga = 225000, mulaiTagih = "2026-01-01") => ({
   serviceNumber: n, status: "ACTIVE", monthlyPrice: harga,
-  billingCycleDay: 1, isolirDay: 16, activatedAt: new Date(aktifSejak),
+  billingCycleDay: 1, isolirDay: 16, billingStartAt: new Date(mulaiTagih),
 });
 
 describe("simulasiTerbit", () => {
@@ -21,7 +21,7 @@ describe("simulasiTerbit", () => {
     assert.equal(h.dilewati, 1);
   });
 
-  test("langganan yang aktif SESUDAH periode tidak ditagih mundur", () => {
+  test("langganan yang mulai ditagih SESUDAH periode tidak ditagih mundur", () => {
     // Tanpa penjagaan ini, impor data lama akan menerbitkan tagihan untuk
     // bulan-bulan sebelum pelanggannya ada.
     const h = simulasiTerbit([aktif("PN1", 225000, "2026-09-15")], { tahun: 2026, bulan: 8 });

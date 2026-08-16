@@ -35,8 +35,8 @@ async function main() {
   const subs = await db.subscription.findMany({
     select: {
       serviceNumber: true, status: true, monthlyPrice: true,
-      billingCycleDay: true, activatedAt: true,
-      billingProfile: { select: { isolirDay: true } },
+      billingCycleDay: true,
+      billingProfile: { select: { isolirDay: true, billingStartAt: true } },
     },
   });
 
@@ -47,7 +47,7 @@ async function main() {
       monthlyPrice: Number(s.monthlyPrice),
       billingCycleDay: s.billingCycleDay,
       isolirDay: s.billingProfile?.isolirDay ?? null,
-      activatedAt: s.activatedAt,
+      billingStartAt: s.billingProfile?.billingStartAt ?? null,
     })),
     { tahun, bulan }
   );

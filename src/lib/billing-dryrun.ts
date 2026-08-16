@@ -28,8 +28,17 @@ export interface LanggananUntukTagih {
   billingCycleDay: number;
   /** Tanggal isolir bila belum bayar; null berarti tidak pernah diisolir. */
   isolirDay: number | null;
-  /** Kapan langganan ini mulai ditagih. */
-  activatedAt: Date | null;
+  /**
+   * Kapan langganan ini MULAI DITAGIH — `BillingProfile.billingStartAt`.
+   *
+   * BUKAN `Subscription.activatedAt`. Keduanya terdengar sama dan sering
+   * berdekatan, tetapi yang satu menjawab "kapan layanannya menyala" dan yang
+   * lain "sejak kapan orang ini membayar". Gladi pertama memakai `activatedAt`
+   * dan menghitung 3 tagihan dari 1.594 pelanggan aktif — kolom itu memang
+   * kosong untuk seluruh data hasil impor, sebab impor mengisi profil
+   * tagihannya, bukan tanggal aktifnya.
+   */
+  billingStartAt: Date | null;
 }
 
 export interface BarisSimulasi {
@@ -72,18 +81,18 @@ export function simulasiTerbit(
     if (!DITAGIH.has(s.status)) {
       return { serviceNumber: s.serviceNumber, tindakan: "LEWAT", jumlah: 0, alasan: `Status ${s.status}.` };
     }
-    if (!s.activatedAt) {
-      return { serviceNumber: s.serviceNumber, tindakan: "LEWAT", jumlah: 0, alasan: "Belum pernah diaktifkan." };
+    if (!s.billingStartAt) {
+      return { serviceNumber: s.serviceNumber, tindakan: "LEWAT", jumlah: 0, alasan: "Belum punya tanggal mulai tagih." };
     }
     // Langganan yang baru aktif SESUDAH periode berakhir tidak ditagih untuk
     // periode itu. Tanpa penjagaan ini, impor data lama akan menerbitkan
     // tagihan mundur untuk bulan-bulan sebelum pelanggannya ada.
-    if (s.activatedAt > akhirPeriode) {
+    if (s.billingStartAt > akhirPeriode) {
       return {
         serviceNumber: s.serviceNumber,
         tindakan: "LEWAT",
         jumlah: 0,
-        alasan: "Aktif setelah periode ini berakhir.",
+        alasan: "Mulai ditagih setelah periode ini berakhir.",
       };
     }
     if (s.monthlyPrice <= 0) {
