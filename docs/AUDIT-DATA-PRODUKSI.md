@@ -119,3 +119,65 @@ koordinat di luar Bali, nol titik dipakai lebih dari lima pelanggan.
 Sisa yang memang tidak ada di sumbernya: 227 pelanggan tanpa NIK, 55 NIK tak
 berbentuk, dan empat pelanggan baru yang belum ada di CRM (`PN260816062`,
 `PN260815027`, `PN260815308`, `PN260815316`).
+
+## PSG 240102 — ditelusuri sampai tuntas (16 Agustus 2026)
+
+Tiga pemeriksaan yang saling bebas menunjuk baris ini, dan itulah yang membuat
+kesimpulannya bisa dipegang:
+
+1. **Jarak** — lima penghuninya berada 3,0–3,8 km dari ODP-nya, sedangkan
+   median seluruh pelanggan hanya 94 m.
+2. **Alamat** — tiga di antaranya beralamat **Bungaya**, padahal ODP-nya di
+   Pesagi.
+3. **OLT** — menurut pelanggannya ODP ini disuapi **empat OLT berbeda**
+   sekaligus, yang mustahil secara fisik.
+
+### ODP-nya sendiri NYATA dan benar tempatnya
+
+Catatannya menyimpan asalnya: *"OLT menurut berkas: OLT ZTE C300 Pesagi ·
+PIU: 1/2/5"*. Koordinatnya berada di dalam sebaran ODP Pesagi, dan ia menjadi
+induk empat ODP kaskade (`DC01`, `DC03`, `DC04`, `DC07`). Jadi yang salah
+bukan ODP-nya, melainkan daftar penghuninya.
+
+### Delapan penghuninya berasal dari empat desa
+
+| Port | Pelanggan | Alamat |
+|---|---|---|
+| 1 | Perumnet Office | kantor sendiri, INACTIVE |
+| 2 | I Gede Sudarma | Jalan raya Peladung |
+| 3 | I Wayan Yukem | Br. dinas Pasiatin |
+| 4 | Ni Nyoman Manis | Bungaya |
+| 5 | I Ketut Lunas | Bungaya |
+| 6 | I Komang Sumastra | Bungaya |
+| 7 | Free Supratman | Tempajang |
+| 8 | I Nengah Mahadipa | Bungaya |
+
+Kantor sendiri dan satu akun gratis ikut di dalamnya. Pola itu — akun internal,
+akun gratis, dan pelanggan dari desa yang berjauhan menumpuk di satu ODP —
+adalah pola **tempat pembuangan**: port yang diisi ketika ODP sebenarnya tidak
+diketahui.
+
+### Ke mana yang tiga orang Bungaya seharusnya
+
+| Pelanggan | ODP Bungaya terdekat | Jarak | Port kosong di sana |
+|---|---|---|---|
+| I Ketut Lunas | BGY 07 | **61 m** | 0 — penuh |
+| Ni Nyoman Manis | BGY 07 | **195 m** | 0 — penuh |
+| I Komang Sumastra | BGY 08 | **200 m** | 8 |
+
+`BGY 01` (13 kosong), `BGY 06` (8 kosong), dan `BGY 02` (12 kosong) berada di
+lingkungan yang sama, jadi ketiganya bisa ditampung tanpa pasang ODP baru.
+
+Dua sisanya bukan Bungaya: Sudarma beralamat Peladung (4,4 km dari ODP Bungaya
+terdekat) dan Yukem beralamat Pasiatin (6,3 km) — "Pesiatin" kebetulan juga
+nama salah satu port PON pada OLT Seraya Barat, jadi ia kemungkinan pelanggan
+Seraya.
+
+### Akibat yang tidak kelihatan
+
+ODP ini tercatat **8/8 penuh**. Selama delapan portnya dipakai orang yang
+bukan penghuninya, pelanggan Pesagi yang sungguhan akan ditolak dari ODP yang
+sebenarnya masih punya tempat.
+
+**Tidak ada yang diubah.** Pemindahan port adalah keputusan lapangan, dan CRM
+sedang dalam mode baca-saja.
