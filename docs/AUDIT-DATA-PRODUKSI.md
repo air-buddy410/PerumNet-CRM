@@ -271,3 +271,18 @@ dan port itu memang tidak bisa dipantau.
 **Jangan tampilkan 28 ODP ini sebagai galat atau "menunggu sinkron".** Mereka
 lengkap sebagaimana mestinya — yang tidak ada cuma pemantauan port PON-nya,
 dan itu batas perangkatnya, bukan lubang di data kita.
+
+### Uji yang baru sekarang bisa dijalankan: kaskade
+
+ODP kaskade disuapi ODP induknya, jadi keduanya HARUS berada di port PON yang
+sama — itu keharusan fisik, bukan konvensi. Sebelum `ponPortId` terisi, tidak
+ada yang bisa mengujinya.
+
+**477 pasang induk–anak diperiksa, 0 berbeda.** Sisanya (99 pasang) salah satu
+sisinya belum bertaut, hampir semuanya ODP HSGQ Kecicang.
+
+Ini pemeriksaan yang berarti, bukan sekadar angka bagus: PIU tiap ODP ditulis
+per baris di berkas sumber, sedangkan hubungan induk–anak berasal dari kolom
+yang berbeda. Kalau pembacaan PIU keliru — meleset slot, salah membaca sisipan
+`olt-`, atau salah menjodohkan nama OLT — ratusan pasang ini akan berselisih.
+Tidak satu pun berselisih.
