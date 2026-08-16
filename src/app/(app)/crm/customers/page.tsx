@@ -74,7 +74,12 @@ export default async function CustomersPage({
         ? [{ status: table.direction }, { id: "asc" }]
         : [{ createdAt: table.direction }, { id: "asc" }];
 
-  const [rawCustomers, total, packages, odps] = await Promise.all([
+  const subscriptionSummaryWhere: Prisma.SubscriptionWhereInput = {
+    ...subscriptionWhere,
+    ...(where ? { customer: where } : {}),
+  };
+
+  const [rawCustomers, total, packages, odps, packageSummaryRows] = await Promise.all([
     db.customer.findMany({
       where,
       include: { area: true, salesOwner: true, _count: { select: { subscriptions: true } } },
@@ -93,12 +98,27 @@ export default async function CustomersPage({
       select: { id: true, code: true, role: true },
       orderBy: { code: "asc" },
     }),
+    db.subscription.groupBy({
+      by: ["packageId", "customerId"],
+      where: subscriptionSummaryWhere,
+    }),
   ]);
 
   // Penyamaran di JALUR DATA, bukan di JSX. Bentuknya tidak berubah, jadi
   // tabel di bawah tidak perlu tahu apa pun soal izin PII — dan kolom baru
   // yang ditambahkan nanti ikut aman tanpa ada yang perlu mengingatnya.
   const customers = redactCustomers(rawCustomers, user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW));
+  const packageNames = new Map(packages.map((pkg) => [pkg.id, pkg.name]));
+  const packageCounts = new Map<string, number>();
+  for (const row of packageSummaryRows) {
+    packageCounts.set(row.packageId, (packageCounts.get(row.packageId) ?? 0) + 1);
+  }
+  const packageSummary = Array.from(packageCounts, ([packageId, count]) => ({
+    packageId,
+    name: packageNames.get(packageId) ?? "Paket tidak aktif",
+    count,
+  }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "id"));
 
   return (
     <div>
@@ -161,9 +181,31 @@ export default async function CustomersPage({
               {PPPOE_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
             <button type="submit" className="btn-secondary shrink-0">Terapkan</button>
+            <Link href="/crm/customers" className="btn-secondary shrink-0">Reset</Link>
           </div>
         </div>
       </form>
+
+      {packageSummary.length > 0 && (
+        <section className="card mb-5 min-w-0 p-4" aria-labelledby="customer-package-summary-title">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 id="customer-package-summary-title" className="font-medium text-slate-800">Ringkasan paket</h2>
+              <p className="mt-1 text-sm text-slate-500">Jumlah customer per paket sesuai filter yang sedang dipakai.</p>
+            </div>
+            <span className="text-xs text-slate-500">{packageSummary.reduce((sum, item) => sum + item.count, 0)} customer</span>
+          </div>
+          <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {packageSummary.map((item) => (
+              <div key={item.packageId} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                <p className="break-words text-sm text-slate-600">{item.name}</p>
+                <p className="mt-1 text-2xl font-semibold text-slate-800">{item.count}</p>
+                <p className="text-xs text-slate-500">customer</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="card overflow-x-auto">
         {customers.length === 0 ? (

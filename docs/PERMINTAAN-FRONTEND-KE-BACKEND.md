@@ -109,3 +109,20 @@ Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman
 - **Layar:** `/crm/customers/[id]`
 - **Status:** Opus sudah memperbaiki preservasi field yang tidak dikirim dan penjagaan sisi tulis `customers.pii_view` pada `updateCustomerAction` (`fe1c6ba`). Frontend sekarang menampilkan NIK/tanggal lahir hanya bagi user dengan izin lihat PII, dan hanya membuatnya editable bersama `customers.edit`.
 - **Guard frontend:** user tanpa akses PII tidak menerima raw atau nilai masking di form identitas. Field yang tidak ditampilkan tidak dikirim, validasi kenyamanan NIK/tanggal dilakukan di browser, dan server tetap menjadi validasi final.
+
+## Fase 85 — Kontrak yang masih diperlukan
+
+### Riwayat audit per customer
+- **Layar:** `/crm/customers/[id]`
+- **Butuh:** loader audit permission-scoped berdasarkan `entityType` dan `entityId`, dengan actor, waktu, aksi, serta ringkasan perubahan yang aman untuk ditampilkan.
+- **Kenapa tidak bisa di sisi frontend:** mengambil seluruh audit log lalu menyaring di browser dapat membocorkan aktivitas lintas entitas dan melanggar batas akses.
+
+### Konteks Merchant dan isolir
+- **Layar:** detail customer dan laporan operasional
+- **Butuh:** kontrak resmi untuk relasi Merchant yang ingin ditampilkan pada customer/subscription, serta ringkasan ServiceSuspension yang menjelaskan status atau tanggal isolir aktif.
+- **Kenapa tidak bisa di sisi frontend:** Merchant saat ini terhubung melalui Payment dan ServiceSuspension adalah rangkaian event; frontend tidak boleh menebak merchant utama atau mengubah event menjadi satu tanggal.
+
+### Laporan tiket customer
+- **Layar:** `/crm/customers/[id]` dan dashboard laporan
+- **Butuh:** loader agregasi permission-scoped untuk jumlah tiket, status, SLA/MTTR, dan rentang waktu dengan filter yang terdokumentasi.
+- **Kenapa tidak bisa di sisi frontend:** menghitung laporan dari daftar tiket parsial dapat menghasilkan angka salah dan membebani server/browser. Fase 85 hanya membawa konteks customer/subscription saat membuat tiket.

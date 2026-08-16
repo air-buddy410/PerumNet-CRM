@@ -9,7 +9,7 @@ export const metadata = { title: "Tiket Pelanggan Baru" };
 export default async function NewCustomerTicketPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; parentId?: string; customerId?: string }>;
+  searchParams: Promise<{ error?: string; parentId?: string; customerId?: string; subscriptionId?: string }>;
 }) {
   await requirePermission(PERMISSIONS.CTICKETS_CREATE);
   const sp = await searchParams;
@@ -53,7 +53,7 @@ export default async function NewCustomerTicketPage({
           </div>
           <div>
             <label className="label" htmlFor="subscriptionId">Langganan (opsional)</label>
-            <select id="subscriptionId" name="subscriptionId" className="input" defaultValue="">
+            <select id="subscriptionId" name="subscriptionId" className="input" defaultValue={parent?.subscriptionId ?? sp.subscriptionId ?? ""}>
               <option value="">— tidak spesifik —</option>
               {customers.flatMap((c) =>
                 c.subscriptions.map((s) => (

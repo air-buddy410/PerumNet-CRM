@@ -1213,3 +1213,30 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Responsive acceptance tetap berlaku pada enam viewport: filter dapat wrap,
   label panjang tidak keluar card, dan perubahan filter mempertahankan query
   URL yang sudah ada.
+
+## 45. Fase 85 — Customer Context Frontend
+
+- Detail customer menampilkan konteks teknis per subscription: username PPPoE,
+  status koneksi dari sesi PPPoE terbaru, waktu terakhir terlihat, posisi ONU,
+  serta jalur router → OLT → PON → ODP. Password PPPoE tidak pernah dikirim
+  atau ditampilkan di UI.
+- Nama OLT memakai nama operasional `OltDevice.name` dengan hostname sebagai
+  fallback. Router, OLT, ODP, dan parent ODP ditautkan ke panel/detail resmi
+  yang sudah tersedia. Tombol `Buka tiket` membawa `customerId` dan
+  `subscriptionId` hanya jika user memiliki permission membuat tiket.
+- Tautan Google Maps hanya muncul setelah latitude dan longitude customer
+  lolos pemeriksaan angka serta rentang koordinat. Tidak ada geocoding atau
+  request Google Maps dari browser.
+- Daftar customer mempertahankan filter status, paket, ODP, dan username PPPoE.
+  Tombol Reset menghapus filter, sedangkan ringkasan paket dihitung melalui
+  agregasi subscription server-side sesuai filter aktif; frontend tidak
+  memotong dataset besar di browser.
+- Merchant, tanggal isolir, audit per customer, dan laporan tiket belum
+  ditampilkan sampai kontrak baca permission-scoped tersedia. Model Merchant
+  saat ini terkait pembayaran, ServiceSuspension adalah event, dan query audit
+  per-entitas/laporan belum boleh ditebak dari UI.
+- Acceptance: status Online, Offline, Disabled, dan Belum tersedia tetap jujur;
+  link teknis, tombol tiket, filter, Reset, dan ringkasan tetap terbaca pada
+  1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800 tanpa
+  horizontal overflow, overlap, password/PII sensitif, hydration warning,
+  atau console error.

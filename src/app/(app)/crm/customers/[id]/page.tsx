@@ -16,6 +16,24 @@ import { updateCustomerAction } from "../actions";
 
 export const metadata = { title: "Detail Customer" };
 
+function pppoeStatusView(status: string | null | undefined) {
+  switch (status) {
+    case "ONLINE":
+      return { label: "Online", className: "bg-emerald-50 text-emerald-700" };
+    case "OFFLINE":
+      return { label: "Offline", className: "bg-red-50 text-red-700" };
+    case "DISABLED":
+      return { label: "Disabled", className: "bg-slate-100 text-slate-600" };
+    default:
+      return { label: "Belum tersedia", className: "bg-amber-50 text-amber-700" };
+  }
+}
+
+function hasValidCoordinates(latitude: number | null | undefined, longitude: number | null | undefined): boolean {
+  return typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+    && typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+}
+
 export default async function CustomerDetailPage({
   params,
   searchParams,
@@ -34,7 +52,38 @@ export default async function CustomerDetailPage({
         area: true,
         salesOwner: true,
         lead: true,
-        subscriptions: { include: { package: true }, orderBy: { createdAt: "desc" } },
+        subscriptions: {
+          include: {
+            package: true,
+            router: { select: { id: true, hostname: true, status: true, deviceType: true } },
+            pppoeSessions: {
+              orderBy: { updatedAt: "desc" },
+              take: 1,
+              select: { id: true, username: true, status: true, lastSeenAt: true, updatedAt: true, routerId: true },
+            },
+            odpPort: {
+              include: {
+                odp: {
+                  include: {
+                    parent: { select: { id: true, code: true } },
+                    ponPort: {
+                      include: {
+                        olt: {
+                          select: {
+                            id: true,
+                            name: true,
+                            networkDevice: { select: { id: true, hostname: true, status: true, deviceType: true } },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
         terminations: {
           include: {
             subscription: { select: { id: true, serviceNumber: true } },
@@ -58,6 +107,11 @@ export default async function CustomerDetailPage({
   const canViewPii = user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW);
   const canCreateSub = user.permissions.has(PERMISSIONS.SUBSCRIPTIONS_CREATE);
   const canCreateTermination = user.permissions.has(PERMISSIONS.TERMINATION_CREATE);
+  const canCreateTicket = user.permissions.has(PERMISSIONS.CTICKETS_CREATE);
+  const hasCustomerCoordinates = hasValidCoordinates(customer.latitude, customer.longitude);
+  const googleMapsHref = hasCustomerCoordinates
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${customer.latitude},${customer.longitude}`)}`
+    : null;
   const terminationSubscriptionIds = new Set(
     customer.terminations
       .filter((termination) => ["DRAFT", "SUBMITTED", "APPROVED", "EFFECTIVE"].includes(termination.status))
@@ -74,7 +128,21 @@ export default async function CustomerDetailPage({
             ? `Dikonversi dari lead ${customer.lead.leadNumber}`
             : "Dibuat manual"
         }
-        action={<Badge value={customer.status} label={statusLabel(customer.status)} />}
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Badge value={customer.status} label={statusLabel(customer.status)} />
+            {googleMapsHref && (
+              <a
+                href={googleMapsHref}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-secondary whitespace-nowrap px-3 py-1.5 text-xs"
+              >
+                Buka di Google Maps
+              </a>
+            )}
+          </div>
+        }
       />
       <Flash ok={sp.ok} error={sp.error} />
 
@@ -221,6 +289,99 @@ export default async function CustomerDetailPage({
           </div>
         )}
       </div>
+
+      <section className="card mt-6 min-w-0" aria-labelledby="customer-network-context-title">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 id="customer-network-context-title" className="font-medium">Koneksi &amp; jalur layanan</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Status koneksi berasal dari sesi PPPoE terbaru. Password PPPoE tidak ditampilkan.
+          </p>
+        </div>
+        {customer.subscriptions.length === 0 ? (
+          <EmptyState message="Belum ada layanan untuk ditampilkan." />
+        ) : (
+          <div className="space-y-4 p-5">
+            {customer.subscriptions.map((subscription) => {
+              const session = subscription.pppoeSessions[0] ?? null;
+              const status = pppoeStatusView(session?.status);
+              const odp = subscription.odpPort?.odp ?? null;
+              const ponPort = odp?.ponPort ?? null;
+              const olt = ponPort?.olt ?? null;
+              const oltDevice = olt?.networkDevice ?? null;
+              const router = subscription.router;
+
+              return (
+                <article key={subscription.id} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-medium text-slate-800">{subscription.serviceNumber}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{subscription.package.name}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <span className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
+                      {canCreateTicket && (
+                        <Link
+                          href={`/helpdesk/tickets/new?customerId=${encodeURIComponent(customer.id)}&subscriptionId=${encodeURIComponent(subscription.id)}`}
+                          className="btn-secondary whitespace-nowrap px-3 py-1.5 text-xs"
+                        >
+                          Buka tiket
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  <dl className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="min-w-0">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Username PPPoE</dt>
+                      <dd className="mt-1 break-words font-mono text-sm text-slate-800">{subscription.pppoeUsername ?? session?.username ?? "—"}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Terakhir terlihat</dt>
+                      <dd className="mt-1 break-words text-sm text-slate-800">{session?.lastSeenAt ? formatDateTime(session.lastSeenAt) : "Belum tersedia"}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Posisi ONU</dt>
+                      <dd className="mt-1 break-words font-mono text-sm text-slate-800">{subscription.onuPosition ?? "Belum tersedia"}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Router</dt>
+                      <dd className="mt-1 break-words text-sm">
+                        {router ? (
+                          <Link href={`/noc/devices?device=${encodeURIComponent(router.id)}`} className="text-brand-600 hover:underline">
+                            {router.hostname}
+                          </Link>
+                        ) : "Belum tertaut"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-4 min-w-0 rounded-lg border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Jalur jaringan</p>
+                    <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-700">
+                      {router ? <Link href={`/noc/devices?device=${encodeURIComponent(router.id)}`} className="text-brand-600 hover:underline">{router.hostname}</Link> : <span>Router belum tertaut</span>}
+                      <span aria-hidden="true">→</span>
+                      {oltDevice ? <Link href={`/noc/devices?device=${encodeURIComponent(oltDevice.id)}`} className="text-brand-600 hover:underline">{olt?.name ?? oltDevice.hostname}</Link> : <span>OLT belum tersedia</span>}
+                      <span aria-hidden="true">→</span>
+                      <span>{ponPort?.label ?? "PON belum tersedia"}</span>
+                      <span aria-hidden="true">→</span>
+                      {odp ? <Link href={`/noc/ftth/odp/${encodeURIComponent(odp.id)}`} className="text-brand-600 hover:underline">{odp.code}</Link> : <span>ODP belum tertaut</span>}
+                      {subscription.odpPort && <span className="text-slate-500">(port {subscription.odpPort.portNumber})</span>}
+                      {odp?.parent && (
+                        <>
+                          <span aria-hidden="true">→</span>
+                          <Link href={`/noc/ftth/odp/${encodeURIComponent(odp.parent.id)}`} className="text-brand-600 hover:underline">{odp.parent.code}</Link>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {customer.terminations.length > 0 && (
         <div className="card mt-6">
