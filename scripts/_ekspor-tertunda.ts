@@ -41,7 +41,7 @@ async function main() {
 
   const sesi = await db.pppoeSession.findMany({
     where: { subscriptionId: null },
-    select: { username: true, lastSeenAt: true, address: true, callerId: true },
+    select: { username: true, lastSeenAt: true, address: true, callerId: true, status: true },
     distinct: ["username"],
     orderBy: { username: "asc" },
   });
@@ -64,7 +64,7 @@ async function main() {
 
   // ── Lembar 1: ada kandidat, namanya tidak menguatkan ────────────
   const ambigu: string[][] = [[
-    "Username PPPoE", "Terakhir online", "IP terakhir", "MAC (caller-id)",
+    "Username PPPoE", "Status", "Terakhir online", "IP terakhir", "MAC (caller-id)",
     "Kandidat: Nomor Layanan", "Kandidat: Nama Pelanggan", "Kandidat: Alamat",
     "Nama cocok?", "KEPUTUSAN (isi: BENAR / SALAH / kosongkan bila ragu)", "CATATAN",
   ]];
@@ -74,7 +74,7 @@ async function main() {
     const s = terakhir.get(u);
     const daftar = [...set.values()];
     if (daftar.length === 0) {
-      ambigu.push([u, tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "", "", "", "", "", "", ""]);
+      ambigu.push([u, s?.status ?? "", tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "", "", "", "", "", "", ""]);
       continue;
     }
     // Satu baris per kandidat. Username diulang supaya tiap baris berdiri
@@ -82,7 +82,7 @@ async function main() {
     for (const k of daftar) {
       const d = detail.get(k.serviceNumber);
       ambigu.push([
-        u, tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "",
+        u, s?.status ?? "", tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "",
         k.serviceNumber, k.customerName, d?.customer.address ?? "",
         nameCorroborates(u, k.customerName) ? "ya" : "tidak",
         "", "",
@@ -92,13 +92,13 @@ async function main() {
 
   // ── Lembar 2: tidak ada kandidat sama sekali ────────────────────
   const tanpaKandidat: string[][] = [[
-    "Username PPPoE", "Terakhir online", "IP terakhir", "MAC (caller-id)",
+    "Username PPPoE", "Status", "Terakhir online", "IP terakhir", "MAC (caller-id)",
     "Angka di dalam username", "KEPUTUSAN (isi Nomor Layanan, atau: TIDAK DIPAKAI)", "CATATAN",
   ]];
   for (const u of hasil.unmatched) {
     const s = terakhir.get(u);
     tanpaKandidat.push([
-      u, tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "",
+      u, s?.status ?? "", tanggal(s?.lastSeenAt), s?.address ?? "", s?.callerId ?? "",
       numbersIn(u).join(" · "), "", "",
     ]);
   }
@@ -162,6 +162,8 @@ async function main() {
     ["1. Sesi ambigu", `${hasil.ambiguous.length} username · nomornya cocok, namanya tidak.`],
     ["", "Satu username bisa punya beberapa baris kandidat. Tandai BENAR pada satu saja."],
     ["2. Tanpa kandidat", `${hasil.unmatched.length} username · nomornya tidak ada di langganan mana pun.`],
+    ["", "Kolom Status paling menolong di sini: yang OFFLINE dan tak pernah terlihat online"],
+    ["", "hampir pasti sudah tidak dipakai — tulis TIDAK DIPAKAI, jangan dicari-cari."],
     ["", "Kemungkinan pelanggan lama yang belum dimigrasi. Isi Nomor Layanan bila ketemu."],
     ["3. Pelanggan tanpa port", `${tanpaPort.length} pelanggan aktif · ODP-nya sudah penuh menurut catatan.`],
     ["4. ODP penuh", `${sesak.length} ODP · periksa di lapangan, kapasitasnya mungkin tertinggal.`],
