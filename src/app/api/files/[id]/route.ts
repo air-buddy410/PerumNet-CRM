@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/rbac";
 import { attachmentPath } from "@/lib/files";
 import { PERMISSIONS } from "@/lib/constants";
+import { catatUnduhBerkas } from "@/lib/customer-dossier-service";
 
 // Penyajian lampiran privat (PRD terminasi §15).
 //
@@ -40,7 +41,31 @@ const ENTITY_PERMISSION: Record<string, string> = {
   // login. Itu jalur terpisah yang harus dibuat sadar — jangan cukup dengan
   // melonggarkan izin di sini, karena daftar ini menjaga SEMUA lampiran.
   EmployeePhoto: PERMISSIONS.HRD_VIEW,
+  // Fase 86 — berkas pelanggan. Formulir berlangganan dan foto lokasi cukup
+  // dengan izin melihat pelanggan.
+  CustomerForm: PERMISSIONS.CUSTOMERS_VIEW,
+  CustomerPhoto: PERMISSIONS.CUSTOMERS_VIEW,
+  // Scan kartu identitas TIDAK. Ia PII, dan izinnya sengaja dibedakan: siapa
+  // pun yang boleh melihat daftar pelanggan tidak otomatis boleh melihat
+  // kartu identitasnya. Ini pemisahan yang sama seperti masking NIK dan
+  // telepon pada daftar — melindungi kolomnya lalu membiarkan scan-nya
+  // terbuka berarti tidak melindungi apa pun.
+  CustomerIdCard: PERMISSIONS.CUSTOMERS_PII_VIEW,
 };
+
+/**
+ * Jenis lampiran yang setiap pembukaannya dicatat.
+ *
+ * Bukan seluruhnya: foto ODP dibuka puluhan kali sehari oleh teknisi dan
+ * mencatatnya hanya akan menenggelamkan audit. Yang dicatat adalah yang
+ * berisi identitas orang — itu yang perlu bisa ditelusuri kalau suatu hari
+ * ditanya siapa saja pernah melihatnya.
+ */
+const DICATAT_UNDUHNYA: ReadonlySet<string> = new Set([
+  "CustomerIdCard",
+  "CustomerForm",
+  "EmployeePhoto",
+]);
 
 export async function GET(
   _req: NextRequest,
@@ -65,6 +90,12 @@ export async function GET(
     data = await readFile(attachmentPath(attachment.storedName));
   } catch {
     return new NextResponse("File hilang dari storage", { status: 410 });
+  }
+
+  // Dicatat SESUDAH izin lolos dan berkasnya benar-benar terbaca, supaya
+  // jejaknya berarti "orang ini melihat isinya" — bukan sekadar "mencoba".
+  if (DICATAT_UNDUHNYA.has(attachment.entityType)) {
+    await catatUnduhBerkas(attachment.id, attachment.entityType, attachment.entityId, user.id);
   }
 
   return new NextResponse(new Uint8Array(data), {

@@ -640,6 +640,7 @@ model Customer {
   customerTickets  CustomerTicket[]
   outboundMessages OutboundMessage[]
   terminations     CustomerTermination[]
+  portalAccount CustomerAccount?
 }
 
 model Subscription {
@@ -2413,6 +2414,11 @@ model Employee {
   @@index([isActive])
 }
 
+// Promo & pengumuman portal TIDAK punya model sendiri: `Announcement` yang
+// sudah ada persis bentuknya (title, badge "PROMO"/"INFO", body, startAt,
+// endAt, isPublished) berikut layarnya di /channels/announcements. Portal
+// membacanya, tim marketing menulisnya di tempat yang sama seperti sekarang.
+
 model AttendanceLocation {
   id        String  @id @default(cuid())
   name      String  @unique
@@ -3276,3 +3282,46 @@ model PppoeIgnored {
 
   decidedBy User? @relation("PppoeIgnoredDecider", fields: [decidedById], references: [id])
 }
+
+// ═══════════════ Fase 87: Portal pelanggan ═══════════════
+//
+// Realm auth yang TERPISAH PENUH dari staf, dan itu keputusan pokoknya.
+//
+// Menumpang tabel `User` akan membuat 1.715 pelanggan masuk ke tabel yang sama
+// dengan pegawai — satu kekeliruan pada penetapan peran, dan seorang pelanggan
+// memegang izin staf. Pemisahan di tingkat tabel membuat kekeliruan itu tidak
+// mungkin: tidak ada kolom peran di sini untuk salah diisi.
+//
+// Password pelanggan TIDAK pernah disimpan sebagai teks, dan TIDAK pernah
+// disalin dari sistem lama — sistem lama menyimpannya terbaca (`perumnet@225`
+// terlihat di layar adminnya), dan menyalinnya berarti mewarisi kelemahannya.
+// Akun dibuat dengan password yang di-hash di sini, atau tidak dibuat.
+
+model CustomerAccount {
+  id           String    @id @default(cuid())
+  customerId   String    @unique
+  /// Nomor layanan dipakai sebagai nama masuk — itu yang diingat pelanggan.
+  loginName    String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  /// Dinaikkan untuk mengusir SELURUH sesi yang sedang berjalan sekaligus —
+  /// padanan "Logout Aplikasi Mobile" pada sistem lama. Token membawa nilai
+  /// ini; yang tidak cocok ditolak tanpa perlu menyimpan daftar sesi.
+  sessionEpoch Int       @default(0)
+  /// Percobaan gagal beruntun; direset saat berhasil.
+  failedCount  Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([isActive])
+}
+
+// Promo & pengumuman portal TIDAK punya model sendiri: `Announcement` yang
+// sudah ada persis bentuknya (title, badge "PROMO"/"INFO", body, startAt,
+// endAt, isPublished) berikut layarnya di /channels/announcements. Portal
+// membacanya, tim marketing menulisnya di tempat yang sama seperti sekarang.
+
