@@ -1176,3 +1176,23 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   dan 360×800.
 - Tabel memakai horizontal scroll terkontrol; kunci dan pesan panjang
   membungkus berdasarkan kata, bukan satu huruf per baris.
+
+## 43. Handoff Opus §43 — Customer di Peta
+
+- `/noc/map` menampilkan customer dengan koordinat sendiri dan customer yang
+  mewarisi koordinat ODP. Customer yang mewarisi titik diberi outline amber
+  dan keterangan `Lokasi mengikuti ODP (perkiraan)`.
+- Warna isi marker dan garis customer tetap mengikuti `linkStatus` dari
+  router, bukan status subscription. Status subscription hanya menjadi detail
+  informasi pada popup.
+- Clustering customer dan infrastruktur tetap dipisahkan agar ribuan titik
+  customer tidak bercampur dengan simpul jaringan. Saat zoom-in, cluster dapat
+  diurai dan titik individual tetap dapat dibuka.
+- Customer yang tidak terlacak melalui port ODP belum ditampilkan pada peta;
+  UI menyampaikan batas cakupan ini tanpa membuat angka hard-code karena DTO
+  belum menyediakan counter khususnya.
+- Garis ODP–customer untuk koordinat customer yang berbeda tetap digambar,
+  termasuk garis yang jauh dari ODP, agar anomali data dapat ditemukan oleh
+  tim lapangan.
+- MapLibre dan fallback SVG memakai warna status, pembeda lokasi warisan,
+  popup, legenda, serta aturan responsive yang sama.

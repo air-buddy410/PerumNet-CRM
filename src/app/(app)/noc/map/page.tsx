@@ -9,6 +9,10 @@ import {
   type NetworkTopologyEdge,
   type NetworkTopologyNode,
 } from "@/components/network-map";
+import {
+  CUSTOMER_COORDINATE_SOURCE_LABEL,
+  customerCoordinateSourceOf,
+} from "@/components/network-map-geometry";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import {
   loadNetworkMap,
@@ -231,6 +235,9 @@ export default async function NetworkMapPage({
           />
 
           <div className="mt-3 flex flex-wrap gap-4 px-2 text-xs text-slate-500">
+            <p className="basis-full text-[11px] leading-relaxed text-slate-400">
+              Warna titik customer mengikuti status koneksi PPPoE. Outline amber menandakan lokasi mengikuti ODP sebagai perkiraan.
+            </p>
             {(Object.keys(OCCUPANCY_COLOR) as OccupancyLevel[]).map((k) => (
               <span key={k} className="flex items-center gap-1.5">
                 <span
@@ -342,9 +349,12 @@ export default async function NetworkMapPage({
           {data.missingCoordinates.customers > 0 && (
             <p className="mt-4 text-xs text-amber-600">
               {data.missingCoordinates.customers} pelanggan tidak punya koordinat
-              sendiri dan digambar di titik ODP-nya.
+              sendiri dan digambar di titik ODP-nya sebagai perkiraan.
             </p>
           )}
+          <p className="mt-4 text-xs leading-relaxed text-slate-500">
+            Peta hanya menampilkan pelanggan yang terlacak melalui port ODP. Pelanggan tanpa port ODP belum ditampilkan di peta ini.
+          </p>
           {data.routes.length > 0 && (
             <p className="mt-4 text-[11px] text-slate-400">Panjang jalur hanya perkiraan dari geometri survey, bukan panjang kabel aktual.</p>
           )}
@@ -491,6 +501,8 @@ function NetworkMapSvg({
       {/* Pelanggan */}
       {data.customers.map((customer) => {
         const point = project(customer.latitude, customer.longitude);
+        const odp = customer.odpId ? odpById.get(customer.odpId) : null;
+        const coordinateSource = customerCoordinateSourceOf(customer, odp);
         return (
           <circle
             key={customer.subscriptionId}
@@ -499,10 +511,13 @@ function NetworkMapSvg({
             r={3}
             fill={linkPalette[customer.linkStatus]}
             opacity={0.85}
+            stroke={coordinateSource === "ODP_INHERITED" ? "#d97706" : "#ffffff"}
+            strokeDasharray={coordinateSource === "ODP_INHERITED" ? "2 2" : undefined}
+            strokeWidth={coordinateSource === "ODP_INHERITED" ? 2 : 1}
           >
             <title>{`${customer.customerName} · ${customer.serviceNumber} · subscription ${customer.status} · link ${customer.linkStatus}${
               customer.portNumber ? ` · port ${customer.portNumber}` : ""
-            }`}</title>
+            } · ${CUSTOMER_COORDINATE_SOURCE_LABEL[coordinateSource]}`}</title>
           </circle>
         );
       })}
@@ -556,6 +571,27 @@ function NetworkMapSvg({
           </Link>
         ) : (
           <g key={node.id}>{marker}</g>
+        );
+      })}
+
+      {/* Ring tambahan memastikan lokasi warisan tetap terlihat di atas marker ODP. */}
+      {data.customers.map((customer) => {
+        const odp = customer.odpId ? odpById.get(customer.odpId) : null;
+        if (customerCoordinateSourceOf(customer, odp) !== "ODP_INHERITED") return null;
+        const point = project(customer.latitude, customer.longitude);
+        return (
+          <circle
+            key={`inherited-ring-${customer.subscriptionId}`}
+            cx={point.x}
+            cy={point.y}
+            r={7}
+            fill="none"
+            stroke="#d97706"
+            strokeWidth={1.5}
+            strokeDasharray="3 3"
+            opacity={0.9}
+            aria-hidden="true"
+          />
         );
       })}
     </svg>

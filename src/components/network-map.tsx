@@ -10,6 +10,10 @@ import type {
   StyleSpecification,
 } from "maplibre-gl";
 import type { LinkStatus, MapBounds, NetworkMapData, OccupancyLevel } from "@/lib/noc-map";
+import {
+  CUSTOMER_COORDINATE_SOURCE_LABEL,
+  customerCoordinateSourceOf,
+} from "@/components/network-map-geometry";
 
 const MAP_STYLE_URL = "/maps/style.json";
 const TOPOLOGY_SOURCE_ID = "perumnet-topology-lines";
@@ -24,6 +28,7 @@ const INFRASTRUCTURE_LAYER_ID = "perumnet-infrastructure-points";
 const CUSTOMER_CLUSTER_LAYER_ID = "perumnet-customer-clusters";
 const CUSTOMER_CLUSTER_COUNT_LAYER_ID = "perumnet-customer-cluster-count";
 const CUSTOMER_LAYER_ID = "perumnet-customer-points";
+const CUSTOMER_INHERITED_LAYER_ID = "perumnet-customer-inherited-points";
 
 export type NetworkTopologyNodeKind = "POP" | "ODC" | "OLT" | "MS" | "ODP";
 
@@ -78,6 +83,8 @@ type NetworkFeatureProperties = {
   linkStatus?: LinkStatus;
   routerName?: string | null;
   lastSeenAt?: string | null;
+  coordinateSource?: "CUSTOMER_COORDINATE" | "ODP_INHERITED";
+  coordinateSourceLabel?: string;
   selected?: boolean;
   nodeKind?: NetworkTopologyNodeKind;
   edgeKind?: NetworkTopologyEdgeKind;
@@ -232,6 +239,8 @@ function buildOverlay(
   }
 
   for (const customer of data.customers) {
+    const odp = customer.odpId ? odpById.get(customer.odpId) : null;
+    const coordinateSource = customerCoordinateSourceOf(customer, odp);
     customers.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [customer.longitude, customer.latitude] },
@@ -247,10 +256,11 @@ function buildOverlay(
         linkStatus: customer.linkStatus,
         routerName: customer.routerName,
         lastSeenAt: customer.lastSeenAt,
+        coordinateSource,
+        coordinateSourceLabel: CUSTOMER_COORDINATE_SOURCE_LABEL[coordinateSource],
       },
     });
 
-    const odp = customer.odpId ? odpById.get(customer.odpId) : null;
     if (odp && (customer.latitude !== odp.latitude || customer.longitude !== odp.longitude)) {
       lines.push({
         type: "Feature",
@@ -320,6 +330,7 @@ function createPopupContent(
   root.append(heading);
 
   const detail = document.createElement("p");
+  const supplementary: HTMLElement[] = [];
   if (properties.kind === "site") {
     detail.textContent = `${featureText(properties, "siteType")} · status ${featureText(properties, "status")}`;
   } else if (properties.kind === "olt") {
@@ -335,12 +346,13 @@ function createPopupContent(
   } else {
     const lastSeen = featureText(properties, "lastSeenAt", "belum tersedia");
     detail.textContent = `${featureText(properties, "serviceNumber")} · subscription ${featureText(properties, "status")} · link ${featureText(properties, "linkStatus", "UNKNOWN")}`;
-
+    const location = document.createElement("p");
+    location.textContent = `Lokasi: ${featureText(properties, "coordinateSourceLabel", "sumber lokasi belum tersedia")}`;
     const extra = document.createElement("p");
     extra.textContent = `Router: ${featureText(properties, "routerName", "belum tersedia")} · terakhir terlihat: ${lastSeen}`;
-    root.append(extra);
+    supplementary.push(location, extra);
   }
-  root.append(detail);
+  root.append(detail, ...supplementary);
 
   const odpId = typeof properties.refId === "string" ? properties.refId : properties.id;
   if (properties.kind === "odp" && onOpenOdp && typeof odpId === "string") {
@@ -514,7 +526,11 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     id: CUSTOMER_LAYER_ID,
     type: "circle",
     source: CUSTOMER_SOURCE_ID,
-    filter: ["!", ["has", "point_count"]],
+    filter: [
+      "all",
+      ["!", ["has", "point_count"]],
+      ["==", ["get", "coordinateSource"], "CUSTOMER_COORDINATE"],
+    ],
     minzoom: 8,
     paint: {
       "circle-color": ["get", "color"],
@@ -522,6 +538,25 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 4.5, 17, 6],
       "circle-stroke-color": "#ffffff",
       "circle-stroke-width": 1,
+    },
+  });
+
+  map.addLayer({
+    id: CUSTOMER_INHERITED_LAYER_ID,
+    type: "circle",
+    source: CUSTOMER_SOURCE_ID,
+    filter: [
+      "all",
+      ["!", ["has", "point_count"]],
+      ["==", ["get", "coordinateSource"], "ODP_INHERITED"],
+    ],
+    minzoom: 8,
+    paint: {
+      "circle-color": ["get", "color"],
+      "circle-opacity": 0.88,
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3.5, 14, 5, 17, 6.5],
+      "circle-stroke-color": "#d97706",
+      "circle-stroke-width": 2.5,
     },
   });
 }
@@ -736,6 +771,7 @@ export function NetworkMap({
         map.on("click", INFRASTRUCTURE_LAYER_ID, showPopup);
         map.on("click", ROUTE_LAYER_ID, showPopup);
         map.on("click", CUSTOMER_LAYER_ID, showPopup);
+        map.on("click", CUSTOMER_INHERITED_LAYER_ID, showPopup);
         map.on("click", TOPOLOGY_LINE_LAYER_ID, showPopup);
         map.on("mouseenter", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -747,6 +783,9 @@ export function NetworkMap({
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseenter", CUSTOMER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseenter", CUSTOMER_INHERITED_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseenter", ROUTE_LAYER_ID, () => {
@@ -765,6 +804,9 @@ export function NetworkMap({
           map.getCanvas().style.cursor = "";
         });
         map.on("mouseleave", CUSTOMER_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("mouseleave", CUSTOMER_INHERITED_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
         });
         map.on("mouseleave", ROUTE_LAYER_ID, () => {
