@@ -121,9 +121,28 @@ export interface HasilTerap extends RencanaGerak {
  * menjalankan ulang tidak menggandakan apa pun, sebab yang sudah ada dikenali
  * dan dilewati.
  */
-export async function terapkanGerak(rows: string[][], userId: string): Promise<HasilTerap> {
+export async function terapkanGerak(
+  rows: string[][],
+  userId: string,
+  /**
+   * Kode di log → kode di master, untuk kode yang salah tulis.
+   *
+   * Sengaja MASUKAN, bukan aturan di dalam kode. Menormalkan kode secara
+   * otomatis sempat dicoba dan hasilnya salah: `PAT-000009` dinormalkan dari
+   * angkanya menjadi `PAT-0009` ("Patch Core LC UPC 10 M"), padahal namanya
+   * "Pigtail Tipe ST" yang sebenarnya `PAT-0008`. Kode tidak bisa dipercaya
+   * untuk menebak kode; yang memutuskan tetap orang, dan keputusannya lewat
+   * sini.
+   */
+  alias: Record<string, string> = {}
+): Promise<HasilTerap> {
   const rencana = await periksaGerak(rows);
   const baca = parseMovementRows(rows);
+  const petaAlias = new Map(Object.entries(alias).map(([a, b]) => [a.toUpperCase(), b.toUpperCase()]));
+  for (const g of baca.gerak) {
+    const ganti = petaAlias.get(g.itemCode);
+    if (ganti) g.itemCode = ganti;
+  }
 
   const items = await db.item.findMany({ select: { id: true, code: true } });
   const perKode = new Map(items.map((i) => [i.code.toUpperCase(), i.id]));

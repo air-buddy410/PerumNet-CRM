@@ -6,7 +6,7 @@
  *
  * Lembar dipilih dari JUDUL KOLOMNYA, bukan urutannya.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { readAllSheetRows } from "@/lib/xlsx-read";
 import { periksaGerak, terapkanGerak } from "@/lib/stock-movement-service";
 import { db } from "@/lib/db";
@@ -25,7 +25,14 @@ async function main() {
   });
   if (!gerak) throw new Error("Tidak ada lembar berkolom Item ID + Amount + DateTime.");
 
-  const r = terapkan ? await terapkanGerak(gerak, user.id) : await periksaGerak(gerak);
+  // Alias kode dibaca dari berkas, bukan ditanam di kode: isinya keputusan
+  // orang tentang kode mana yang sebenarnya kode mana.
+  const berkasAlias = process.argv.find((a) => a.endsWith(".json"));
+  const alias: Record<string, string> =
+    berkasAlias && existsSync(berkasAlias) ? JSON.parse(readFileSync(berkasAlias, "utf8")) : {};
+  if (Object.keys(alias).length) console.log(`  alias kode dipakai  : ${Object.keys(alias).length}`);
+
+  const r = terapkan ? await terapkanGerak(gerak, user.id, alias) : await periksaGerak(gerak);
   console.log(terapkan ? "═══ DITERAPKAN ═══" : "═══ PERIKSA (tidak menulis apa pun) ═══");
   console.log(`  baris di lembar     : ${r.totalBaris}`);
   console.log(`  pergerakan terbaca  : ${r.terbaca}  (${r.masuk} masuk · ${r.keluar} keluar)`);
