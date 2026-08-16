@@ -143,3 +143,27 @@ describe("bersihkanSemua — NIK unik", () => {
     assert.equal(h.bersih[0].birthDate?.toISOString().slice(0, 10), "1986-06-08");
   });
 });
+
+describe("bersihkanSemua — titik bawaan peta", () => {
+  test("koordinat yang dipakai puluhan pelanggan TIDAK disimpan", () => {
+    // Nilai asli dari salinan 16 Agustus 2026: satu titik muncul 59 kali
+    // dengan lima belas angka di belakang koma — pusat peta yang tersimpan
+    // ketika operator membuka formulir tanpa menggeser penanda.
+    const rows = Array.from({ length: 8 }, (_, i) => ({
+      serviceNumber: `PN${i}`, lat: "-8.449970331760369", lng: "115.59114508454392",
+    }));
+    const h = bersihkanSemua(rows);
+    assert.equal(h.bersih.filter((b) => b.latitude !== null).length, 0);
+    assert.equal(h.masalah.filter((m) => /titik bawaan peta/.test(m.pesan)).length, 8);
+  });
+
+  test("beberapa pelanggan berbagi satu titik tetap diterima", () => {
+    // Satu pekarangan, satu kos, satu ruko bertingkat — itu wajar.
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      serviceNumber: `PN${i}`, lat: "-8.438337", lng: "115.674357",
+    }));
+    const h = bersihkanSemua(rows);
+    assert.equal(h.bersih.filter((b) => b.latitude !== null).length, 3);
+    assert.equal(h.masalah.length, 0);
+  });
+});

@@ -169,9 +169,38 @@ export function bersihkanIdentitas(m: IdentitasMasuk): {
  * menolak yang kedua akan memilih berdasarkan urutan baris, yang tidak berarti
  * apa-apa. Keduanya dilepas dan dilaporkan.
  */
+/**
+ * Berapa kali satu titik boleh berulang sebelum dianggap titik bawaan peta.
+ *
+ * Beberapa pelanggan memang bisa berbagi koordinat — satu pekarangan, satu kos,
+ * satu ruko bertingkat. Enam puluh tidak. Pada salinan 16 Agustus 2026, satu
+ * titik muncul 59 kali dengan lima belas angka di belakang koma: itu pusat peta
+ * yang tersimpan ketika operator membuka formulir tanpa menggeser penanda.
+ * Menyimpannya menumpuk 59 rumah di satu titik dan membuat petanya berbohong
+ * dengan cara yang meyakinkan.
+ */
+const MAKS_TITIK_SAMA = 5;
+
 export function bersihkanSemua(rows: IdentitasMasuk[]): HasilIdentitas {
   const out: HasilIdentitas = { bersih: [], masalah: [] };
   const hasil = rows.map((r) => ({ r, ...bersihkanIdentitas(r) }));
+
+  const titik = new Map<string, number>();
+  for (const h of hasil) {
+    if (h.bersih.latitude === null || h.bersih.longitude === null) continue;
+    const k = `${h.bersih.latitude},${h.bersih.longitude}`;
+    titik.set(k, (titik.get(k) ?? 0) + 1);
+  }
+  for (const h of hasil) {
+    if (h.bersih.latitude === null || h.bersih.longitude === null) continue;
+    const k = `${h.bersih.latitude},${h.bersih.longitude}`;
+    const n = titik.get(k) ?? 0;
+    if (n > MAKS_TITIK_SAMA) {
+      h.masalah.push(`Koordinat ${k} dipakai ${n} pelanggan — titik bawaan peta, tidak disimpan.`);
+      h.bersih.latitude = null;
+      h.bersih.longitude = null;
+    }
+  }
 
   const hitung = new Map<string, number>();
   for (const h of hasil) {
