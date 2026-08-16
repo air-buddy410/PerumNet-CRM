@@ -2446,3 +2446,48 @@ paling mudah keliru:
 
 Tombol Terapkan menyebut angkanya ("Terapkan 38 keputusan") dan dimatikan
 ketika `ringkas.siap === 0`.
+
+---
+
+## §43 — Pelanggan di peta: datanya sudah ada, tinggal ditampilkan
+
+Koordinat pelanggan masuk 16 Agustus 2026. **1.631 pelanggan punya koordinat
+sendiri**, sebelumnya nol.
+
+**Tidak ada backend baru.** `loadNetworkMap()` sudah mengembalikan
+`customers: MapCustomer[]` lengkap sejak Fase 37b — yang berubah hanya isinya.
+
+### Yang berubah di layar
+
+Pelanggan tanpa koordinat sendiri **mewarisi koordinat ODP-nya**. Selama ini
+itu berarti semuanya menumpuk tepat di titik ODP. Sekarang 1.604 pindah ke
+rumah masing-masing, dan petanya akan terlihat sangat berbeda. Itu bukan bug.
+
+Yang masih mewarisi: **80 pelanggan**. Membedakan tampilannya menolong — orang
+perlu tahu mana titik sungguhan dan mana yang menumpang.
+`missingCoordinates.customers` memberi angkanya.
+
+### Yang perlu diperhatikan
+
+**Warnai dari `linkStatus`, bukan `status`.** `linkStatus` datang dari router
+dan menjawab "sekarang nyala atau tidak"; `status` adalah status langganan dan
+menjawab "boleh dipakai atau tidak". Keduanya sering berbeda, dan yang dicari
+orang saat membuka peta hampir selalu yang pertama.
+
+**27 pelanggan berkoordinat tidak akan muncul** — mereka belum punya port ODP,
+dan penelusurannya lewat port. Perilaku lama, bukan sesuatu yang perlu
+diperbaiki; tetapi menyebutkannya di layar lebih baik daripada mereka hilang
+tanpa jejak.
+
+**1.604 penanda di atas 577 ODP.** Tanpa pengelompokan, peta Karangasem menjadi
+kabut titik.
+
+### Lima belas yang akan tampak mencolok
+
+Lima belas pelanggan berjarak 2,1–7,3 km dari ODP yang tercatat menampung
+mereka — `PN104042606` 7.324 m, `PN102032633` 7.291 m, dan lima di antaranya
+menunjuk `PSG 240102`. Kabel drop tidak sepanjang itu, jadi salah satunya
+keliru: koordinatnya atau penempatan ODP-nya.
+
+Kalau garis pelanggan→ODP digambar, kelima belas ini akan memanjang melintasi
+peta. **Biarkan terlihat** — justru begitu orang lapangan menemukannya.
