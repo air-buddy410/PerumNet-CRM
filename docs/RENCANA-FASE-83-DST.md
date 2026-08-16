@@ -19,7 +19,7 @@ SOP PDF v1.0. Fase terakhir yang selesai: 82 (rantai OLT→PON→ODP).
 
 ---
 
-## Fase 83 — Rekonsiliasi & tambang data ALUS yang tersisa  `[Opus]`
+## Fase 83 — Rekonsiliasi & tambang data ALUS  ✅ SELESAI 17 Agustus 2026
 
 Menutup selisih data antara dua sistem selagi ALUS masih jadi sumber kebenaran.
 
@@ -38,8 +38,27 @@ Menutup selisih data antara dua sistem selagi ALUS masih jadi sumber kebenaran.
 - Selesaikan sisa lama bila pemilik setuju: 27 pelanggan berbayar tanpa port
   ODP, 23 kode material tanpa nama.
 
-**Selesai bila:** selisih dua sistem terdaftar semua di satu laporan, dan tiap
-selisih berstatus: diimpor / dibiarkan dengan alasan / menunggu keputusan.
+**Hasilnya** (rinci di [AUDIT-DATA-PRODUKSI.md](AUDIT-DATA-PRODUKSI.md)):
+
+- **1.698 posisi ONU** tersimpan. Pemeriksaan silangnya terhadap tautan PON
+  Fase 82: **1.503 sepakat, 34 berselisih — 97,8%.** `PID` dan `PSM` ternyata
+  saling tertukar di berkas sumber.
+- **Kasus lama "27 pelanggan tanpa port ODP" terpecahkan**, aritmetikanya tutup
+  sempurna: empat ODP menampung lebih banyak orang daripada kapasitas
+  tercatatnya (30/16, 19/16, 19/16, 15/8 = 27 tak kebagian). 26 dari 27 sedang
+  ONLINE — mereka nyata; kapasitas tercatatnya yang keliru.
+- **Empat pelanggan baru masuk**, tiga dapat port.
+- **Redaman: batal dengan alasan.** 110 memang kosong di sumbernya, 23 sisanya
+  positif 6–19 pada kolom dBm yang normalnya negatif — itu dB rugi, bukan dBm
+  daya. Penolakan `parseDbm` benar.
+- **Isolir date sudah terisi** 1.679/1.709 sejak dulu; **tags tidak dipakai**.
+- **Rekonsiliasi: 1.682 dari 1.711 cocok penuh, NOL selisih status, NOL selisih
+  harga.** Yang layak ditindak: **21 pelanggan diblokir di penagihan tetapi
+  sambungannya masih menyala.**
+
+Alat yang ditinggalkan, dipakai berulang sampai cutover:
+`scripts/_rekon-alus.ts` (tidak menulis apa pun), `scripts/_impor-pelanggan.ts`
+(penambahan kecil yang terus terjadi), `scripts/_impor-onu.ts`.
 
 ---
 
