@@ -79,12 +79,17 @@ stock.
 
 Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman scan publik, dan route print duplex. Sampai `qrSvg` resmi tersedia, preview menampilkan status `QR belum tersedia` dan print fisik tetap ditahan. Kontrak yang direkomendasikan: tambahkan `qrSvg: string | null` pada hasil `loadEmployeeCards()` dengan SVG yang dibuat server-side.
 
-### Item Master perlu action untuk field katalog
+### Item Master — kontrak field katalog sudah tersedia
 - **Layar:** `/inventory/items`
-- **Butuh:** `saveItemAction` atau kontrak action resmi yang menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
-- **Kenapa tidak bisa di sisi frontend:** action saat ini hanya menerima field master dasar. Frontend menampilkan empat nilai hasil impor secara read-only dan sengaja tidak mengirim field yang belum didukung agar UI tidak memberi kesan perubahan tersimpan padahal diabaikan.
+- **Status:** `saveItemAction` sudah menerima dan memvalidasi `supplierId`, `purchaseCost`, `salePrice`, dan `condition` (`GOOD`/`SECOND`) saat membuat atau mengubah item.
+- **Catatan frontend:** supplier nonaktif tetap perlu dikembalikan sebagai opsi ketika item lama sedang diedit. Field yang tidak dikirim dipertahankan; nilai kosong hanya menghapus bila memang dikirim sebagai penghapusan sengaja.
 
 **Terjawab (Fase 74).** `saveItemAction` menerima `supplierId`, `purchaseCost`, `salePrice`, dan `condition`. Pemasok diperiksa keberadaannya; bidang yang tidak dikirim dibiarkan apa adanya. Lihat §41.4.
+
+### NetworkPort — makna jumlah ONU
+- **Layar:** `/noc/devices`
+- **Status:** angka ONU harus diberi label “ONU online”. LibreNMS menghapus ONU yang tidak lagi dilaporkan, sehingga angka tersebut bukan jumlah pelanggan dan bukan inventaris perangkat terpasang.
+- **Catatan frontend:** panel perangkat memakai `loadRingkasanPort(deviceId)` dan tidak mengubah loader atau aturan sinkronisasi.
 
 ### Form edit Customer perlu kontrak PII resmi (§34)
 - **Layar:** `/crm/customers/[id]`

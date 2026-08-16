@@ -914,9 +914,11 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - `/inventory/items` menampilkan vendor utama, harga beli, harga jual, dan
   kondisi material. Nilai kondisi `GOOD` ditampilkan sebagai “Baik” dan
   `SECOND` sebagai “Layak pakai ulang”; nilai rupiah memakai `formatRupiah`.
-- Empat field katalog tersebut masih read-only karena action Item Master belum
-  menerima perubahan resminya. UI tidak menampilkan input yang seolah-olah
-  dapat disimpan.
+- Empat field katalog dapat diedit user dengan `items.manage` melalui
+  `saveItemAction`: vendor utama, harga beli, harga jual, dan kondisi.
+- Harga dikirim sebagai teks rupiah; nilai kosong hanya menghapus data bila
+  operator memang mengosongkannya. Supplier nonaktif tetap tersedia sebagai
+  pilihan saat item lama sedang diedit agar asal pemasok tidak hilang.
 - Tabel memakai horizontal scroll terkontrol, wrapping berdasarkan kata, dan
   kolom tambahan tidak boleh membuat card atau viewport melebar.
 
@@ -1009,6 +1011,8 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 - `/noc/devices` menyediakan panel port pada perangkat yang dipilih tanpa membuat route detail baru.
 - Ringkasan memisahkan PON, Ethernet, ONU, VLAN, PPP, dan port lainnya. Tampilan awal hanya merender PON dan Ethernet; ONU serta kelompok port lain dibuka melalui tautan terkontrol agar daftar ONU tidak memenuhi halaman.
+- Angka ONU ditulis sebagai “ONU online” dan tidak boleh dibaca sebagai jumlah
+  pelanggan atau inventaris perangkat terpasang.
 - Setiap port menampilkan nama, alias operator bila tersedia, jenis, status operasional, status admin, kecepatan Mbps/Gbps, dan waktu sinkronisasi terakhir.
 - Panel bersifat read-only dan mengikuti permission `noc.view`. Data perangkat atau port yang kosong/tidak tersedia ditampilkan sebagai state informatif.
 
@@ -1116,3 +1120,30 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   360×800.
 - Filter, form pemasok, tabel, panel port, badge, dan action tidak boleh keluar
   card, bertumpuk, atau memicu horizontal overflow.
+
+## 40. Follow-up Handoff Opus §41.4–§41.6
+
+### Item Master
+
+- Form `/inventory/items` mengirim `supplierId`, `purchaseCost`, `salePrice`,
+  dan `condition` melalui action resmi yang sudah divalidasi Opus.
+- Supplier aktif dan nonaktif tetap dapat ditampilkan; supplier nonaktif diberi
+  penanda agar item lama tidak kehilangan asal pemasok.
+- Field harga memakai input teks numerik yang aman untuk rupiah dan tetap dapat
+  dikosongkan secara sengaja. Tabel mempertahankan `formatRupiah`.
+
+### NetworkPort
+
+- Ringkasan dan filter memakai label “ONU online”. Angka ini berasal dari port
+  yang sedang dilaporkan LibreNMS, bukan jumlah pelanggan atau inventaris.
+- Ringkasan perangkat menggunakan `loadRingkasanPort(deviceId)` agar hanya
+  membaca data perangkat yang sedang dipilih; default PON/Ethernet dan filter
+  ONU terkontrol tetap dipertahankan.
+
+### Acceptance follow-up
+
+- Desktop, tablet, dan mobile tetap tidak boleh mengalami form melebar,
+  horizontal overflow, teks keluar card, atau status port yang pecah.
+- Edit item dengan supplier aktif, supplier nonaktif, harga kosong, harga
+  rupiah, serta kondisi `GOOD`/`SECOND` harus menghasilkan submit ke action
+  resmi tanpa input palsu.

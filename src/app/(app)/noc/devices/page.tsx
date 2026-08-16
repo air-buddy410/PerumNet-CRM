@@ -19,7 +19,7 @@ const sortOptions: readonly TableSortOption[] = [
 const PORT_KIND_LABELS: Record<string, string> = {
   PON: "PON",
   ETHERNET: "Ethernet",
-  ONU: "ONU",
+  ONU: "ONU online",
   VLAN: "VLAN",
   PPP: "PPP",
   LAIN: "Lainnya",
@@ -70,7 +70,7 @@ export default async function NetDevicesPage({
       ? loadPortPerangkat(table.query.device)
       : Promise.resolve([]),
     table.query.device
-      ? loadRingkasanPort()
+      ? loadRingkasanPort(table.query.device)
       : Promise.resolve([]),
   ]);
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
@@ -96,7 +96,7 @@ export default async function NetDevicesPage({
   const portSummary = [
     { key: "PON", label: "PON" },
     { key: "ETHERNET", label: "Ethernet" },
-    { key: "ONU", label: "ONU" },
+    { key: "ONU", label: "ONU online" },
     { key: "VLAN", label: "VLAN" },
     { key: "PPP", label: "PPP" },
     { key: "LAIN", label: "Lainnya" },
@@ -217,7 +217,10 @@ export default async function NetDevicesPage({
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
                   <span>
-                    {portFilter === "DEFAULT" ? "Menampilkan PON dan Ethernet." : portFilter === "ONU" ? "Menampilkan ONU." : "Menampilkan VLAN, PPP, dan port lainnya."}
+                    {portFilter === "DEFAULT" ? "Menampilkan PON dan Ethernet." : portFilter === "ONU" ? "Menampilkan ONU online." : "Menampilkan VLAN, PPP, dan port lainnya."}
+                  </span>
+                  <span className="basis-full text-[11px] text-slate-400">
+                    Angka ONU menunjukkan perangkat yang sedang dilaporkan online oleh LibreNMS, bukan jumlah pelanggan atau inventaris terpasang.
                   </span>
                   {portFilter !== "DEFAULT" && (
                     <Link href={buildTableHref("/noc/devices", table.query, { portKind: null })} className="font-semibold text-brand-600 hover:underline">

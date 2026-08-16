@@ -50,7 +50,7 @@ export default async function ItemsPage({
       ? [{ minStock: table.direction }, { id: "asc" }]
       : [{ code: table.direction }, { id: "asc" }];
 
-  const [items, total, categories, editRow] = await Promise.all([
+  const [items, total, categories, suppliers, editRow] = await Promise.all([
     db.item.findMany({
       where,
       include: {
@@ -65,6 +65,9 @@ export default async function ItemsPage({
     }),
     db.item.count({ where }),
     db.category.findMany({ where: { type: "ITEM", isActive: true }, orderBy: { name: "asc" } }),
+    canManage
+      ? db.supplier.findMany({ orderBy: { name: "asc" } })
+      : Promise.resolve([]),
     table.query.edit
       ? db.item.findUnique({
           where: { id: table.query.edit },
@@ -81,7 +84,7 @@ export default async function ItemsPage({
       />
       <Flash ok={table.query.ok} error={table.query.error} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="crm-list-column">
           <div className="card overflow-x-auto">
           {items.length === 0 ? (
@@ -183,7 +186,7 @@ export default async function ItemsPage({
                 <label className="label" htmlFor="name">Nama</label>
                 <input id="name" name="name" className="input" defaultValue={editRow?.name ?? ""} required />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="brand">Brand</label>
                   <input id="brand" name="brand" className="input" defaultValue={editRow?.brand ?? ""} />
@@ -202,7 +205,21 @@ export default async function ItemsPage({
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label" htmlFor="supplierId">Vendor utama</label>
+                <select id="supplierId" name="supplierId" className="input" defaultValue={editRow?.supplierId ?? ""}>
+                  <option value="">— tanpa vendor —</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name}{supplier.isActive ? "" : " (Nonaktif)"}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Vendor nonaktif tetap ditampilkan agar item lama tidak kehilangan asal pemasok.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="unit">Satuan</label>
                   <select id="unit" name="unit" className="input" defaultValue={editRow?.unit ?? "pcs"}>
@@ -216,6 +233,44 @@ export default async function ItemsPage({
                   <input id="minStock" name="minStock" type="number" min={0} className="input" defaultValue={editRow?.minStock ?? 0} />
                 </div>
               </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="purchaseCost">Harga beli</label>
+                  <input
+                    id="purchaseCost"
+                    name="purchaseCost"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="input"
+                    defaultValue={editRow?.purchaseCost?.toString() ?? ""}
+                    placeholder="Contoh: 150000"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Masukkan rupiah tanpa atau dengan tanda Rp.</p>
+                </div>
+                <div>
+                  <label className="label" htmlFor="salePrice">Harga jual</label>
+                  <input
+                    id="salePrice"
+                    name="salePrice"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    className="input"
+                    defaultValue={editRow?.salePrice?.toString() ?? ""}
+                    placeholder="Contoh: 175000"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Kosongkan bila memang ingin menghapus nilai.</p>
+                </div>
+              </div>
+              <div>
+                <label className="label" htmlFor="condition">Kondisi</label>
+                <select id="condition" name="condition" className="input" defaultValue={editRow?.condition ?? "GOOD"}>
+                  {DEVICE_CONDITIONS.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="label" htmlFor="trackingType">Tracking</label>
                 <select id="trackingType" name="trackingType" className="input" defaultValue={editRow?.trackingType ?? "BULK"}>
@@ -228,28 +283,10 @@ export default async function ItemsPage({
                 </p>
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
-                <h3 className="text-xs font-semibold text-slate-700">Data katalog hasil impor</h3>
+                <h3 className="text-xs font-semibold text-slate-700">Aturan data katalog</h3>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                  Data ini ditampilkan read-only. Perubahan vendor, harga, dan kondisi menunggu dukungan resmi pada action Item Master.
+                  Vendor, harga, dan kondisi dapat diperbarui dari form ini. Kosongkan harga atau pilih tanpa vendor bila ingin menghapus nilai tersebut.
                 </p>
-                <dl className="mt-3 grid min-w-0 gap-x-4 gap-y-3 sm:grid-cols-2">
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Vendor utama</dt>
-                    <dd className="mt-1 break-words text-xs text-slate-700">{editRow?.supplier?.name ?? "—"}</dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Kondisi</dt>
-                    <dd className="mt-1 break-words text-xs text-slate-700">{editRow ? CONDITION_LABELS[editRow.condition] ?? editRow.condition : "—"}</dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Harga beli</dt>
-                    <dd className="mt-1 break-words text-xs text-slate-700">{formatRupiah(editRow?.purchaseCost)}</dd>
-                  </div>
-                  <div className="min-w-0">
-                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Harga jual</dt>
-                    <dd className="mt-1 break-words text-xs text-slate-700">{formatRupiah(editRow?.salePrice)}</dd>
-                  </div>
-                </dl>
               </div>
               <div className="flex gap-2">
                 <button type="submit" className="btn-primary">{editRow ? "Simpan" : "Tambah"}</button>
