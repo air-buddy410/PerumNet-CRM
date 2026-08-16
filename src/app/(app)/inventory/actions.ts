@@ -6,8 +6,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
-import { PERMISSIONS, TRACKING_TYPES, ITEM_UNITS } from "@/lib/constants";
+import { PERMISSIONS, TRACKING_TYPES, ITEM_UNITS, DEVICE_CONDITIONS } from "@/lib/constants";
 import { previewCatalogImport, applyCatalogImport } from "@/lib/item-import-service";
+
+/** Kode kondisi barang, diturunkan dari satu daftar yang sama dengan formulir. */
+const KODE_KONDISI = DEVICE_CONDITIONS.map(([v]) => v) as unknown as [string, ...string[]];
 
 const itemSchema = z.object({
   id: z.string().optional(),
@@ -27,7 +30,12 @@ const itemSchema = z.object({
   supplierId: z.string().optional(),
   purchaseCost: z.string().optional(),
   salePrice: z.string().optional(),
-  condition: z.enum(["GOOD", "SECOND"]).optional(),
+  // Diambil dari DEVICE_CONDITIONS, bukan ditulis ulang di sini. Daftar itu
+  // memuat tiga nilai (`DAMAGED` ikut), dan menyalinnya jadi dua membuat
+  // pilihan "Rusak" yang tampil di formulir ditolak sebagai "Input tidak
+  // valid" — pesan yang tidak menyebut sebabnya, pada pilihan yang aplikasi
+  // sendiri tawarkan.
+  condition: z.enum(KODE_KONDISI).optional(),
 });
 
 /**
