@@ -125,12 +125,24 @@ function sel(baris: string[], at: number): string {
 }
 
 /**
- * Nomor layanan diseragamkan HANYA pada hal yang pasti tidak mengubah artinya:
- * spasi dan huruf besar-kecil. Angkanya tidak pernah disentuh — `PN102042532`
- * tidak boleh diam-diam menjadi `PN10204253`.
+ * Nomor layanan: HANYA spasi yang dibuang.
+ *
+ * Huruf besar-kecil sengaja DIPERTAHANKAN. Sistem penagihan menyimpan
+ * `Free102gor` dan `FreekadesTgl` apa adanya, dan menyeragamkannya menjadi
+ * huruf besar membuat pencarian meleset pada nomor yang sebenarnya ada.
+ * Perbandingan yang mengabaikan besar-kecil dilakukan saat MENCOCOKKAN, bukan
+ * dengan merusak nilainya lebih dulu.
+ *
+ * Angkanya tidak pernah disentuh — `PN102042532` tidak boleh diam-diam
+ * menjadi `PN10204253`.
  */
 export function rapikanNomor(s: string): string {
-  return s.replace(/\s+/g, "").toUpperCase();
+  return s.replace(/\s+/g, "");
+}
+
+/** Kunci pembanding yang mengabaikan besar-kecil. Untuk pencocokan saja. */
+export function kunciNomor(s: string): string {
+  return rapikanNomor(s).toUpperCase();
 }
 
 /** Kode ODP: spasi dalam dipertahankan, sebab `SRY 020105S1` memang berbeda dari `SRY020105S1`. */
@@ -302,11 +314,26 @@ export function bacaKeputusan(lembar: { nama: string; baris: string[][] }[]): Ha
           continue;
         }
         const nomor = rapikanNomor(jawab);
-        // Nomor layanan kita selalu memuat huruf DAN angka. Jawaban yang
-        // tidak berbentuk begitu hampir pasti kalimat bebas, dan menebaknya
-        // sebagai nomor akan membuat pencarian gagal dengan cara yang
-        // membingungkan.
-        if (!/^[A-Z]+\d+$/.test(nomor)) {
+        // Yang ditolak di sini hanya yang JELAS bukan nomor: kalimat bebas.
+        //
+        // Sempat lebih ketat dari ini — `^[A-Z]+\d+$`, ditulis dari pola
+        // `PN102042532` saja — dan aturan itu menolak 23 nomor yang sah.
+        // Akun gratis bernomor `Free102gor`, `Free102kadesBkt`, bahkan
+        // `FreekadesTgl` yang tidak memuat satu angka pun. Bentuk nomor
+        // layanan adalah keputusan bagian penagihan, bukan sesuatu yang boleh
+        // ditebak dari contoh yang kebetulan terlihat.
+        //
+        // Yang memutuskan sah atau tidak adalah ADA-TIDAKNYA di basis data,
+        // dan itu diperiksa di lapisan berikutnya — lengkap dengan pesan yang
+        // menyebut nomornya. Di sini cukup menyingkirkan yang tidak mungkin
+        // menjadi nomor: yang memuat spasi, atau yang terlalu panjang.
+        // Yang menandai kalimat bebas adalah JUMLAH KATANYA. Nomor yang
+        // terketik dengan spasi nyasar ("PN 104022613") masih dua potong dan
+        // pantas diterima; "nanti dicek dulu" tiga potong dan jelas bukan
+        // nomor. Ambang ini longgar dengan sengaja — yang benar-benar
+        // memutuskan tetap ada-tidaknya nomor itu di basis data.
+        const potong = jawab.trim().split(/\s+/).length;
+        if (!nomor || potong > 2 || nomor.length > 32) {
           out.masalah.push({
             lembar: l.nama, baris: r + 1,
             pesan: `Keputusan "${jawab}" untuk ${username} bukan nomor layanan dan bukan TIDAK DIPAKAI.`,

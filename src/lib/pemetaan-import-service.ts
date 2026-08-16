@@ -16,7 +16,7 @@
 
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
-import { bacaKeputusan, type HasilBaca, type Masalah } from "@/lib/pemetaan-import";
+import { bacaKeputusan, kunciNomor, type HasilBaca, type Masalah } from "@/lib/pemetaan-import";
 
 export interface BarisHasil {
   jenis: "TAUT" | "ABAIKAN" | "PORT" | "KAPASITAS";
@@ -65,12 +65,14 @@ export async function periksaPemetaan(lembar: Lembar[]): Promise<HasilPemetaan> 
 
 async function periksaTaut(baca: HasilBaca, out: BarisHasil[]): Promise<void> {
   if (baca.taut.length === 0) return;
-  const nomor = [...new Set(baca.taut.map((t) => t.serviceNumber))];
+  // Seluruh langganan dibaca sekali dan diindeks tanpa memandang besar-kecil.
+  // Menyaring dengan `in` pada nilai apa adanya akan meleset pada nomor akun
+  // gratis yang tersimpan campuran (`Free102gor`), dan melesetnya tampak
+  // seperti "nomor tidak ada" — padahal nomornya ada.
   const subs = await db.subscription.findMany({
-    where: { serviceNumber: { in: nomor } },
     select: { id: true, serviceNumber: true, pppoeUsername: true, customer: { select: { name: true } } },
   });
-  const perNomor = new Map(subs.map((s) => [s.serviceNumber, s]));
+  const perNomor = new Map(subs.map((s) => [kunciNomor(s.serviceNumber), s]));
 
   // Username yang SUDAH dipakai langganan lain. Satu username tidak boleh
   // menunjuk dua pelanggan — kalau itu terjadi, poll akan menautkan sesinya
@@ -84,13 +86,13 @@ async function periksaTaut(baca: HasilBaca, out: BarisHasil[]): Promise<void> {
 
   for (const t of baca.taut) {
     const kunci = `${t.username} → ${t.serviceNumber}`;
-    const sub = perNomor.get(t.serviceNumber);
+    const sub = perNomor.get(kunciNomor(t.serviceNumber));
     if (!sub) {
       out.push({ jenis: "TAUT", kunci, status: "TOLAK", pesan: `Nomor layanan ${t.serviceNumber} tidak ada.` });
       continue;
     }
     const punyaSiapa = pemilik.get(t.username);
-    if (punyaSiapa && punyaSiapa !== t.serviceNumber) {
+    if (punyaSiapa && kunciNomor(punyaSiapa) !== kunciNomor(t.serviceNumber)) {
       out.push({
         jenis: "TAUT", kunci, status: "TOLAK",
         pesan: `Username sudah dipakai ${punyaSiapa}. Lepaskan dari sana dulu bila memang pindah.`,
@@ -140,10 +142,9 @@ async function periksaPort(baca: HasilBaca, out: BarisHasil[]): Promise<void> {
   });
   const perKode = new Map(odp.map((o) => [o.code.toUpperCase(), o]));
   const subs = await db.subscription.findMany({
-    where: { serviceNumber: { in: [...new Set(baca.port.map((p) => p.serviceNumber))] } },
     select: { id: true, serviceNumber: true, odpPort: { select: { portNumber: true, odp: { select: { code: true } } } } },
   });
-  const perNomor = new Map(subs.map((s) => [s.serviceNumber, s]));
+  const perNomor = new Map(subs.map((s) => [kunciNomor(s.serviceNumber), s]));
   const portAda = await db.odpPort.findMany({
     where: { odpId: { in: odp.map((o) => o.id) } },
     select: { odpId: true, portNumber: true, subscriptionId: true, status: true },
@@ -161,7 +162,7 @@ async function periksaPort(baca: HasilBaca, out: BarisHasil[]): Promise<void> {
       out.push({ jenis: "PORT", kunci, status: "TOLAK", pesan: `ODP ${p.odpCode} tidak ada.` });
       continue;
     }
-    const sub = perNomor.get(p.serviceNumber);
+    const sub = perNomor.get(kunciNomor(p.serviceNumber));
     if (!sub) {
       out.push({ jenis: "PORT", kunci, status: "TOLAK", pesan: `Nomor layanan ${p.serviceNumber} tidak ada.` });
       continue;
@@ -252,8 +253,13 @@ export async function terapkanPemetaan(lembar: Lembar[], userId: string): Promis
 
   for (const t of baca.taut) {
     if (!siap.has(`TAUT|${t.username} → ${t.serviceNumber}`)) continue;
+    const target = await db.subscription.findFirst({
+      where: { serviceNumber: { equals: t.serviceNumber, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (!target) continue;
     const sub = await db.subscription.update({
-      where: { serviceNumber: t.serviceNumber },
+      where: { id: target.id },
       data: { pppoeUsername: t.username },
       select: { id: true },
     });
@@ -294,7 +300,10 @@ export async function terapkanPemetaan(lembar: Lembar[], userId: string): Promis
   for (const p of baca.port) {
     if (!siap.has(`PORT|${p.serviceNumber} → ${p.odpCode} port ${p.portNumber}`)) continue;
     const o = await db.odp.findFirst({ where: { code: p.odpCode }, select: { id: true } });
-    const sub = await db.subscription.findUnique({ where: { serviceNumber: p.serviceNumber }, select: { id: true } });
+    const sub = await db.subscription.findFirst({
+      where: { serviceNumber: { equals: p.serviceNumber, mode: "insensitive" } },
+      select: { id: true },
+    });
     if (!o || !sub) continue;
     const port = await db.odpPort.upsert({
       where: { odpId_portNumber: { odpId: o.id, portNumber: p.portNumber } },

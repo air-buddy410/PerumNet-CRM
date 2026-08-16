@@ -8,6 +8,7 @@ import {
   adalahTidakDipakai,
   rapikanNomor,
   rapikanOdp,
+  kunciNomor,
   kenaliLembar,
 } from "@/lib/pemetaan-import";
 
@@ -153,8 +154,24 @@ describe("bacaKeputusan — tanpa kandidat", () => {
     assert.match(h.masalah[0].pesan, /bukan nomor layanan/);
   });
 
-  test("nomor layanan dirapikan tetapi angkanya tidak disentuh", () => {
-    const h = bacaKeputusan([{ nama: "x", baris: [J_TANPA, b("a_1", " pn104022613 ")] }]);
+  test("nomor akun gratis diterima — bentuknya bukan urusan importir", () => {
+    // Nilai-nilai asli dari sistem penagihan mereka. Aturan yang lebih ketat
+    // (`^[A-Z]+\d+$`, ditulis dari pola PN saja) menolak 23 nomor yang sah,
+    // termasuk satu yang tidak memuat angka sama sekali. Yang memutuskan sah
+    // atau tidak adalah ada-tidaknya di basis data, bukan bentuknya.
+    const h = bacaKeputusan([{
+      nama: "x",
+      baris: [J_TANPA, b("a_1", "Free102gor"), b("a_2", "FreekadesTgl"), b("a_3", "PN102freebe")],
+    }]);
+    assert.deepEqual(h.taut.map((t) => t.serviceNumber), ["Free102gor", "FreekadesTgl", "PN102freebe"]);
+    assert.equal(h.masalah.length, 0);
+  });
+
+  test("spasi dibuang, huruf besar-kecil dipertahankan", () => {
+    // Besar-kecil dipertahankan sebab sistem penagihan menyimpan `Free102gor`
+    // apa adanya. Yang mengabaikan besar-kecil adalah pencocokannya, bukan
+    // nilainya.
+    const h = bacaKeputusan([{ nama: "x", baris: [J_TANPA, b("a_1", " PN 104022613 ")] }]);
     assert.equal(h.taut[0].serviceNumber, "PN104022613");
   });
 });
@@ -273,8 +290,10 @@ describe("pembacaan nilai", () => {
     assert.equal(adalahTidakDipakai("PN104022613"), false);
   });
 
-  test("rapikanNomor tidak menyentuh angkanya", () => {
-    assert.equal(rapikanNomor(" pn 102042532 "), "PN102042532");
-    assert.equal(rapikanNomor("PN102042532"), "PN102042532");
+  test("rapikanNomor membuang spasi tanpa mengubah huruf maupun angka", () => {
+    assert.equal(rapikanNomor(" PN 102042532 "), "PN102042532");
+    assert.equal(rapikanNomor("Free102gor"), "Free102gor");
+    assert.equal(kunciNomor("Free102gor"), "FREE102GOR");
+    assert.equal(kunciNomor(" free102GOR "), "FREE102GOR");
   });
 });
