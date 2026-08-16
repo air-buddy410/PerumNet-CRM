@@ -167,3 +167,43 @@ describe("bersihkanSemua — titik bawaan peta", () => {
     assert.equal(h.masalah.length, 0);
   });
 });
+
+describe("nikMenang — keputusan pemilik jaringan", () => {
+  const bentrok = { serviceNumber: "PN1", nik: "5107040806860007", dob: "1990-01-01" };
+
+  test("bawaannya tetap membuang keduanya", () => {
+    const h = bersihkanIdentitas(bentrok);
+    assert.equal(h.bersih.identityNumber, null);
+    assert.equal(h.bersih.birthDate, null);
+  });
+
+  test("dengan nikMenang, NIK dan tanggal dari NIK yang dipakai", () => {
+    // NIK disalin dari kartu di tangan; tanggal lahir diketik dari ingatan.
+    const h = bersihkanIdentitas(bentrok, true);
+    assert.equal(h.bersih.identityNumber, "5107040806860007");
+    assert.equal(h.bersih.birthDate?.toISOString().slice(0, 10), "1986-06-08");
+  });
+
+  test("selisihnya TETAP dilaporkan walau pemenangnya sudah dipilih", () => {
+    // Memilih pemenang tidak membuat yang kalah menjadi benar — sesuatu di
+    // sumbernya tetap salah dan pantas diketahui.
+    const h = bersihkanIdentitas(bentrok, true);
+    assert.equal(h.masalah.length, 1);
+    assert.match(h.masalah[0], /dipakai yang dari NIK/);
+  });
+
+  test("nikMenang TIDAK menyelamatkan NIK yang tanggalnya tidak masuk akal", () => {
+    // Hari 99 bukan tanggal. Yang menang tetap harus bisa dibaca.
+    const h = bersihkanIdentitas({ serviceNumber: "PN1", nik: "5107049906860007", dob: "1990-01-01" }, true);
+    assert.equal(h.bersih.identityNumber, null);
+    assert.equal(h.bersih.birthDate?.toISOString().slice(0, 10), "1990-01-01");
+  });
+
+  test("nikMenang TIDAK melonggarkan larangan NIK ganda", () => {
+    const h = bersihkanSemua([
+      { serviceNumber: "PN1", nik: "5107040806860007", dob: "1990-01-01" },
+      { serviceNumber: "PN2", nik: "5107040806860007" },
+    ], true);
+    assert.equal(h.bersih.every((b) => b.identityNumber === null), true);
+  });
+});

@@ -12,7 +12,13 @@
 // Yang membentuk berkas ini: **NIK memeriksa tanggal lahirnya sendiri.** Enam
 // digit di tengahnya adalah tanggal lahir pemiliknya, dengan hari +40 untuk
 // perempuan. Jadi dua bidang yang datang dari sumber yang sama bisa saling
-// membuktikan, dan yang tidak cocok TIDAK dipakai — bukan dipilih salah satu.
+// membuktikan.
+//
+// Ketika keduanya berselisih, bawaannya membuang KEDUANYA — dari sini tidak
+// ada cara membedakan mana yang salah. Pemilik jaringan memutuskan lain untuk
+// salinan sistem lama (`nikMenang`), dan alasannya masuk akal: NIK disalin
+// dari kartu yang ada di tangan, tanggal lahir diketik dari ingatan. Itu tetap
+// sebuah pilihan yang harus disebut, bukan bawaan yang diam-diam berlaku.
 
 import { NIK_RE, birthDateFromNik } from "@/lib/customer-import";
 
@@ -110,7 +116,21 @@ export function rapikanEmail(raw: string): string | null {
  * satu berarti menebak pada bidang yang justru dipakai untuk membuktikan
  * identitas orang.
  */
-export function bersihkanIdentitas(m: IdentitasMasuk): {
+export function bersihkanIdentitas(
+  m: IdentitasMasuk,
+  /**
+   * Ketika NIK dan tanggal ketikan berselisih, pakai tanggal dari NIK.
+   *
+   * Bawaannya FALSE — membuang keduanya, sebab dari sini tidak ada cara
+   * membedakan mana yang salah. Diputuskan pemilik jaringan 16 Agustus 2026
+   * untuk salinan sistem lama: **NIK menang**, dengan alasan yang masuk akal —
+   * NIK disalin dari kartu di tangan, tanggal lahir diketik dari ingatan.
+   *
+   * Tetap sebuah PILIHAN, bukan bawaan, sebab yang diputuskan adalah nomor
+   * identitas orang dan keputusan itu pantas terlihat di tempat ia dipakai.
+   */
+  nikMenang = false
+): {
   bersih: IdentitasBersih;
   masalah: string[];
 } {
@@ -133,12 +153,19 @@ export function bersihkanIdentitas(m: IdentitasMasuk): {
     identityNumber = null;
     birthDate = lahirKetik;
   } else if (lahirNik && lahirKetik && lahirNik.getTime() !== lahirKetik.getTime()) {
-    masalah.push(
-      `NIK memuat tanggal lahir ${lahirNik.toISOString().slice(0, 10)} ` +
-        `tetapi tertulis ${lahirKetik.toISOString().slice(0, 10)} — keduanya tidak dipakai.`
-    );
-    identityNumber = null;
-    birthDate = null;
+    const nik = lahirNik.toISOString().slice(0, 10);
+    const ketik = lahirKetik.toISOString().slice(0, 10);
+    if (nikMenang) {
+      // NIK dipakai, tanggal ketikan dibuang — tetapi selisihnya TETAP
+      // dilaporkan. Sesuatu di sumbernya salah, dan memilih pemenang tidak
+      // membuat yang kalah menjadi benar.
+      masalah.push(`NIK memuat ${nik} tetapi tertulis ${ketik} — dipakai yang dari NIK.`);
+      birthDate = lahirNik;
+    } else {
+      masalah.push(`NIK memuat tanggal lahir ${nik} tetapi tertulis ${ketik} — keduanya tidak dipakai.`);
+      identityNumber = null;
+      birthDate = null;
+    }
   }
 
   const koord = rapikanKoordinat(m.lat ?? "", m.lng ?? "");
@@ -161,15 +188,6 @@ export function bersihkanIdentitas(m: IdentitasMasuk): {
 }
 
 /**
- * Membersihkan seluruh baris, dan menolak NIK yang dipakai lebih dari satu
- * orang.
- *
- * `Customer.identityNumber` unik pada skema. Dua pelanggan bernomor sama
- * berarti salah satunya salah ketik di sumber; menyimpan yang pertama dan
- * menolak yang kedua akan memilih berdasarkan urutan baris, yang tidak berarti
- * apa-apa. Keduanya dilepas dan dilaporkan.
- */
-/**
  * Berapa kali satu titik boleh berulang sebelum dianggap titik bawaan peta.
  *
  * Beberapa pelanggan memang bisa berbagi koordinat — satu pekarangan, satu kos,
@@ -181,9 +199,18 @@ export function bersihkanIdentitas(m: IdentitasMasuk): {
  */
 const MAKS_TITIK_SAMA = 5;
 
-export function bersihkanSemua(rows: IdentitasMasuk[]): HasilIdentitas {
+/**
+ * Membersihkan seluruh baris, dan menolak NIK yang dipakai lebih dari satu
+ * orang.
+ *
+ * `Customer.identityNumber` unik pada skema. Dua pelanggan bernomor sama
+ * berarti salah satunya salah ketik di sumber; menyimpan yang pertama dan
+ * menolak yang kedua akan memilih berdasarkan urutan baris, yang tidak berarti
+ * apa-apa. Keduanya dilepas dan dilaporkan.
+ */
+export function bersihkanSemua(rows: IdentitasMasuk[], nikMenang = false): HasilIdentitas {
   const out: HasilIdentitas = { bersih: [], masalah: [] };
-  const hasil = rows.map((r) => ({ r, ...bersihkanIdentitas(r) }));
+  const hasil = rows.map((r) => ({ r, ...bersihkanIdentitas(r, nikMenang) }));
 
   const titik = new Map<string, number>();
   for (const h of hasil) {

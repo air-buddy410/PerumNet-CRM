@@ -35,8 +35,8 @@ export interface HasilIdentitas {
 /** Telepon yang artinya "tidak ada" meski kolomnya terisi. */
 const TELEPON_KOSONG = new Set(["", "-", "--", "0"]);
 
-export async function periksaIdentitas(rows: IdentitasMasuk[]): Promise<HasilIdentitas> {
-  const { bersih, masalah } = bersihkanSemua(rows);
+export async function periksaIdentitas(rows: IdentitasMasuk[], nikMenang = false): Promise<HasilIdentitas> {
+  const { bersih, masalah } = bersihkanSemua(rows, nikMenang);
 
   const subs = await db.subscription.findMany({
     select: {
@@ -130,9 +130,13 @@ export async function periksaIdentitas(rows: IdentitasMasuk[]): Promise<HasilIde
  * Hanya bidang yang KOSONG yang diisi — `undefined` pada Prisma berarti jangan
  * sentuh, dan itu yang menjaga koreksi manual tetap hidup.
  */
-export async function terapkanIdentitas(rows: IdentitasMasuk[], userId: string): Promise<HasilIdentitas> {
-  const rencana = await periksaIdentitas(rows);
-  const { bersih } = bersihkanSemua(rows);
+export async function terapkanIdentitas(
+  rows: IdentitasMasuk[],
+  userId: string,
+  nikMenang = false
+): Promise<HasilIdentitas> {
+  const rencana = await periksaIdentitas(rows, nikMenang);
+  const { bersih } = bersihkanSemua(rows, nikMenang);
   const siap = new Map(rencana.baris.filter((b) => b.status === "SIAP").map((b) => [b.serviceNumber, b.isi]));
 
   const subs = await db.subscription.findMany({ select: { serviceNumber: true, customerId: true } });

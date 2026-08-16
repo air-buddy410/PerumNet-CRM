@@ -16,6 +16,8 @@ import { db } from "@/lib/db";
 
 const berkas = process.argv[2];
 const terapkan = process.argv.includes("--terapkan");
+// Keputusan pemilik jaringan, bukan bawaan: lihat `nikMenang`.
+const nikMenang = process.argv.includes("--nik-menang");
 
 async function main() {
   if (!berkas) throw new Error("Pakai: _impor-identitas.ts <identitas.tsv> [--terapkan]");
@@ -26,7 +28,10 @@ async function main() {
     return { serviceNumber, phone, nik, dob, email, lat, lng };
   });
 
-  const r = terapkan ? await terapkanIdentitas(rows, user.id) : await periksaIdentitas(rows);
+  const r = terapkan
+    ? await terapkanIdentitas(rows, user.id, nikMenang)
+    : await periksaIdentitas(rows, nikMenang);
+  if (nikMenang) console.log("  NIK MENANG saat berselisih dengan tanggal ketikan.");
   console.log(terapkan ? "═══ DITERAPKAN ═══" : "═══ PERIKSA (tidak menulis apa pun) ═══");
   console.log(`  baris dibaca : ${rows.length}`);
   console.log(`  ringkas      : ${JSON.stringify(r.ringkas)}`);
