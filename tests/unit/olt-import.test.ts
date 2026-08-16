@@ -51,6 +51,30 @@ describe("bacaPon", () => {
     });
   });
 
+  test("sisipan `olt-` pada C600 tidak menghalangi slot terbaca", () => {
+    // Nilai asli dari 192.168.100.60. Tanpa sisipan ini seluruh port C600
+    // jatuh ke URUTAN, dan dua slot fisik — 16 dan 17 — ditumpuk menjadi satu
+    // slot bernomor 1–32. PIU di berkas ODP menyebut slot yang sebenarnya,
+    // jadi selama ditumpuk tidak satu pun ODP bisa dijodohkan ke port PON-nya.
+    assert.deepEqual(bacaPon({ ifName: "gpon_olt-1/16/1", urutan: 1 }), {
+      slot: 16, port: 1, label: "gpon_olt-1/16/1", asal: "NAMA",
+    });
+    assert.deepEqual(bacaPon({ ifName: "gpon_olt-1/17/16", urutan: 32 }), {
+      slot: 17, port: 16, label: "gpon_olt-1/17/16", asal: "NAMA",
+    });
+  });
+
+  test("dua slot C600 tidak lagi bertumpuk", () => {
+    // Sebelum diperbaiki, kedua baris ini menjadi slot 1 port 1 dan slot 1
+    // port 2 — port yang tidak ada di perangkatnya.
+    const { pon, masalah } = susunPon([
+      { ifName: "gpon_olt-1/16/1", urutan: 1 },
+      { ifName: "gpon_olt-1/17/1", urutan: 17 },
+    ]);
+    assert.equal(masalah.length, 0);
+    assert.deepEqual(pon.map((p) => `${p.slot}/${p.port}`), ["16/1", "17/1"]);
+  });
+
   test("nama yang menyebut nomornya sendiri dipakai apa adanya", () => {
     assert.equal(bacaPon({ ifName: "PON07", urutan: 3 }).port, 7);
     assert.equal(bacaPon({ ifName: "PON07", urutan: 3 }).asal, "NAMA");

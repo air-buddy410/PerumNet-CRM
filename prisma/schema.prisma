@@ -2256,6 +2256,11 @@ model TicketPause {
 model OltDevice {
   id              String  @id @default(cuid())
   networkDeviceId String  @unique // spesialisasi NetworkDevice bertipe OLT
+  /// Nama operasional, mis. `ZTE-C600-100-Kecicang`. `NetworkDevice.hostname`
+  /// berisi IP karena itulah yang dikenal LibreNMS dan itu kunci sinkronnya —
+  /// tidak boleh diganti. Tanpa kolom ini layar hanya bisa menampilkan IP, dan
+  /// nama site saja tidak cukup: satu site bisa menaungi lebih dari satu OLT.
+  name            String?
   vendor          String // ZTE|HUAWEI|CDATA|HSGQ|FIBERHOME|VSOL|HIOSO
   model           String?
   managementIp    String

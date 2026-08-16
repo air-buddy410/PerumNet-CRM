@@ -123,7 +123,14 @@ export interface PonBersih {
  */
 export function bacaPon(p: PortMasuk): PonBersih {
   const n = p.ifName.trim();
-  const zte = /^gpon[_-]?(\d+)\/(\d+)\/(\d+)$/i.exec(n);
+  // Dua penamaan ZTE dipakai di jaringan yang sama: C300 menulis `gpon_1/2/13`,
+  // C600 menyisipkan `olt-` menjadi `gpon_olt-1/16/1`. Sisipan itu semula tidak
+  // tertangkap, sehingga seluruh port C600 jatuh ke URUTAN dan dua slot fisik
+  // (16 dan 17) ditumpuk menjadi slot 1 bernomor 1–32. Labelnya menyimpan
+  // kebenarannya, tetapi slot dan portnya salah — dan PIU di berkas ODP
+  // menyebut slot yang sebenarnya, jadi tanpa sisipan ini ODP tidak bisa
+  // dijodohkan ke port PON-nya sama sekali.
+  const zte = /^gpon[_-]?(?:olt[_-])?(\d+)\/(\d+)\/(\d+)$/i.exec(n);
   if (zte) return { slot: Number(zte[2]), port: Number(zte[3]), label: n, asal: "NAMA" };
 
   const bernomor = /^pon[_\s-]?(\d+)$/i.exec(n);

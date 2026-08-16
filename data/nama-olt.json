@@ -1,0 +1,34 @@
+{
+  "_baca": "Satu OLT dikenal dengan TIGA nama: LibreNMS memakai IP, berkas OLT memakai nama bervlan, berkas ODP memakai nama berspasi. Menjodohkan ketiganya dengan aturan berarti menebak, jadi jodohnya ditulis tangan di sini dan bisa diperiksa orang. Ubah berkas ini kalau ada OLT baru — jangan tambahkan aturan penebak di kode.",
+
+  "_perangkat": "hostname LibreNMS → nama operasional yang dipakai orang.",
+  "perangkat": {
+    "192.168.100.11": "HSGQ-102-SerayaBarat",
+    "192.168.100.12": "HSGQ-102-SerayaTengah",
+    "192.168.100.30": "ZTE-C300-102-Pesagi",
+    "192.168.100.60": "ZTE-C600-100-Kecicang",
+    "192.168.100.61": "ZTE-C600-104-Abang"
+  },
+
+  "_catatanOdp": "Nama sebagaimana ditulis berkas ODP → hostname LibreNMS.",
+  "catatanOdp": {
+    "OLT HSGQ Seraya Barat": "192.168.100.11",
+    "OLT HSGQ Seraya Tengah": "192.168.100.12",
+    "OLT ZTE C300 Pesagi": "192.168.100.30",
+    "OLT ZTE C600 Kecicang": "192.168.100.60",
+    "OLT ZTE C600 Abang": "192.168.100.61"
+  },
+
+  "_belumAda": "OLT HSGQ Kecicang disebut 28 ODP dan 97 pelanggan, tetapi TIDAK ADA perangkatnya di CRM maupun di LibreNMS. Ia sengaja tidak dijodohkan — menautkannya ke OLT Kecicang yang lain berarti mengarang jalur serat. Tambahkan barisnya di sini setelah perangkatnya masuk.",
+  "belumAda": ["OLT HSGQ Kecicang"],
+
+  "_samaDengan": "Nama pada berkas OLT → nama pada catatan ODP. Dipakai HANYA untuk memeriksa silang, tidak untuk memilih.",
+  "samaDengan": {
+    "HSGQ-100-Kecicang": "OLT HSGQ Kecicang",
+    "HSGQ-102-SerayaBarat": "OLT HSGQ Seraya Barat",
+    "HSGQ-102-SerayaTengah": "OLT HSGQ Seraya Tengah",
+    "ZTE-C300-102-Pesagi": "OLT ZTE C300 Pesagi",
+    "ZTE-C600-100-Kecicang": "OLT ZTE C600 Kecicang",
+    "ZTE-C600-104-Abang": "OLT ZTE C600 Abang"
+  }
+}
