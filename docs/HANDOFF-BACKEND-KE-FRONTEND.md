@@ -2380,3 +2380,69 @@ berikutnya.
 
 **Splitter hanya 1:8 dan 1:16.** Angka lain ditolak sebagai salah baca, bukan
 diterima sebagai jenis splitter baru.
+
+### 42.1 Wrapper resmi untuk halaman Impor Pemetaan
+
+Betul — `src/lib/pemetaan-import-service` tidak boleh dipanggil dari halaman.
+Pintunya `src/app/(app)/noc/pemetaan/actions.ts`.
+
+| | |
+|---|---|
+| **Route** | `/noc/pemetaan` |
+| **Nama menu** | "Impor Pemetaan", di grup NOC — sebelah "FTTH" |
+| **Permission** | `PERMISSIONS.FTTH_MANAGE` (`ftth.manage`) — sama dengan halaman ODP/port |
+| **Format** | `.xlsx` saja; `.xls` lama ditolak dengan pesan yang menyuruh simpan ulang |
+| **Batas ukuran** | `MAX_UPLOAD_BYTES` = 5 MB, sama dengan importir lain |
+
+```ts
+import { previewPemetaanAction, applyPemetaanAction } from "./actions";
+
+// keduanya: (formData) => Promise<HasilAksi>, dengan formData.get("file")
+```
+
+**Bentuk kembaliannya satu, untuk sukses maupun gagal:**
+
+```ts
+type HasilAksi =
+  | { ok: true;  data: HasilPemetaan }
+  | { ok: false; error: string };     // ← kalimat siap tampil, sudah berbahasa Indonesia
+```
+
+`error` muncul untuk: berkas belum dipilih, berkas kosong, lebih dari 5 MB,
+bukan `.xlsx`, atau xlsx yang tidak terbaca. Tampilkan apa adanya — kalimatnya
+sudah ditulis untuk dibaca operator, bukan untuk log.
+
+`HasilPemetaan` sama persis dengan §42:
+
+```ts
+{
+  baris: { jenis: "TAUT"|"ABAIKAN"|"PORT"|"KAPASITAS";
+           kunci: string; status: "SIAP"|"LEWAT"|"TOLAK"; pesan: string }[],
+  masalah: { lembar: string; baris: number; pesan: string }[],
+  dilewati: number,
+  ringkas: { siap: number; lewat: number; tolak: number },
+}
+```
+
+**Penerapan mengunggah ULANG berkasnya**, bukan mengirim balik hasil
+pratinjau. Sama seperti Impor Katalog dan Impor Pelanggan, dan alasannya sama:
+apa pun yang dikirim balik dari browser bisa disunting, dan menerapkan baris
+yang tidak pernah lewat pemeriksaan adalah jalan masuk yang tidak perlu ada.
+Jadi simpan `File`-nya di state, jangan hasil pratinjaunya.
+
+`applyPemetaanAction` sudah memanggil `revalidatePath` untuk `/noc/pemetaan`,
+`/noc/ftth`, dan `/noc/pppoe`.
+
+**Susunan layar** — tiga hal yang menentukan, diulang dari §42 karena ini yang
+paling mudah keliru:
+
+1. Tampilkan **TOLAK paling atas**, bukan disembunyikan. Itu yang harus dibawa
+   kembali ke lapangan; pesannya sudah ditulis siap tindak.
+2. `dilewati` **bukan kegagalan** — itu baris yang sengaja dikosongkan tim
+   karena ragu, dan petunjuk di berkasnya memang meminta begitu. Netral, bukan
+   merah.
+3. `masalah` beda dari TOLAK: itu baris yang tidak bisa **dibaca** sama sekali,
+   lengkap dengan nomor barisnya.
+
+Tombol Terapkan menyebut angkanya ("Terapkan 38 keputusan") dan dimatikan
+ketika `ringkas.siap === 0`.
