@@ -286,3 +286,154 @@ per baris di berkas sumber, sedangkan hubungan induk–anak berasal dari kolom
 yang berbeda. Kalau pembacaan PIU keliru — meleset slot, salah membaca sisipan
 `olt-`, atau salah menjodohkan nama OLT — ratusan pasang ini akan berselisih.
 Tidak satu pun berselisih.
+
+# Fase 83 — rekonsiliasi dengan sistem lama (17 Agustus 2026)
+
+## Posisi ONU: jalur kedua yang membuktikan Fase 82
+
+Sistem lama mencatat, untuk hampir tiap pelanggan, di mana ONU-nya duduk pada
+OLT — dan nilai itu **dibaca dari perangkatnya**, bukan diketik orang.
+**1.698 tersimpan.**
+
+Itu memberi jalur kedua yang bebas menuju port PON:
+
+```
+jalur A  pelanggan → port ODP → ODP → (PIU di berkas) → port PON     ← catatan tertulis
+jalur B  pelanggan → posisi ONU ────────────────────→ port PON       ← pembacaan perangkat
+```
+
+**1.503 sepakat, 34 berselisih pada 19 ODP — 97,8%.** Fase 82 dibangun dari
+catatan tertulis; ini menguji hasilnya dengan sumber yang jenisnya sama sekali
+lain, dan ia bertahan.
+
+### Yang berselisih, dan polanya
+
+| ODP | Berkas | Pembacaan ONU | Bacaan |
+|---|---|---|---|
+| `PSG 240102` | 2/5 | **1/6, 1/16, 16/4, 1/4** | penampungan — terkonfirmasi kelima kalinya |
+| `SRY` | 1/1 | 1/4 (3), 1/6 | penampungan — terkonfirmasi |
+| `PID` ×4 | 1/10 | **1/9** | — |
+| `PSM` ×2 | 1/9 | **1/10** | ↑ **tertukar dengan PID** |
+| `TMG` ×3 | 16/5 | 16/6 | segrup, bergeser satu |
+| sisanya ×8 | — | ±1 port | tunggal |
+
+`PID` dan `PSM` **saling tertukar** — dua kelompok yang PIU-nya bertukar tempat
+di berkas sumber. Itu kekeliruan yang bisa dicari orang.
+
+**Tidak ada tautan ODP yang diubah.** Bukan karena pembacaan perangkat kurang
+dipercaya — justru sebaliknya — melainkan karena memindahkan ODP menyentuh
+seluruh penghuninya sekaligus, sedangkan yang diketahui di sini cuma sebagian.
+Itu keputusan lapangan.
+
+## Kasus lama "27 pelanggan berbayar tanpa port ODP" — TERPECAHKAN
+
+Aritmetikanya tutup sempurna:
+
+| ODP | Menurut sistem lama | Kapasitas tercatat | Tidak kebagian |
+|---|---|---|---|
+| `GMG 001` | 30 | 16 | **14** |
+| `BB 01` | 19 | 16 | **3** |
+| `PSG 25 010102` | 19 | 16 | **3** |
+| `PSG 240102` | 15 | 8 | **7** |
+| | | | **27** |
+
+Keempat ODP itu tercatat **penuh 100%**, dan **26 dari 27 pelanggan sedang
+ONLINE** — mereka nyata, membayar, dan tersambung. Yang keliru bukan
+pelanggannya, melainkan salah satu dari dua ini:
+
+1. **kapasitas tercatat terlalu kecil** — mungkin ada splitter kedua di
+   lokasi yang sama yang tidak punya barisnya sendiri, atau
+2. **mereka sebenarnya di ODP kaskade anaknya**, dan sistem lama mencatat
+   induknya.
+
+`GMG 001` yang paling mencolok: 30 pelanggan pada 16 port, hampir dua kali
+lipat. Ia juga salah satu ODP `OLT HSGQ Kecicang` yang tidak terpantau.
+
+**Akibat yang perlu diketahui:** okupansi ODP di CRM **kurang 27** dari
+kenyataan, dan untuk ke-27 orang itu CRM tidak bisa menjawab "dia di port
+berapa". Ini pertanyaan lapangan — ukur ulang di keempat lokasi itu.
+
+## Redaman: tidak ada yang bisa diisi, dan itu benar
+
+Rencana semula "lengkapi 135 ODP tanpa redaman" **batal, dengan alasan**:
+
+- **110** memang kosong juga di berkas sumber
+- **23** punya nilai, tetapi **seluruhnya positif** (6–19) sedangkan kolomnya
+  dBm daya terima yang normalnya negatif. `parseDbm` menolak nilai > 5, dan
+  penolakan itu **benar** — angka segitu hampir pasti redaman dalam dB (rugi),
+  bukan dBm (daya). Mengisinya akan mencampur dua besaran dalam satu kolom.
+- **2** tidak ada di berkas (`NONE`, `SRY 05J1 (HITAM)`)
+
+Catatan untuk suatu hari nanti: **31 nilai positif (1–5) sudah terlanjur
+tersimpan** karena lolos batas `> 5`. Nilainya lebih kecil sehingga tidak
+mustahil, tetapi asalnya sama mencurigakannya.
+
+## Isolir date dan tags: sudah selesai / tidak dipakai
+
+- `BillingProfile.isolirDay` ternyata **sudah terisi 1.679 dari 1.709**, 26
+  ragam nilai. Tidak ada yang perlu dikerjakan.
+- **Tags praktis tidak dipakai** di sistem lama — dari empat pelanggan terbaru,
+  tiga berisi `-`. Dilewati.
+
+## Empat pelanggan baru: masuk
+
+`PN260816062`, `PN260815027`, `PN260815308`, `PN260815316` — lengkap dengan
+NIK, tanggal lahir, telepon, email, koordinat, paket, dan PPPoE. **Tiga dapat
+port ODP; yang keempat tidak**, sebab ODP-nya `PSG 240102` yang penuh — dan ia
+berstatus PROSPECT, jadi memang belum perlu.
+
+## Rekonsiliasi: 1.682 dari 1.711 cocok penuh
+
+`scripts/_rekon-alus.ts` — **tidak menulis apa pun**, ke CRM maupun ke sistem
+lama. Dijalankan berulang, bukan sekali.
+
+```
+Di keduanya   1.711    cocok penuh 1.682 · ada selisihnya 29
+Hanya di CRM      4    (keempat pelanggan baru — salinan ALUS lebih tua)
+Hanya di ALUS     0
+Selisih          27 ODP · 2 ONU · 0 status · 0 harga
+```
+
+**Nol selisih status dan nol selisih harga pada 1.711 pelanggan.** Itu angka
+yang menenangkan menjelang cutover.
+
+### Yang paling layak ditindak: 21 pelanggan
+
+Status penagihan sistem lama disandingkan dengan keadaan secret di router —
+**dua sumbu berbeda**, dan justru perbedaannya yang informatif:
+
+```
+1.513  Active   → ONLINE      wajar
+   64  Block    → DISABLED    wajar
+   27  Inactive → DISABLED    wajar
+   25  Active   → DISABLED    ← membayar tetapi diputus?
+   21  Block    → ONLINE      ← DIBLOKIR TETAPI MASIH MENYALA
+   21  Active   → OFFLINE     gangguan atau perangkat mati
+```
+
+**21 pelanggan diblokir di penagihan tetapi sambungannya masih menyala.** Itu
+belum tentu salah — blokir bisa baru saja ditetapkan dan belum dieksekusi —
+tetapi selama tidak ada yang menghitungnya, tidak ada yang tahu. Sekarang ada
+yang menghitung, kapan pun diminta.
+
+## Satu cacat di kode saya sendiri, yang hanya ketahuan lewat data sungguhan
+
+Laporan pertama menampilkan I Wayan Wiastana **dua kali sekaligus**: "hanya di
+sistem lama" DAN "hanya di CRM". Kedua barisnya terlihat benar, sebab CID-nya
+di sistem lama berawalan dua LEFT-TO-RIGHT MARK yang tidak kelihatan mata.
+`kunciOdp` sudah membersihkan tanda semacam itu — kode ODP `KCC‎ 1440701`
+memaksanya sejak awal — tetapi `kunci` untuk nomor layanan belum. Sudah
+disamakan, dan diuji.
+
+Kalau tidak ketahuan, laporan akan menyimpulkan ada satu pelanggan hilang
+sekaligus satu pelanggan liar, padahal tidak ada satu pun.
+
+## Keadaan produksi sesudah Fase 83
+
+```
+Pelanggan          1.715      (+4)
+Langganan          1.715      (+4)
+Posisi ONU         1.698      baru
+ODP bertaut PON      549
+Port ODP terisi    1.687      (+3)
+```
