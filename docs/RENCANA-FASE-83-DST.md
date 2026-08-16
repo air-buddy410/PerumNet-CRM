@@ -62,7 +62,7 @@ Alat yang ditinggalkan, dipakai berulang sampai cutover:
 
 ---
 
-## Fase 84 — Jembatan operasional harian  `[Opus, sedikit Luna]`
+## Fase 84 — Jembatan operasional harian  ◑ BACKEND SELESAI 17 Agustus 2026
 
 Hal-hal kecil yang tiap hari dilihat orang di ALUS dan belum ada di kita.
 
@@ -76,8 +76,38 @@ Hal-hal kecil yang tiap hari dilihat orang di ALUS dan belum ada di kita.
 - Kartu dasbor: status OLT/ONU ringkas (dari data sinkron yang ada, bukan
   telemetri live — itu Fase 88).
 
-**Selesai bila:** kegagalan sinkron terlihat di layar tanpa membuka log, dan
-dasbor menjawab "worker jalan atau tidak" sekali pandang.
+**Yang ternyata SUDAH ADA** — diperiksa sebelum membangun, supaya tidak lahir
+layar kembar:
+
+- `NetworkAccessJob` + layar `/noc/access-jobs` = padanan "MikroTik Sync
+  Failures" ALUS. Sudah lengkap: `attempts`, `lastError`, status.
+- `PppoePollRun` per router + kegagalannya sudah tampil di `/noc/pppoe`.
+- `ScheduledTask` + `ScheduledTaskRun` + layar `/settings/scheduler`.
+
+Jadi isi fase ini menyusut, dan yang tersisa justru yang paling menipu.
+
+**Yang DIKERJAKAN:** `src/lib/system-status.ts` + `-service.ts`.
+
+Layar penjadwal menampilkan `lastStatus` hijau `SUCCESS` untuk tugas yang sudah
+enam jam tidak berjalan — sebab status menjawab "bagaimana hasil jalan
+terakhir", bukan "apakah ia masih hidup". Worker yang mati diam-diam tidak
+menghasilkan kegagalan; ia berhenti menghasilkan apa pun.
+
+**Kesegaran** diukur sebagai kelipatan interval, bukan angka mutlak — telat
+sepuluh menit itu gawat bagi tugas dua menit dan bukan apa-apa bagi tugas
+harian. Dengan lantai toleransi 180 detik supaya tugas tercepat tidak berkedip
+merah sepanjang hari, dan tugas yang sengaja dimatikan tidak dihitung gagal.
+
+Kegagalan router dihitung **beruntun**, bukan seumur hidup: `pppoe.poll` punya
+214 kegagalan sepanjang hidupnya dan sedang sehat sempurna.
+
+`scripts/_cek-kesehatan.ts` menjawabnya dari terminal sekarang juga, dalam
+**WITA** — bukan UTC jam server.
+
+**Sisa untuk Luna:** layar `/settings/status` + kartu dasbor. Kontraknya di
+HANDOFF §45.
+
+**Selesai bila:** dasbor menjawab "worker jalan atau tidak" sekali pandang.
 
 ---
 

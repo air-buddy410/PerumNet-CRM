@@ -2609,3 +2609,87 @@ memberikannya; begitu masuk, lapisan site menyala tanpa perubahan kode.
 **Dua ODP tampaknya baris penampungan, bukan ODP sungguhan** — `PSG 240102`
 dan `SRY`. Keduanya akan tampak aneh di peta (penghuninya jauh dan dari desa
 yang berbeda-beda). Itu bukan bug gambarmu; biarkan terlihat.
+
+---
+
+## §45 — Status Sistem: satu layar yang menjawab "semuanya jalan atau tidak?"
+
+Fase 84. Backend siap; layarnya bagianmu.
+
+### Kenapa ini ada, padahal `/settings/scheduler` sudah menampilkan banyak
+
+Layar itu menampilkan `lastStatus` dan `lastRunAt`. Keduanya benar — dan
+justru itu jebakannya: sebuah tugas bisa berbunyi **`SUCCESS` berwarna hijau**
+padahal **enam jam tidak berjalan sama sekali**. Statusnya menjawab "bagaimana
+hasil jalan TERAKHIR", bukan "apakah ia masih hidup". Worker yang mati
+diam-diam tidak menghasilkan kegagalan; ia berhenti menghasilkan apa pun, dan
+layar tetap hijau.
+
+Yang membedakan hidup dari mati adalah **kesegaran**, dan itu perhitungan,
+bukan kolom. Sekarang sudah dihitung.
+
+### Satu pemanggilan
+
+```ts
+import { loadStatusSistem } from "@/lib/system-status-service";
+
+const s = await loadStatusSistem();
+```
+
+| Bidang | Isi |
+|---|---|
+| `s.vonis` | `"SEHAT"` · `"PERHATIAN"` · `"GAWAT"` — **yang terburuk menang**, sistem tidak "agak sehat" |
+| `s.gejala[]` | `{ bagian, vonis, pesan }` — hanya yang bermasalah. Kosong = tidak ada apa-apa |
+| `s.tugas[]` | tiap tugas berjadwal + `kesegaran`, `sejak`, `alasan`, `sewaTertinggal` |
+| `s.router[]` | tiap router + `sejak`, `gagalBeruntun`, `errorTerakhir`, `sesiOnline` |
+| `s.antrean` | `{ queued, running, failed }` perintah ke router |
+| `s.librenms` | `{ perangkat, port, terakhirSinkron, sejak }` |
+| `s.olt` | `{ olt, ponPort, odpTertaut, odpTanpaPon }` |
+
+`kesegaran` bernilai `MATI` · `SEGAR` · `TERLAMBAT` · `MACET`.
+
+### Empat hal yang menentukan tampilannya
+
+**1. `MATI` bukan merah.** Mode baca-saja **sengaja** mematikan lima tugas
+penulis (`billing.dunning`, `channels.outbox`, `network.access-jobs`,
+`termination.effective`, `hrd.contract-lifecycle`). Kalau kelimanya merah,
+peringatan yang sungguhan akan terkubur. Pakai warna netral/abu dan label
+"dimatikan".
+
+**2. `sejak` sudah berupa kata** — `"5 menit lalu"`, `"11.5 jam lalu"`,
+`"belum pernah"`. **Pakai itu, jangan cap waktu.** Jam server UTC sedangkan
+tim bekerja di **Asia/Makassar**; cap waktu menuntut orang menghitung sendiri,
+dan hitungan itu bisa meleset **satu hari penuh** — hari ini nyaris membuat
+saya sendiri salah baca. Kalau kamu tetap menampilkan jam, paksa
+`timeZone: "Asia/Makassar"`.
+
+**3. `failCount` itu seumur hidup, `gagalBeruntun` itu sekarang.**
+`pppoe.poll` punya 214 kegagalan sepanjang hidupnya dan sedang sehat sempurna.
+**Jangan warnai merah berdasarkan `failCount`** — itu sejarah, bukan keadaan.
+Yang menandakan masalah sekarang adalah `s.gejala` dan
+`router[].gagalBeruntun`.
+
+**4. Kalau `s.gejala` kosong, katakan begitu.** Layar sehat yang berisi tabel
+penuh angka tetap menuntut dibaca. Satu baris "tidak ada gejala" mengakhiri
+pertanyaannya dalam sedetik.
+
+### Yang kuusulkan
+
+- **Rute `/settings/status`** (atau `/status`) — namanya terserah.
+- Susunannya: **vonis besar di atas** → **daftar gejala** → baru tabel rinci.
+  Orang datang untuk satu jawaban; tabelnya untuk yang sudah tahu ada masalah.
+- **Kartu kecil di `/dashboard`**: ikon vonis + jumlah gejala, menaut ke sana.
+  Itu yang membuatnya terlihat tanpa orang harus ingat membukanya.
+- Tanpa auto-refresh agresif — 30–60 detik cukup, atau tombol muat ulang.
+
+Sudah bisa dilihat isinya sekarang lewat terminal:
+
+```bash
+docker compose run --rm tools npx tsx scripts/_cek-kesehatan.ts
+```
+
+### Yang TIDAK perlu kamu bangun
+
+Kegagalan penarikan per router sudah tampil di `/noc/pppoe`, dan antrean
+perintah router di `/noc/access-jobs`. Layar status ini **merangkum dan
+menaut**, bukan menggantikan keduanya.
