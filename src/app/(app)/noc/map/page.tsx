@@ -103,7 +103,7 @@ export default async function NetworkMapPage({
     }),
     db.networkSite.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.oltDevice.findMany({
-      select: { id: true, networkDevice: { select: { hostname: true } } },
+      select: { id: true, name: true, networkDevice: { select: { hostname: true } } },
     }),
   ]);
 
@@ -168,11 +168,20 @@ export default async function NetworkMapPage({
           </select>
         </div>
         <div>
+          <label className="label" htmlFor="router">Router</label>
+          <select id="router" name="router" defaultValue={sp.router ?? ""} className="input">
+            <option value="">Semua router</option>
+            {data.routers.map((router) => (
+              <option key={router.id} value={router.id}>{router.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="label" htmlFor="olt">OLT</label>
           <select id="olt" name="olt" defaultValue={sp.olt ?? ""} className="input">
             <option value="">Semua OLT</option>
             {olts.map((o) => (
-              <option key={o.id} value={o.id}>{o.networkDevice.hostname}</option>
+              <option key={o.id} value={o.id}>{o.name ?? o.networkDevice.hostname}</option>
             ))}
           </select>
         </div>
@@ -189,15 +198,6 @@ export default async function NetworkMapPage({
           <select id="status" name="status" defaultValue={sp.status ?? ""} className="input">
             {STATUS_FILTERS.map((s) => (
               <option key={s} value={s}>{s || "Semua status"}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="router">Router</label>
-          <select id="router" name="router" defaultValue={sp.router ?? ""} className="input">
-            <option value="">Semua router</option>
-            {data.routers.map((router) => (
-              <option key={router.id} value={router.id}>{router.name}</option>
             ))}
           </select>
         </div>
@@ -631,6 +631,7 @@ async function loadNetworkTopology(
       },
       select: {
         id: true,
+        name: true,
         networkDevice: {
           select: {
             hostname: true,
@@ -735,7 +736,7 @@ async function loadNetworkTopology(
       id,
       refId: olt.id,
       kind: "OLT",
-      label: olt.networkDevice.hostname,
+      label: olt.name ?? olt.networkDevice.hostname,
       latitude: site.latitude,
       longitude: site.longitude,
       status: olt.networkDevice.status,
@@ -773,15 +774,16 @@ async function loadNetworkTopology(
 
   for (const olt of oltRows) {
     const nodeId = oltNodeId.get(olt.id);
+    const oltLabel = olt.name ?? olt.networkDevice.hostname;
     addEdge(
       siteNodeId.get(olt.networkDevice.siteId),
       nodeId,
       "SITE_OLT",
-      `${olt.networkDevice.site.name} → ${olt.networkDevice.hostname}`,
+      `${olt.networkDevice.site.name} → ${oltLabel}`,
     );
     for (const pon of olt.ponPorts) {
       for (const odp of pon.odps) {
-        addEdge(nodeId, odpNodeId.get(odp.id), "OLT_ODP", `${olt.networkDevice.hostname} · PON ${pon.label}`);
+        addEdge(nodeId, odpNodeId.get(odp.id), "OLT_ODP", `${oltLabel} · PON ${pon.label}`);
       }
     }
   }

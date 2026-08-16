@@ -1196,3 +1196,20 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   tim lapangan.
 - MapLibre dan fallback SVG memakai warna status, pembeda lokasi warisan,
   popup, legenda, serta aturan responsive yang sama.
+
+## 44. Handoff Opus §44 — Nama OLT dan Urutan Filter Peta
+
+- Label OLT pada filter, marker, popup, dan garis topology memakai nama
+  operasional `OltDevice.name`. Jika nama belum tersedia, UI memakai hostname
+  sebagai fallback; hostname tetap dipertahankan sebagai identitas sinkronisasi
+  LibreNMS.
+- Urutan filter peta mengikuti alur kerja operator: Site → Router → OLT →
+  Okupansi ODP → Status pelanggan → Status koneksi.
+- Relasi OLT → PON → ODP tetap memakai data relasi resmi. ODP yang belum punya
+  port PON tidak dibuatkan garis perkiraan dan tidak ditampilkan sebagai error.
+- OLT yang belum terpantau karena modelnya tidak mendukung SNMP tetap diberi
+  status operasional yang jujur bila datanya tersedia; frontend tidak membuat
+  status sinkronisasi atau port PON palsu.
+- Responsive acceptance tetap berlaku pada enam viewport: filter dapat wrap,
+  label panjang tidak keluar card, dan perubahan filter mempertahankan query
+  URL yang sudah ada.
