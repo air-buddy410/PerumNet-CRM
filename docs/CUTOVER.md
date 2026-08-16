@@ -31,6 +31,22 @@ dihentikan oleh orang, di sana.
       menunjukkan seluruhnya cocok terhadap tagihan sistem lama pada periode
       yang sama. **Ini syarat yang paling menentukan** — selama angkanya belum
       cocok, tidak ada gunanya melanjutkan.
+
+      *Keadaan 17 Agustus:* simulasinya sudah masuk akal —
+      **1.647 tagihan · Rp370.093.600** untuk Agustus 2026, rata-rata
+      Rp224.708 yang jatuh tepat di rentang paketnya. Yang dilewati seluruhnya
+      punya alasan: 27 INACTIVE, 26 berharga nol (akun gratis), 6 PROSPECT,
+      5 tanpa tanggal mulai tagih, 4 mulai setelah periode.
+
+      **Yang masih kurang: nominal tagihan ALUS untuk periode yang sama.**
+      Daftar invoice-nya hanya keluar lewat POST DataTables, dan pengambilan
+      dari sistem lama dijaga baca-saja. Perlu satu ekspor `nomor<TAB>jumlah`
+      dari sana, lalu jalankan `--banding`. **Tanpa perbandingan itu, angka di
+      atas baru masuk akal — belum terbukti.**
+
+- [ ] **Lima langganan tanpa tanggal mulai tagih diselesaikan.** Mereka tidak
+      akan pernah ditagih selama kolomnya kosong, dan itu tidak akan
+      menghasilkan galat apa pun — hanya pelanggan yang diam-diam gratis.
 - [ ] **Tagihan berjalan diselesaikan.** Putuskan: tagihan periode berjalan
       diterbitkan di sistem lama sampai habis, dan CRM mulai dari periode
       berikutnya. Mencampur keduanya dalam satu periode akan menghasilkan

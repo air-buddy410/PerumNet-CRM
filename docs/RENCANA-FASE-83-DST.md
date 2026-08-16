@@ -111,7 +111,7 @@ HANDOFF §45.
 
 ---
 
-## Fase 85 — Kesetaraan layar inti  `[Luna, kontrak dari Opus]`
+## Fase 85 — Kesetaraan layar inti  ◑ KONTRAK SIAP (HANDOFF §46) — layar milik Luna
 
 Menyamakan *kepadatan informasi* layar-layar yang dipakai tiap hari, tanpa
 mengubah gaya.
@@ -135,7 +135,7 @@ yang sama dari layar kita tanpa membuka ALUS.
 
 ---
 
-## Fase 86 — Berkas & log per pelanggan  `[Opus → Luna]`
+## Fase 86 — Berkas & log per pelanggan  ✅ BACKEND SELESAI 17 Agustus 2026
 
 Prasyarat backend untuk bagian Fase 85 yang butuh tabel baru.
 
@@ -154,7 +154,7 @@ riwayat perubahan, tanpa membuka ALUS.
 
 ---
 
-## Fase 87 — Portal pelanggan (web + PWA)  `[Opus kontrak & backend, Luna UI]`
+## Fase 87 — Portal pelanggan (web + PWA)  ✅ BACKEND SELESAI 17 Agustus 2026
 
 Jawaban untuk "app alus punya login untuk client side, kita bisa buat yang
 mirip?" — bisa, dan lebih dulu web + PWA supaya satu kode.
@@ -181,7 +181,7 @@ yang sungguhan, dan tiketnya sampai ke helpdesk.
 
 ---
 
-## Fase 88 — Telemetri OLT/ONU  `[Opus]`
+## Fase 88 — Telemetri OLT/ONU  ✅ 88a SELESAI 17 Agustus 2026 · 88b belum diputuskan
 
 Yang paling dikagumi orang dari ALUS: panel ONU live (RX dBm, jarak,
 dyinggasp, LOS). Bertahap:
@@ -200,7 +200,7 @@ yang diketahui + kapan terakhir dilihat.
 
 ---
 
-## Fase 89 — Job center penagihan, terpasang MATI  `[Opus, nyala = keputusan pemilik]`
+## Fase 89 — Job center penagihan, terpasang MATI  ✅ GLADI SELESAI 17 Agustus 2026
 
 Padanan "Notification & Job Center" ALUS (Buat Invoice / Kirim Notifikasi /
 Jalankan Isolir) memakai modul billing kita yang sudah ada (`runs`, `isolir`,
@@ -221,7 +221,7 @@ pemilik. **Menyalakannya bukan bagian fase ini.**
 
 ---
 
-## Fase 90 — SOP Alur Kerja versi CRM  `[Opus menulis, pemilik menetapkan]`
+## Fase 90 — SOP Alur Kerja versi CRM  ✅ SELESAI 17 Agustus 2026 — [SOP-ALUR-KERJA.md](SOP-ALUR-KERJA.md)
 
 Tulis ulang SOP PDF v1.0 menjadi `docs/SOP-ALUR-KERJA.md` yang menunjuk rute
 dan modul yang sungguhan:
@@ -260,3 +260,32 @@ membaca SOP ini, dan tiap kalimatnya menunjuk layar yang benar-benar ada.
 → 89 (gladi penagihan, MATI)
 → 90 (SOP ditulis saat kenyataannya sudah stabil)
 ```
+
+
+---
+
+## Keadaan seluruh rencana, 17 Agustus 2026
+
+| Fase | Keadaan |
+|---|---|
+| 83 Rekonsiliasi & tambang data | ✅ selesai |
+| 84 Jembatan operasional harian | ✅ backend · layar Luna (§45) |
+| 85 Kesetaraan layar inti | ◑ kontrak siap (§46) · layar Luna |
+| 86 Berkas & log per pelanggan | ✅ backend · layar Luna (§46) |
+| 87 Portal pelanggan | ✅ backend · layar Luna (§46) |
+| 88a Telemetri ONU dari data sinkron | ✅ selesai · layar Luna (§46) |
+| 88b Pembacaan OLT langsung | ⏸ belum diputuskan |
+| 89 Gladi penagihan (MATI) | ✅ alat siap · menunggu ekspor nominal ALUS |
+| 90 SOP versi CRM | ✅ selesai |
+
+**Yang menahan cutover**, berurutan menurut kepentingan:
+
+1. Ekspor nominal tagihan ALUS satu periode, lalu `--banding`. Tanpa itu angka
+   kita baru masuk akal, belum terbukti.
+2. Layar-layar Luna (§45, §46).
+3. Lima langganan tanpa tanggal mulai tagih.
+4. Koordinat 6 POP — menahan lapisan site di peta, bukan menahan cutover.
+
+**Yang masih di luar rencana ini:** SUPERPOP/rak, fiber core & OTDR, Legal &
+Compliance, checkpoint ODP berevidence, dokumen IRF/DO/STO terpisah, lokasi
+absen ber-geofence, lembur, arus kas, perubahan modal, rasio keuangan.
