@@ -27,6 +27,23 @@ describe("kunciOdp", () => {
   });
 });
 
+describe("kunci", () => {
+  test("tanda tak terlihat pada CID tidak memecah satu orang menjadi dua", () => {
+    // `‎‎PN102052675` sungguhan ada di sistem lama, berawalan dua
+    // LEFT-TO-RIGHT MARK. Tanpa dibersihkan, ia muncul sekaligus sebagai
+    // "hanya di sistem lama" DAN "hanya di CRM" — dan kedua barisnya terlihat
+    // benar, sebab tandanya tidak kelihatan mata.
+    const h = bandingkan(
+      [{ cid: "‎‎PN102052675", nama: "I Wayan Wiastana", status: "Active", plan: "Paket-Personal (175,000)", odp: null, onu: null }],
+      [{ serviceNumber: "PN102052675", nama: "I Wayan Wiastana", status: "ACTIVE", monthlyPrice: 175000, odp: null, onuPosition: null, linkStatus: "ONLINE" }]
+    );
+    assert.equal(h.perJenis.HANYA_DI_ALUS, 0);
+    assert.equal(h.perJenis.HANYA_DI_CRM, 0);
+    assert.equal(h.bersama, 1);
+    assert.equal(h.cocokPenuh, 1);
+  });
+});
+
 describe("statusSetara", () => {
   test("status sistem lama dipetakan ke status langganan", () => {
     assert.equal(statusSetara("Active"), "ACTIVE");

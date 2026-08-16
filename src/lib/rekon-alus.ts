@@ -74,17 +74,25 @@ export interface HasilRekon {
   blokirVsRouter: { alus: string; link: string; jumlah: number }[];
 }
 
-/** Kunci pencocokan nomor layanan: tanpa spasi, huruf besar. */
+/**
+ * Tanda arah teks dan spasi nol yang tidak terlihat mata.
+ *
+ * Sistem lama menyimpannya di dalam nilai — `‎‎PN102052675` dan
+ * `KCC‎ 1440701` keduanya sungguhan. Karena tak terlihat, satu pelanggan bisa
+ * muncul di KEDUA sisi laporan sekaligus: "hanya di sistem lama" dan "hanya di
+ * CRM", padahal ia orang yang sama. Itu persis yang terjadi pada laporan
+ * pertama sebelum pembersihan ini dipasang.
+ */
+const TAK_TERLIHAT = /[​-‏‪-‮﻿]/g;
+
+/** Kunci pencocokan nomor layanan: tanpa spasi, tanpa tanda tak terlihat, huruf besar. */
 export function kunci(n: string): string {
-  return (n ?? "").replace(/\s+/g, "").toUpperCase();
+  return (n ?? "").replace(TAK_TERLIHAT, "").replace(/\s+/g, "").toUpperCase();
 }
 
-/** Kode ODP: tanpa spasi, huruf besar, tanpa tanda baca tak terlihat. */
+/** Kode ODP: aturan yang sama. */
 export function kunciOdp(n: string | null | undefined): string {
-  return (n ?? "")
-    .replace(/[‎‏​]/g, "")
-    .replace(/\s+/g, "")
-    .toUpperCase();
+  return (n ?? "").replace(TAK_TERLIHAT, "").replace(/\s+/g, "").toUpperCase();
 }
 
 /**
