@@ -181,3 +181,85 @@ sebenarnya masih punya tempat.
 
 **Tidak ada yang diubah.** Pemindahan port adalah keputusan lapangan, dan CRM
 sedang dalam mode baca-saja.
+
+## Empat ODP bentrok OLT — semuanya terjawab (16 Agustus 2026)
+
+`JGS 05120101`, `SRY 05J4`, `SRY 0602`, `SSN 03DC01` bercerita lain sekali
+dari `PSG 240102`. Bentuknya bukan campur aduk, melainkan **satu suara
+membangkang melawan mayoritas yang bulat**:
+
+| ODP | Mayoritas | Membangkang | Sebaran penghuni |
+|---|---|---|---|
+| JGS 05120101 | 6× Kecicang | 1× Abang | 75–375 m, semua Bebandem |
+| SRY 05J4 | 5× Seraya Barat | 1× Seraya Tengah | 42–125 m, semua Yeh Kali |
+| SRY 0602 | 7× Seraya Barat | 1× Seraya Tengah | 29–196 m, Pejongan |
+| SSN 03DC01 | 15× ZTE C600 Kecicang | 1× HSGQ Kecicang | 72–310 m, Green Harmony |
+
+Bandingkan dengan `PSG 240102`: penghuninya 3–3,8 km dari ODP dan menyebut
+empat OLT sekaligus. Keempat ini rapat dan sedesa.
+
+### Yang memutuskan: port PON menyebut nama dusunnya sendiri
+
+Berkas ODP menyimpan port PON tiap ODP (`PIU`), dan operator menamai port
+HSGQ di LibreNMS dengan nama daerah yang disuapinya:
+
+- `SRY 05J4` → `Port 6` → port itu bernama **`YehKali`**, dan keenam
+  penghuninya beralamat *Br. dinas yeh kali*
+- `SRY 0602` → `Port 7` → port itu bernama **`Pejongan`**, dan enam dari
+  delapan penghuninya beralamat *Br. Dinas pejongan*
+
+Empat sumber yang saling bebas — catatan ODP, mayoritas pelanggan, jarak, dan
+nama port yang ditulis operator — menunjuk hal yang sama. Yang membangkang
+satu-satu itu catatan pelanggan yang basi, bukan ODP yang salah.
+
+Keempatnya sudah tertaut ke port PON-nya.
+
+### `SRY` — baris penampungan kedua
+
+Ditemukan saat pemeriksaan silang. Kodenya telanjang tanpa nomor, dan
+**keempat penghuninya akun `Free`**: kantor desa, bendesa, dan satu orang yang
+tercatat dua kali. Semuanya beralamat *Seraya Tengah*, sedangkan catatan
+ODP-nya menunjuk Seraya Barat `Port 1` (`Gerobog`).
+
+Pola yang sama dengan `PSG 240102`: akun internal dan gratis ditumpuk di satu
+baris. Tidak diubah — keputusan lapangan.
+
+## Rantai OLT → PON → ODP kini utuh
+
+`Odp.ponPortId` **549 dari 577 terisi**, sebelumnya nol. `Odp.siteId` naik
+340 → 557.
+
+Fase 81 menyimpulkan site tiap ODP dari pelanggannya dan berhenti di 340.
+Jalan itu memutar: **berkas ODP menyebut sendiri OLT dan port PON tiap ODP**,
+dan nilainya sudah tersimpan di `Odp.notes` sejak impor ODP — seluruh 577
+punya, cuma belum pernah dibaca kembali.
+
+Jumlah ODP per OLT cocok persis dengan tallinya di berkas — 172 Kecicang,
+131 Abang, 114 Pesagi, 77 Seraya Barat, 55 Seraya Tengah.
+
+### Satu kekeliruan saya sendiri yang ketahuan di tengah jalan
+
+ZTE C600 menamai portnya `gpon_olt-1/16/1`. Sisipan `olt-` tidak tertangkap
+`bacaPon`, sehingga seluruh port C600 jatuh ke penomoran berbasis urutan dan
+**dua slot fisik — 16 dan 17 — tersimpan sebagai satu slot bernomor 1–32**.
+Labelnya menyimpan kebenarannya, kolomnya tidak. Selama tertumpuk,
+`PIU: 1/16/9` tidak bisa dicocokkan ke apa pun. Sudah dibetulkan, 32 baris
+dipindahkan ke slot yang benar.
+
+### OLT keenam yang tidak ada perangkatnya
+
+**`OLT HSGQ Kecicang` disebut 28 ODP dan 97 pelanggan, tetapi tidak ada di
+CRM maupun di LibreNMS.** Itulah satu-satunya sebab 28 ODP belum bertaut port
+PON. Sengaja dibiarkan menggantung — menautkannya ke OLT Kecicang yang lain
+berarti mengarang jalur serat.
+
+Delapan di antaranya (`BBD 05`, `06`, `08`, `10`, `11`, `GMG 001`, `002`,
+`004`) justru **seluruh** pelanggannya menyebut `ZTE C600 Kecicang`, bukan
+HSGQ. Dua kemungkinan, dan keduanya masuk akal: pelanggannya dipindah dari
+HSGQ ke C600 tanpa berkas ODP diperbarui, atau sebaliknya. Site-nya sama
+(Kecicang) sehingga peta tidak terpengaruh; yang belum pasti hanya port
+PON-nya.
+
+**Yang perlu diputuskan pemilik jaringan:** apakah `OLT HSGQ Kecicang` masih
+hidup? Kalau ya, ia perlu masuk LibreNMS. Kalau sudah dipensiunkan, 28 ODP dan
+97 pelanggan itu perlu dipindahkan catatannya ke OLT penggantinya.

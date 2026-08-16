@@ -2522,3 +2522,84 @@ Itu sudah diketahui pemilik jaringan.
 **Lima ODP disuapi lebih dari satu OLT menurut pelanggannya**, jadi site-nya
 tidak disimpulkan: `PSG 240102` (empat OLT sekaligus), `JGS 05120101`,
 `SRY 05J4`, `SRY 0602`, `SSN 03DC01`.
+
+---
+
+## §44 — Rantai OLT → PON → ODP kini utuh, dan OLT akhirnya punya nama
+
+Dua hal berubah untukmu. Yang kedua kecil tapi kelihatan di layar tiap hari.
+
+### 1. `OltDevice.name` — pakai ini, jangan `hostname`
+
+Kamu benar bahwa OLT di peta seharusnya bernama, bukan ber-IP. Sekarang ada
+kolomnya:
+
+```ts
+const olt = await db.oltDevice.findMany({
+  select: { id: true, name: true, networkDevice: { select: { hostname: true } } },
+});
+// name  → "ZTE-C600-100-Kecicang"
+// hostname → "192.168.100.60"
+```
+
+Kelimanya sudah terisi: `HSGQ-102-SerayaBarat`, `HSGQ-102-SerayaTengah`,
+`ZTE-C300-102-Pesagi`, `ZTE-C600-100-Kecicang`, `ZTE-C600-104-Abang`.
+
+Tiga tempat di `noc/map/page.tsx` masih memakai `hostname`:
+
+| Baris | Apa |
+|---|---|
+| 175 | pilihan pada penyaring **OLT** |
+| 738 | `label` simpul OLT di topologi |
+| 780, 784 | label sisi `SITE_OLT` dan `OLT_ODP` |
+
+**`name` bisa null** — perangkat OLT yang belum dijodohkan tidak punya nama
+operasional. Pakai `olt.name ?? olt.networkDevice.hostname`, jangan `!`.
+
+**Jangan pakai nama site sebagai gantinya.** Satu site bisa menaungi lebih
+dari satu OLT, dan Kecicang memang begitu: ada OLT HSGQ Kecicang kedua yang
+belum masuk CRM. Begitu ia masuk, dua simpul akan bernama "Kecicang" dan tidak
+ada yang bisa membedakannya.
+
+`hostname` sendiri TIDAK diganti dan jangan diusulkan diganti — itu kunci
+sinkron LibreNMS.
+
+### 2. Urutan penyaring
+
+Yang diminta pemilik jaringan, dan ini murni pemindahan blok markup:
+
+```
+Site → Router → OLT → Okupansi ODP → Status pelanggan → Status koneksi
+```
+
+Sekarang `Router` ada di urutan kelima ([page.tsx:196](../src/app/(app)/noc/map/page.tsx:196));
+ia perlu naik ke kedua, tepat sesudah `Site`. Yang lain sudah pada tempatnya.
+
+### 3. Yang berubah di data — petamu akan terlihat lebih penuh
+
+`Odp.ponPortId` **kini terisi untuk 549 dari 577 ODP**, sebelumnya nol. Ini
+mata rantai yang selama ini kosong, jadi topologimu baru sekarang bisa
+menggambar OLT → PON → ODP sungguhan alih-alih melompatinya.
+
+`Odp.siteId` naik dari 340 → **557**.
+
+Sumbernya bukan tebakan: berkas ODP sistem lama menyebut sendiri OLT dan port
+PON tiap ODP, dan nilainya sudah tersimpan sejak impor ODP — cuma belum pernah
+dibaca kembali. Yang paling menolong: **ODP tanpa penghuni ikut tertaut**,
+padahal merekalah yang justru dicari orang saat memasang pelanggan baru.
+
+### 4. Yang masih berlubang, supaya tidak kamu kira bug
+
+**28 ODP belum bertaut port PON.** Semuanya menyebut `OLT HSGQ Kecicang` —
+OLT keenam yang disebut 28 ODP dan 97 pelanggan tetapi **tidak ada
+perangkatnya**, tidak di CRM maupun di LibreNMS. Sengaja dibiarkan menggantung;
+menautkannya ke OLT Kecicang yang lain berarti mengarang jalur serat. Kalau
+ada tempat yang wajar menyebutkannya, itu lebih baik daripada mereka hilang
+diam-diam.
+
+**Site masih 0 di peta** — koordinat POP belum ada. Pemilik jaringan akan
+memberikannya; begitu masuk, lapisan site menyala tanpa perubahan kode.
+
+**Dua ODP tampaknya baris penampungan, bukan ODP sungguhan** — `PSG 240102`
+dan `SRY`. Keduanya akan tampak aneh di peta (penghuninya jauh dan dari desa
+yang berbeda-beda). Itu bukan bug gambarmu; biarkan terlihat.
