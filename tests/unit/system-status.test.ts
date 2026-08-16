@@ -17,6 +17,22 @@ describe("nilaiKesegaran", () => {
     assert.equal(vonisKesegaran(k.status), "SEHAT");
   });
 
+  test("tugas yang dimatikan tetap melaporkan kapan terakhir berjalan", () => {
+    // `channels.outbox` sudah berjalan 4.135 kali sebelum mode baca-saja
+    // mematikannya. Melaporkannya "belum pernah" adalah pernyataan yang
+    // KELIRU — dan pembacanya akan menyimpulkan tugas itu tak pernah dipakai.
+    const k = nilaiKesegaran({ isEnabled: false, intervalSec: 60, lastRunAt: lalu(19 * 3600) }, SEKARANG);
+    assert.equal(k.status, "MATI");
+    assert.equal(k.telatDetik, 19 * 3600);
+    assert.equal(lamanya(k.telatDetik), "19.0 jam lalu");
+  });
+
+  test("dimatikan DAN memang belum pernah jalan tetap berbunyi belum pernah", () => {
+    const k = nilaiKesegaran({ isEnabled: false, intervalSec: 86400, lastRunAt: null }, SEKARANG);
+    assert.equal(k.telatDetik, null);
+    assert.equal(lamanya(k.telatDetik), "belum pernah");
+  });
+
   test("jitter wajar tidak berkedip merah", () => {
     // Worker berdetak tiap 15 detik dan satu putaran memakan beberapa detik,
     // jadi tugas 60 detik rutin telat 20–30 detik. Tanpa lantai toleransi,

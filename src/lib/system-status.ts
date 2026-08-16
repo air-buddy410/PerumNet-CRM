@@ -53,18 +53,25 @@ export interface TugasMasuk {
 }
 
 export function nilaiKesegaran(t: TugasMasuk, sekarang: Date): NilaiKesegaran {
+  // Jarak sejak jalan terakhir dihitung LEBIH DULU, bahkan untuk tugas yang
+  // dimatikan. Tugas yang dimatikan tetap punya riwayat — `channels.outbox`
+  // sudah berjalan 4.135 kali sebelum mode baca-saja mematikannya — dan
+  // melaporkannya sebagai "belum pernah" adalah pernyataan yang keliru, bukan
+  // sekadar kurang rapi.
+  const telatDetik = t.lastRunAt
+    ? Math.max(0, Math.round((sekarang.getTime() - t.lastRunAt.getTime()) / 1000))
+    : null;
+  const interval = Math.max(1, t.intervalSec);
+  const telatKali = telatDetik === null ? null : telatDetik / interval;
+
   // Tugas yang sengaja dimatikan BUKAN kegagalan. Mode baca-saja mematikan
   // lima tugas penulis, dan menandainya merah akan mengubur yang sungguhan.
   if (!t.isEnabled) {
-    return { status: "MATI", telatDetik: null, telatKali: null, alasan: "Sengaja dimatikan." };
+    return { status: "MATI", telatDetik, telatKali, alasan: "Sengaja dimatikan." };
   }
-  if (!t.lastRunAt) {
+  if (telatDetik === null || telatKali === null) {
     return { status: "MACET", telatDetik: null, telatKali: null, alasan: "Aktif, tetapi belum pernah berjalan." };
   }
-
-  const telatDetik = Math.max(0, Math.round((sekarang.getTime() - t.lastRunAt.getTime()) / 1000));
-  const interval = Math.max(1, t.intervalSec);
-  const telatKali = telatDetik / interval;
 
   if (telatDetik <= LANTAI_DETIK) {
     return { status: "SEGAR", telatDetik, telatKali, alasan: `Berjalan ${telatDetik} detik lalu.` };
