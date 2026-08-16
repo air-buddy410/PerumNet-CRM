@@ -118,7 +118,26 @@ export const ITEM_CODE_RE = /^[A-Z]{2,6}-\d{4}$/;
  * terbaca membesar seratus kali dan tertangkap pemeriksaan kewajaran di bawah.
  */
 export function parseRupiah(raw: string): number | null {
-  const s = (raw ?? "").replace(/rp/gi, "").replace(/[.,\s]/g, "").trim();
+  const asli = (raw ?? "").replace(/rp/gi, "").trim();
+  if (!asli) return null;
+
+  // Notasi ilmiah DITERIMA. Google Sheets menuliskan angka besar sebagai
+  // "1.105E7" saat diekspor, dan itu bukan angka yang tidak terbaca — itu
+  // Rp 11.050.000 yang ditulis dengan cara lain. Menolaknya berarti membuang
+  // harga yang sungguh-sungguh ada, dan orang yang membaca laporannya akan
+  // mengira barangnya memang tidak berharga.
+  //
+  // Diperiksa SEBELUM titik dan koma dibuang: pada "1.105E7" titik itu koma
+  // desimal, bukan pemisah ribuan, dan membuangnya menjadikannya 1105E7.
+  if (/^-?\d+(\.\d+)?[eE][+-]?\d+$/.test(asli)) {
+    const n = Number(asli);
+    if (!Number.isFinite(n) || n < 0) return null;
+    // Harus bilangan bulat: rupiah tidak mengenal pecahan, dan "1.5E0" yang
+    // berarti 1,5 rupiah hampir pasti salah baca kolomnya.
+    return Number.isSafeInteger(n) ? n : null;
+  }
+
+  const s = asli.replace(/[.,\s]/g, "");
   if (!s) return null;
   if (!/^\d+$/.test(s)) return null;
   const n = Number(s);

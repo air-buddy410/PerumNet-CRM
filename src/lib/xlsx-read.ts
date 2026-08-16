@@ -15,8 +15,21 @@ import { listKmzEntries, readZipEntry, isZip, KmzError } from "@/lib/kmz";
 
 export class XlsxError extends Error {}
 
-/** Batas baris yang dibaca — template HRD sendiri hanya menyediakan 200. */
-export const MAX_ROWS = 5000;
+/**
+ * Batas baris BERISI yang dibaca dari satu berkas.
+ *
+ * Angka 5.000 ditulis ketika satu-satunya pemakai pembaca ini adalah impor
+ * pegawai, yang templatnya sendiri hanya menyediakan 200 baris. Buku kerja
+ * katalog material bekerja lain: enam lembar dalam satu berkas, dan dua di
+ * antaranya riwayat pergerakan sepanjang empat ribu baris yang tidak diimpor
+ * tetapi tetap harus dilewati pembacanya. Berkas katalog PerumNet yang sah
+ * berisi 8.871 baris dan tertolak sebagai "terlalu besar".
+ *
+ * Batas ini menjaga memori, bukan menjaga bentuk berkas. Lima puluh ribu baris
+ * teks pendek masih beberapa megabita — jauh di bawah yang berbahaya, dan jauh
+ * di atas berkas mana pun yang orang benar-benar impor.
+ */
+export const MAX_ROWS = 50_000;
 
 // ── Pembacaan XML seperlunya ────────────────────────────────────
 
@@ -121,24 +134,37 @@ export function readAllSheetRows(buf: Buffer): string[][][] {
   let sudah = 0;
   for (const sheet of sheets) {
     const rows = parseSheetXml(readZipEntry(buf, sheet).toString("utf8"), shared, sudah);
-    sudah += rows.length;
+    sudah += jumlahBerisi(rows);
     out.push(rows);
   }
   return out;
 }
 
+/** Baris yang punya setidaknya satu sel berisi. */
+export function jumlahBerisi(rows: string[][]): number {
+  return rows.reduce((n, r) => n + (r.some((c) => c !== "") ? 1 : 0), 0);
+}
+
 /**
- * @param sudah Jumlah baris yang sudah terbaca dari lembar sebelumnya, supaya
- *   batas {@link MAX_ROWS} dihitung untuk seluruh berkas.
+ * @param sudah Jumlah baris BERISI yang sudah terbaca dari lembar sebelumnya,
+ *   supaya batas {@link MAX_ROWS} dihitung untuk seluruh berkas.
  */
 function parseSheetXml(xml: string, shared: string[], sudah: number): string[][] {
   const rows: string[][] = [];
   const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
   let rowMatch: RegExpExecArray | null;
+  // Dihitung berjalan, bukan dihitung ulang tiap baris: berkas sebelas ribu
+  // baris akan menjadi kuadratik kalau seluruh larik disapu setiap kali.
+  let berisi = 0;
 
   while ((rowMatch = rowRe.exec(xml))) {
-    if (sudah + rows.length >= MAX_ROWS) {
-      throw new XlsxError(`Berkas memuat lebih dari ${MAX_ROWS} baris — terlalu besar untuk diimpor sekaligus.`);
+    // Yang dihitung terhadap batas adalah baris BERISI, bukan jumlah elemen
+    // `<row>`. Google Sheets memadatkan tiap lembar sampai seribu baris kosong
+    // atau lebih ketika diekspor, sehingga berkas berisi tiga ratus material
+    // terhitung sebelas ribu baris dan ditolak sebagai "terlalu besar". Pesan
+    // itu menyesatkan sepenuhnya: berkasnya kecil, yang besar hanya bingkainya.
+    if (berisi + sudah >= MAX_ROWS) {
+      throw new XlsxError(`Berkas memuat lebih dari ${MAX_ROWS} baris berisi — terlalu besar untuk diimpor sekaligus.`);
     }
     const row: string[] = [];
     // Atributnya TIDAK BOLEH rakus. Sel kosong ditulis self-closing
@@ -173,6 +199,7 @@ function parseSheetXml(xml: string, shared: string[], sudah: number): string[][]
       while (row.length < col) row.push("");
       row[col] = value.trim();
     }
+    if (row.some((c) => c !== "")) berisi++;
     rows.push(row);
   }
   return rows;

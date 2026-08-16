@@ -303,3 +303,34 @@ describe("pemulihan kode saldo yang rusak", () => {
     assert.match(h.items[0].notes.join(" "), /tidak dikenal, dianggap GOOD/);
   });
 });
+
+describe("parseRupiah — notasi ilmiah dari Google Sheets", () => {
+  test("angka besar yang ditulis sebagai 1.105E7 terbaca utuh", () => {
+    // Nilai asli dari lembar katalog PerumNet. Google Sheets menuliskan angka
+    // besar begini saat diekspor; menolaknya membuang harga yang sungguh ada,
+    // dan barangnya lalu tampak tidak berharga di laporan.
+    assert.equal(parseRupiah("1.105E7"), 11_050_000);
+    assert.equal(parseRupiah("1.04E7"), 10_400_000);
+    assert.equal(parseRupiah("1.368E8"), 136_800_000);
+    assert.equal(parseRupiah("1.5E7"), 15_000_000);
+  });
+
+  test("bentuk biasa tidak berubah artinya", () => {
+    // Titik di sini pemisah RIBUAN, bukan koma desimal — dan itulah sebabnya
+    // notasi ilmiah harus diperiksa lebih dulu, sebelum titik dibuang.
+    assert.equal(parseRupiah("11.050.000"), 11_050_000);
+    assert.equal(parseRupiah("Rp 1.500"), 1500);
+    assert.equal(parseRupiah("15000"), 15_000);
+  });
+
+  test("pecahan rupiah ditolak — kolomnya hampir pasti salah baca", () => {
+    assert.equal(parseRupiah("1.5E0"), null);
+    assert.equal(parseRupiah("-1E3"), null);
+  });
+
+  test("yang memang bukan angka tetap ditolak", () => {
+    assert.equal(parseRupiah("abc"), null);
+    assert.equal(parseRupiah(""), null);
+    assert.equal(parseRupiah("E7"), null);
+  });
+});

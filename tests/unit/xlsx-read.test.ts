@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   readSheetRows,
+  jumlahBerisi,
   parseCellDate,
   columnIndexOf,
   SERIAL_DATE_FLOOR,
@@ -99,5 +100,21 @@ describe("parseCellDate — menerima dua bentuk", () => {
     const d = parseCellDate("2026-01-06")!;
     assert.equal(d.getUTCDate(), 6);
     assert.equal(d.getUTCHours(), 12);
+  });
+});
+
+describe("batas baris menghitung yang BERISI saja", () => {
+  test("padding kosong dari Google Sheets tidak menghabiskan jatah", () => {
+    // Google Sheets memadatkan tiap lembar sampai seribu baris kosong atau
+    // lebih saat diekspor. Menghitungnya membuat berkas berisi tiga ratus
+    // material tertolak sebagai "terlalu besar" — dan pesannya menyesatkan
+    // sepenuhnya, sebab berkasnya kecil, yang besar hanya bingkainya.
+    const isi = Array.from({ length: 20 }, (_, i) => [`KODE-${i}`, `Nama ${i}`]);
+    const kosong = Array.from({ length: 6000 }, () => ["", "", ""]);
+    assert.equal(jumlahBerisi([...isi, ...kosong]), 20);
+  });
+
+  test("baris yang selnya berisi spasi saja tetap dianggap kosong", () => {
+    assert.equal(jumlahBerisi([["", ""], ["", "x"]]), 1);
   });
 });
