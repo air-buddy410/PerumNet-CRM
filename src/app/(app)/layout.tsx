@@ -186,6 +186,7 @@ export default async function AppLayout({
       { href: "/noc/pppoe", label: "Monitor PPPoE" },
       { href: "/noc/map", label: "Peta Jaringan" },
       { href: "/noc/ftth", label: "FTTH (OLT/ODP)" },
+      ...(can(PERMISSIONS.FTTH_MANAGE) ? [{ href: "/noc/pemetaan", label: "Impor Pemetaan" }] : []),
         { href: "/noc/access-jobs", label: "Antrian Router" },
       ],
     });

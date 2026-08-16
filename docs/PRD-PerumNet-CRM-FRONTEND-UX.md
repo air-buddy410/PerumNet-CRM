@@ -1147,3 +1147,32 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Edit item dengan supplier aktif, supplier nonaktif, harga kosong, harga
   rupiah, serta kondisi `GOOD`/`SECOND` harus menghasilkan submit ke action
   resmi tanpa input palsu.
+
+## 41. Impor Pemetaan — Handoff Opus §42
+
+### Alur dan permission
+
+- `/noc/pemetaan` tersedia untuk user dengan permission `ftth.manage` dan
+  muncul di grup NOC sebagai “Impor Pemetaan”.
+- Workbook keputusan tim hanya menerima `.xlsx` dengan batas 5 MB. Pratinjau
+  memakai `previewPemetaanAction`; penerapan memakai `applyPemetaanAction` dan
+  mengunggah ulang file asli, bukan data tabel hasil pratinjau.
+
+### Status keputusan
+
+- `SIAP` berarti keputusan dapat diterapkan.
+- `LEWAT` berarti keadaan sudah sesuai dan tidak diubah.
+- `TOLAK` berarti keputusan tidak dapat diterapkan dan harus tetap terlihat
+  beserta alasannya.
+- `masalah[]` ditampilkan terpisah berdasarkan nama lembar dan nomor baris.
+- `dilewati` berarti baris sengaja dikosongkan oleh tim, bukan kegagalan.
+- Tombol penerapan hanya aktif jika setidaknya ada satu baris `SIAP`; backend
+  tetap hanya menerapkan baris `SIAP`.
+
+### Acceptance responsive
+
+- Ringkasan, error, tabel keputusan, dan hasil penerapan tidak boleh keluar
+  card atau viewport pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844,
+  dan 360×800.
+- Tabel memakai horizontal scroll terkontrol; kunci dan pesan panjang
+  membungkus berdasarkan kata, bukan satu huruf per baris.
