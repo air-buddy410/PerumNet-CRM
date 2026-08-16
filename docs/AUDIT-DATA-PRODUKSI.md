@@ -246,12 +246,16 @@ Labelnya menyimpan kebenarannya, kolomnya tidak. Selama tertumpuk,
 `PIU: 1/16/9` tidak bisa dicocokkan ke apa pun. Sudah dibetulkan, 32 baris
 dipindahkan ke slot yang benar.
 
-### OLT keenam yang tidak ada perangkatnya
+### OLT keenam yang hidup tetapi tidak bisa dipantau — DIPUTUSKAN, jangan dikejar
 
-**`OLT HSGQ Kecicang` disebut 28 ODP dan 97 pelanggan, tetapi tidak ada di
-CRM maupun di LibreNMS.** Itulah satu-satunya sebab 28 ODP belum bertaut port
-PON. Sengaja dibiarkan menggantung — menautkannya ke OLT Kecicang yang lain
-berarti mengarang jalur serat.
+**`OLT HSGQ Kecicang` melayani 28 ODP dan 97 pelanggan. Ia hidup.** Yang tidak
+ada hanyalah catatannya di LibreNMS, sebab **model OLT itu tidak mendukung
+SNMP** — bukan firmware rusak, bukan perangkat mati, bukan sesuatu yang
+menunggu diperbaiki. LibreNMS tidak akan pernah bisa menariknya.
+
+Itulah satu-satunya sebab 28 ODP tidak bertaut port PON, dan itu **keadaan
+tetap**. Pemilik jaringan sudah memutuskan membiarkannya (16 Agustus 2026).
+Menjodohkannya ke OLT Kecicang yang lain berarti mengarang jalur serat.
 
 Delapan di antaranya (`BBD 05`, `06`, `08`, `10`, `11`, `GMG 001`, `002`,
 `004`) justru **seluruh** pelanggannya menyebut `ZTE C600 Kecicang`, bukan
@@ -260,6 +264,10 @@ HSGQ ke C600 tanpa berkas ODP diperbarui, atau sebaliknya. Site-nya sama
 (Kecicang) sehingga peta tidak terpengaruh; yang belum pasti hanya port
 PON-nya.
 
-**Yang perlu diputuskan pemilik jaringan:** apakah `OLT HSGQ Kecicang` masih
-hidup? Kalau ya, ia perlu masuk LibreNMS. Kalau sudah dipensiunkan, 28 ODP dan
-97 pelanggan itu perlu dipindahkan catatannya ke OLT penggantinya.
+Delapan ODP itu pun ikut dibiarkan. Karena keduanya sama-sama di Kecicang,
+site mereka benar bagaimanapun juga; yang tidak diketahui hanya port PON-nya,
+dan port itu memang tidak bisa dipantau.
+
+**Jangan tampilkan 28 ODP ini sebagai galat atau "menunggu sinkron".** Mereka
+lengkap sebagaimana mestinya — yang tidak ada cuma pemantauan port PON-nya,
+dan itu batas perangkatnya, bukan lubang di data kita.

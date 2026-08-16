@@ -2516,8 +2516,10 @@ sistem lama. Lima titik harus dicatat orang di lapangan; sesudah itu rantainya
 lengkap tanpa perubahan kode apa pun.
 
 **`HSGQ-100-Kecicang` tidak punya lapisan OLT** — 97 pelanggan, tetapi
-perangkatnya tidak ada di LibreNMS karena SNMP-nya mati oleh masalah firmware.
-Itu sudah diketahui pemilik jaringan.
+perangkatnya tidak ada di LibreNMS. **OLT-nya hidup dan melayani; model itu
+saja yang tidak mendukung SNMP.** Jadi ini bukan kerusakan yang menunggu
+diperbaiki — ia tidak akan pernah muncul lewat LibreNMS, berapa lama pun
+ditunggu. Sudah diketahui dan diputuskan pemilik jaringan (16 Agustus 2026).
 
 **Lima ODP disuapi lebih dari satu OLT menurut pelanggannya**, jadi site-nya
 tidak disimpulkan: `PSG 240102` (empat OLT sekaligus), `JGS 05120101`,
@@ -2590,12 +2592,16 @@ padahal merekalah yang justru dicari orang saat memasang pelanggan baru.
 
 ### 4. Yang masih berlubang, supaya tidak kamu kira bug
 
-**28 ODP belum bertaut port PON.** Semuanya menyebut `OLT HSGQ Kecicang` —
-OLT keenam yang disebut 28 ODP dan 97 pelanggan tetapi **tidak ada
-perangkatnya**, tidak di CRM maupun di LibreNMS. Sengaja dibiarkan menggantung;
-menautkannya ke OLT Kecicang yang lain berarti mengarang jalur serat. Kalau
-ada tempat yang wajar menyebutkannya, itu lebih baik daripada mereka hilang
-diam-diam.
+**28 ODP tidak akan pernah bertaut port PON, dan itu keadaan tetap.** Semuanya
+menyebut `OLT HSGQ Kecicang` — OLT keenam yang **hidup dan melayani 97
+pelanggan**, tetapi modelnya tidak mendukung SNMP, sehingga LibreNMS tidak
+bisa menariknya dan port PON-nya tidak pernah ada di CRM.
+
+Ini bukan lubang data yang menunggu diisi. Pemilik jaringan sudah memutuskan
+membiarkannya (16 Agustus 2026). Jangan tampilkan sebagai galat atau
+"menunggu sinkron" — kalau ada tempat wajar menyebutkannya, sebut sebagai
+keterangan: *OLT-nya tidak mendukung SNMP, jadi port PON-nya tidak terpantau.*
+Yang penting mereka tidak hilang diam-diam dari layar.
 
 **Site masih 0 di peta** — koordinat POP belum ada. Pemilik jaringan akan
 memberikannya; begitu masuk, lapisan site menyala tanpa perubahan kode.

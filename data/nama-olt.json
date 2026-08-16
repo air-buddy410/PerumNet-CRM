@@ -19,8 +19,8 @@
     "OLT ZTE C600 Abang": "192.168.100.61"
   },
 
-  "_belumAda": "OLT HSGQ Kecicang disebut 28 ODP dan 97 pelanggan, tetapi TIDAK ADA perangkatnya di CRM maupun di LibreNMS. Ia sengaja tidak dijodohkan — menautkannya ke OLT Kecicang yang lain berarti mengarang jalur serat. Tambahkan barisnya di sini setelah perangkatnya masuk.",
-  "belumAda": ["OLT HSGQ Kecicang"],
+  "_takTerpantau": "OLT HSGQ Kecicang HIDUP dan melayani 28 ODP serta 97 pelanggan, tetapi modelnya TIDAK MENDUKUNG SNMP — LibreNMS tidak akan pernah bisa menariknya, berapa lama pun ditunggu. Jadi ini bukan baris yang menunggu diisi: ia sengaja dikosongkan, dan pemilik jaringan sudah memutuskan membiarkannya (16 Agustus 2026). Menjodohkannya ke OLT Kecicang yang lain berarti mengarang jalur serat — jangan. Kalau suatu hari perangkatnya dicatat manual, barulah tambahkan barisnya di `catatanOdp`.",
+  "takTerpantau": ["OLT HSGQ Kecicang"],
 
   "_samaDengan": "Nama pada berkas OLT → nama pada catatan ODP. Dipakai HANYA untuk memeriksa silang, tidak untuk memilih.",
   "samaDengan": {
