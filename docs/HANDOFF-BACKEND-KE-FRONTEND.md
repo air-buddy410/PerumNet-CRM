@@ -2693,3 +2693,82 @@ docker compose run --rm tools npx tsx scripts/_cek-kesehatan.ts
 Kegagalan penarikan per router sudah tampil di `/noc/pppoe`, dan antrean
 perintah router di `/noc/access-jobs`. Layar status ini **merangkum dan
 menaut**, bukan menggantikan keduanya.
+
+---
+
+## §46 — Fase 85–89: yang siap kamu pakai
+
+Backend Fase 86–89 sudah mendarat. Ini daftar apa yang bisa dipanggil, dan
+apa yang **tidak boleh** ditampilkan.
+
+### Berkas pelanggan (Fase 86)
+
+```ts
+import { loadBerkasPelanggan, loadRiwayatPelanggan } from "@/lib/customer-dossier-service";
+import { JENIS_BERKAS, LABEL_BERKAS } from "@/lib/customer-dossier";
+```
+
+Unggah lewat Server Action yang memanggil `simpanBerkasPelanggan`. Unduh lewat
+`/api/files/[id]` — **jangan** menyajikan berkas dari mana pun selain itu.
+
+**Scan KTP butuh izin `customers.pii_view`**, bukan `customers.view`. Untuk
+pengguna tanpa izin itu, unduhannya menjawab 404. **Jangan tampilkan
+tombolnya** kepada mereka — tombol yang selalu gagal lebih membingungkan
+daripada tombol yang tidak ada.
+
+### Riwayat pelanggan (Fase 86)
+
+`loadRiwayatPelanggan(customerId)` → `{ waktu, aksi, oleh, keterangan, modul }[]`,
+terbaru di atas. Sudah menjaring lintas entitas — langganan, tagihan, isolir,
+tiket, work order — bukan hanya `Customer`.
+
+### Portal pelanggan (Fase 87)
+
+```ts
+import { masukPortal, keluarPortal, pelangganSekarang, loadBerandaPortal, laporGangguan } from "@/lib/portal-service";
+import { aturSandiPortal, keluarkanSemuaPerangkat } from "@/lib/portal-service";
+```
+
+`loadBerandaPortal(customerId)` mengembalikan nama, nomor layanan, paket,
+`koneksi` (dari router), pengumuman, dan `tiketTerbuka`.
+
+**Empat hal yang mengikat:**
+
+1. **Portal punya tata letak SENDIRI**, bukan `(app)` — pelanggan bukan staf,
+   dan sidebar CRM tidak boleh muncul di sana sedetik pun.
+2. **`tagihan.diCrm === false` sampai cutover.** Tampilkan `tagihan.pesan` apa
+   adanya. **Jangan** menggantinya dengan "Rp0" atau "tidak ada tagihan" —
+   `Invoice` masih nol baris, dan kalimat itu akan membohongi 1.715 orang
+   dengan layar yang terlihat berfungsi.
+3. **`koneksi.status` bisa `"BELUM DIKETAHUI"`.** Itu bukan "mati".
+4. **Lapor gangguan menolak laporan kedua** selama yang pertama belum ditutup,
+   dan pesannya sudah ramah. Tampilkan apa adanya.
+
+Untuk staf: tombol **"Atur ulang sandi portal"** dan **"Keluarkan dari semua
+perangkat"** di detail pelanggan — padanan tombol yang sama di sistem lama.
+
+### Keadaan ONU (Fase 88a)
+
+```ts
+import { nilaiOnu } from "@/lib/onu-telemetry";
+// → { keadaan, ringkas, belumDiketahui[] }
+```
+
+`keadaan`: `NYALA` · `PADAM_SENDIRIAN` · `PADAM_SEPON` · `PON_TAK_TERPANTAU` ·
+`TAK_DIKETAHUI`.
+
+**Tampilkan `belumDiketahui` walau pelanggannya nyala.** Panel yang tampak
+lengkap membuat orang mengira daya terima ONU sudah terbaca — padahal itu
+perlu membaca OLT langsung, dan belum kita lakukan. Panel yang jujur soal
+batasnya lebih dipercaya daripada panel yang lengkap dan diam-diam salah.
+
+`PADAM_SEPON` adalah temuan paling berharga di layar ini: ia berarti **jangan
+kirim teknisi ke rumah pelanggan**. Beri penekanan visual.
+
+### Penagihan (Fase 89)
+
+**Tidak ada yang perlu kamu bangun.** Layar `/billing/*` sudah ada dan sengaja
+tidak dijalankan. Gladinya lewat terminal.
+
+Kalau kamu menambahkan sesuatu di sana, pastikan **tidak** ada tombol yang
+bisa menerbitkan atau mengisolir sebelum cutover.
