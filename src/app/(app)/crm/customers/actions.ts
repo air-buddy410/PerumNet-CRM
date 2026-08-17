@@ -10,6 +10,11 @@ import { PERMISSIONS } from "@/lib/constants";
 import { previewCustomerImport, applyCustomerImport } from "@/lib/customer-import-service";
 import { NIK_RE, birthDateFromNik } from "@/lib/customer-import";
 import { bertopeng } from "@/lib/customer-pii";
+import { simpanBerkasPelanggan } from "@/lib/customer-dossier-service";
+import { BERKAS_PII } from "@/lib/customer-dossier";
+import { aturSandiPortal, keluarkanSemuaPerangkat } from "@/lib/portal-service";
+
+export type AksiBerkas = { ok: true } | { ok: false; error: string };
 
 const schema = z.object({
   customerId: z.string().min(1),
@@ -156,4 +161,61 @@ export async function applyCustomerImportAction(formData: FormData) {
     revalidatePath("/noc/ftth");
   }
   return result;
+}
+
+// ── Fase 86–87: berkas pelanggan & akun portal ──────────────────
+
+/**
+ * Mengunggah satu berkas pelanggan.
+ *
+ * Seluruh pemeriksaan isi berkas — ukuran, MIME dipasangkan dengan extension,
+ * magic-byte dicocokkan dengan MIME yang diakui — dikerjakan `saveAttachment`
+ * lewat `simpanBerkasPelanggan`. Yang ditambahkan di sini penjaga izin, dan
+ * ia BERBEDA menurut jenisnya: scan kartu identitas menuntut izin PII,
+ * selebihnya cukup izin menyunting pelanggan.
+ */
+export async function unggahBerkasPelangganAction(formData: FormData): Promise<AksiBerkas> {
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
+  const customerId = String(formData.get("customerId") ?? "");
+  const jenis = String(formData.get("jenis") ?? "");
+  const file = formData.get("file");
+
+  if (!customerId) return { ok: false, error: "Pelanggan tidak disebutkan." };
+  if (!(file instanceof File)) return { ok: false, error: "Berkas tidak terkirim." };
+
+  if (BERKAS_PII.has(jenis) && !user.permissions.has(PERMISSIONS.CUSTOMERS_PII_VIEW)) {
+    // Yang tidak boleh MELIHAT scan identitas juga tidak boleh menaruhnya:
+    // mengunggah tanpa bisa memeriksa ulang berarti menaruh sesuatu yang tidak
+    // bisa dipertanggungjawabkan sendiri.
+    return { ok: false, error: "Mengunggah kartu identitas menuntut izin data pribadi." };
+  }
+
+  const hasil = await simpanBerkasPelanggan(customerId, jenis, file, user.id);
+  if (!hasil.ok) return hasil;
+  revalidatePath(`/crm/customers/${customerId}`);
+  return { ok: true };
+}
+
+/** Padanan "Reset Password Portal Customer" pada sistem lama. */
+export async function aturSandiPortalAction(formData: FormData): Promise<AksiBerkas> {
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
+  const customerId = String(formData.get("customerId") ?? "");
+  const sandi = String(formData.get("sandi") ?? "");
+  if (!customerId) return { ok: false, error: "Pelanggan tidak disebutkan." };
+
+  const hasil = await aturSandiPortal(customerId, sandi, user.id);
+  if (!hasil.ok) return hasil;
+  revalidatePath(`/crm/customers/${customerId}`);
+  return { ok: true };
+}
+
+/** Padanan "Logout Aplikasi Mobile" pada sistem lama. */
+export async function keluarkanSemuaPerangkatAction(formData: FormData): Promise<AksiBerkas> {
+  const user = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
+  const customerId = String(formData.get("customerId") ?? "");
+  if (!customerId) return { ok: false, error: "Pelanggan tidak disebutkan." };
+
+  await keluarkanSemuaPerangkat(customerId, user.id);
+  revalidatePath(`/crm/customers/${customerId}`);
+  return { ok: true };
 }

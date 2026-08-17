@@ -33,8 +33,25 @@ function requestOrigin(request: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+// Fase 87 — portal pelanggan. Realm yang BERBEDA, bukan sekadar jalur publik.
+//
+// Aturan "sudah masuk lalu buka jalur publik → lempar ke /dashboard" berlaku
+// untuk staf, dan menerapkannya di sini akan salah dua arah sekaligus:
+// pelanggan yang membuka portalnya akan dilempar ke dasbor staf, dan pegawai
+// yang sedang masuk tidak akan pernah bisa membuka portal untuk menolong
+// pelanggan di telepon. Karena itu seluruh cabang `/pelanggan` dilewatkan di
+// sini, dan penjagaannya dikerjakan halamannya sendiri lewat
+// `pelangganSekarang()` — yang memeriksa cookie portal, keaktifan akun, DAN
+// `sessionEpoch`, tiga hal yang tidak bisa diperiksa dari middleware tanpa
+// menyentuh basis data.
+const PORTAL_PREFIX = "/pelanggan";
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === PORTAL_PREFIX || pathname.startsWith(`${PORTAL_PREFIX}/`)) {
+    return NextResponse.next();
+  }
 
   // Webhook integrasi (§56): dipanggil sistem eksternal tanpa sesi —
   // autentikasi memakai token per-integrasi di route handler.
