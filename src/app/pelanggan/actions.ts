@@ -12,6 +12,7 @@
 // tiket; itu saja.
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { masukPortal, keluarPortal, laporGangguan, pelangganSekarang } from "@/lib/portal-service";
 
 export type AksiPortal = { ok: true } | { ok: false; error: string };
@@ -53,5 +54,9 @@ export async function laporGangguanAction(
     String(formData.get("isi") ?? "")
   );
   if (!hasil.ok) return hasil;
+  // Beranda menampilkan jumlah tiket terbuka, dan angka itu langsung berubah
+  // oleh laporan ini. Tanpa penyegaran, pelanggan menekan kirim lalu melihat
+  // angka lama — dan menyimpulkan laporannya tidak masuk.
+  revalidatePath("/pelanggan");
   return { ok: true };
 }
