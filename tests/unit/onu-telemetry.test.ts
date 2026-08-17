@@ -27,17 +27,22 @@ describe("nilaiOnu", () => {
   });
 
   test("OLT tanpa SNMP dikatakan apa adanya, bukan dilaporkan rusak", () => {
-    // 97 pelanggan bergantung pada OLT HSGQ Kecicang yang tidak mendukung
-    // SNMP. Itu keadaan tetap yang sudah diputuskan, bukan galat.
+    // 97 pelanggan bergantung pada OLT HSGQ Kecicang yang di luar SNMP.
+    // Sejak 17 Agustus CLI-nya terbuka — kalimatnya menyebut jalan yang ADA,
+    // bukan hanya yang tidak ada.
     const h = nilaiOnu({ sesi: null, portPon: null, tetanggaPadam: 0, tetangga: 0 });
     assert.equal(h.keadaan, "PON_TAK_TERPANTAU");
-    assert.ok(h.belumDiketahui.some((x) => /tidak bisa dipantau/.test(x)));
+    assert.ok(h.belumDiketahui.some((x) => /di luar pemantauan SNMP/.test(x)));
+    assert.match(h.ringkas, /tombol daya optik tetap menjawab/);
   });
 
   test("yang belum diketahui SELALU disebutkan, bahkan saat nyala", () => {
-    // Panel yang tampak lengkap membuat orang mengira dBm-nya sudah terbaca.
+    // Panel yang tampak lengkap membuat orang mengira dBm-nya tampil sendiri.
+    // Baris dBm kini MENUNJUK tombolnya, bukan menyatakan tidak bisa — sebab
+    // jalur bacanya sudah ada; sedangkan jarak ONU tetap jujur belum terbaca.
     const h = nilaiOnu({ sesi: "ONLINE", portPon: "up", tetanggaPadam: 0, tetangga: 20 });
     assert.equal(h.keadaan, "NYALA");
-    assert.ok(h.belumDiketahui.some((x) => /dBm/.test(x)));
+    assert.ok(h.belumDiketahui.some((x) => /Baca daya optik/.test(x)));
+    assert.ok(h.belumDiketahui.some((x) => /Jarak ONU.*belum bisa dibaca/.test(x)));
   });
 });

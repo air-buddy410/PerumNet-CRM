@@ -60,9 +60,15 @@ const AMBANG_SEPON = 0.5;
  * relevan — teknisi harus ke OLT, bukan ke rumah pelanggan.
  */
 export function nilaiOnu(b: BahanOnu): PenilaianOnu {
+  // Daftar ini penjaga kejujuran panel: apa yang TIDAK ditampilkan otomatis.
+  // Baris dBm pernah berbunyi "perlu pembacaan langsung ke OLT" — ditulis
+  // sebelum jalur pembacaannya ada. Sekarang jalurnya ada (tombol di panel
+  // yang sama), jadi kalimatnya menunjuk ke sana alih-alih menyatakan tidak
+  // bisa. Jarak ONU tetap jujur belum terbaca: perintahnya belum dipetakan
+  // di satu pun vendor.
   const belumDiketahui = [
-    "Daya terima ONU (dBm) — perlu pembacaan langsung ke OLT.",
-    "Jarak ONU dari OLT — sama, perlu pembacaan langsung.",
+    "Daya terima ONU (dBm) tidak tampil otomatis — baca dengan tombol \"Baca daya optik\" di bawah.",
+    "Jarak ONU dari OLT — belum bisa dibaca.",
   ];
 
   if (b.portPon === "down") {
@@ -109,8 +115,12 @@ export function nilaiOnu(b: BahanOnu): PenilaianOnu {
     return {
       keadaan: "PON_TAK_TERPANTAU",
       ringkas:
-        "OLT pelanggan ini tidak mendukung SNMP, jadi port PON-nya tidak terpantau. Keadaannya hanya bisa dibaca dari sesi PPPoE.",
-      belumDiketahui: [...belumDiketahui, "Keadaan port PON — OLT-nya tidak bisa dipantau sama sekali."],
+        "OLT pelanggan ini di luar pemantauan SNMP, jadi keadaan port PON-nya tidak diketahui otomatis. " +
+        "Sesi PPPoE dan tombol daya optik tetap menjawab.",
+      belumDiketahui: [
+        ...belumDiketahui,
+        "Keadaan port PON — OLT ini di luar pemantauan SNMP; tombol daya optik tetap bekerja (lewat CLI).",
+      ],
     };
   }
 
