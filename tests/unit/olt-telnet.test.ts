@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { bacaKredensialOlt, OltTelnetError, adaPrompt, tandaGagalMasuk } from "@/lib/olt-telnet";
+import { bacaKredensialOlt, OltTelnetError, adaPrompt, tandaGagalMasuk, periksaPerintahBaca, PerintahDitolak, jalankanPerintah } from "@/lib/olt-telnet";
 
 describe("bacaKredensialOlt", () => {
   test("penanda sementara Fase 81 DITOLAK dengan alasan yang benar", () => {
@@ -121,5 +121,66 @@ describe("tandaGagalMasuk — kalimat vendor yang sungguhan", () => {
     // terkirim — jadi banner awal tidak pernah sampai ke sini.
     assert.equal(tandaGagalMasuk(BANNER_C600), false);
     assert.equal(tandaGagalMasuk(BANNER_HSGQ), false);
+  });
+});
+
+describe("tembok baca-saja", () => {
+  test("perintah yang MENGUBAH ditolak sebelum menyentuh soket", () => {
+    // Diminta pemilik jaringan: yang boleh berubah hanya basis data CRM.
+    for (const p of [
+      "no vlan 100", "reboot", "save", "write memory", "copy running startup",
+      "ont delete 8 0", "service-port 1 vlan 100", "user add admin", "set interface",
+    ]) {
+      assert.throws(() => periksaPerintahBaca(p), PerintahDitolak, `"${p}" harus ditolak`);
+    }
+  });
+
+  test("perintah membaca dan berpindah mode diizinkan", () => {
+    for (const p of ["show ont-info 8 all", "enable", "configure", "exit", "?", "show ?"]) {
+      assert.doesNotThrow(() => periksaPerintahBaca(p), `"${p}" harus lolos`);
+    }
+  });
+
+  test("perintah menumpang di belakang pemisah ditolak", () => {
+    // Tanpa ini, "show version; reboot" lolos karena kata pertamanya `show`.
+    assert.throws(() => periksaPerintahBaca("show version; reboot"), PerintahDitolak);
+    assert.throws(() => periksaPerintahBaca("show version\nno vlan 1"), PerintahDitolak);
+    assert.throws(() => periksaPerintahBaca("show version | reboot"), PerintahDitolak);
+  });
+
+  test("kata pertama yang diperiksa, bukan pola di tengah kalimat", () => {
+    // "reboot show" tidak boleh lolos hanya karena memuat kata `show`.
+    assert.throws(() => periksaPerintahBaca("reboot show"), PerintahDitolak);
+  });
+});
+
+describe("tembok terpasang pada jalur kirim, bukan cuma tersedia", () => {
+  test("jalankanPerintah menolak perintah mengubah TANPA membuka soket", () => {
+    // Tes ini menjaga hal yang berbeda dari tes daftar putih di atas: bukan
+    // "apakah aturannya benar", melainkan "apakah aturannya DIPAKAI". Tanpa
+    // ini, menghapus satu baris pemanggil membuat seluruh tembok tidak
+    // berguna sementara semua tes tetap hijau.
+    //
+    // Host-nya sengaja alamat yang tidak bisa dirutekan: kalau penjaga hilang,
+    // fungsinya akan mencoba menyambung alih-alih melempar seketika.
+    assert.throws(
+      () =>
+        jalankanPerintah(
+          { host: "192.0.2.1", port: 23, user: "x", password: "y" },
+          ["show version", "reboot"]
+        ),
+      PerintahDitolak
+    );
+  });
+
+  test("perintah membaca tidak ditolak penjaga (gagalnya nanti di jaringan)", () => {
+    // Tidak melempar SEKETIKA — ia mengembalikan Promise yang gagal belakangan
+    // karena hostnya tidak ada. Yang diuji di sini: penjaga tidak menahannya.
+    const janji = jalankanPerintah(
+      { host: "192.0.2.1", port: 23, user: "x", password: "y", timeoutMs: 300 },
+      ["show version"]
+    );
+    assert.ok(janji instanceof Promise);
+    janji.catch(() => {});
   });
 });

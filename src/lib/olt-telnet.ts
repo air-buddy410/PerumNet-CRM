@@ -97,6 +97,49 @@ export function bacaKredensialOlt(credentialRef: string | null): { user: string;
   return { user: raw.slice(0, pisah), password: raw.slice(pisah + 1) };
 }
 
+// ── Tembok baca-saja ────────────────────────────────────────────
+//
+// Diminta pemilik jaringan, 17 Agustus 2026: **yang boleh berubah HANYA basis
+// data CRM kita.** OLT, SNMP, router, dan sistem lama seluruhnya baca-saja.
+//
+// Ini bukan disiplin, melainkan penolakan. Disiplin gagal pada hari seseorang
+// menyalin sebaris kode dan mengganti perintahnya; daftar putih menolak
+// perintah yang tidak dikenal SEBELUM ia menyentuh soket, dan tidak ada jalan
+// memanggil `jalankanPerintah` yang melewatinya.
+//
+// Yang diizinkan sengaja sempit: berpindah mode, melihat, dan bertanya. Satu
+// pun perintah yang mengubah keadaan — `no`, `set`, `save`, `write`, `copy`,
+// `reboot`, `ont`, `service-port` — tidak ada di sini, dan menambahkannya
+// harus jadi keputusan sadar yang terlihat di riwayat berkas ini.
+
+/** Kata pertama yang boleh dikirim ke konsol perangkat. */
+const PERINTAH_BOLEH = new Set(["show", "display", "enable", "configure", "exit", "quit", "end", "?"]);
+
+export class PerintahDitolak extends OltTelnetError {}
+
+/**
+ * Memastikan sebuah perintah hanya membaca.
+ *
+ * Diperiksa per baris, dan yang diperiksa KATA PERTAMANYA — bukan pencocokan
+ * pola di tengah kalimat, yang bisa diakali dengan menyisipkan `show` di
+ * belakang perintah yang mengubah.
+ */
+export function periksaPerintahBaca(perintah: string): void {
+  const bersih = perintah.trim();
+  if (!bersih) return;
+  // Titik koma dan baris baru memungkinkan dua perintah menumpang satu baris.
+  if (/[;\n\r|]/.test(bersih)) {
+    throw new PerintahDitolak(`Perintah "${bersih}" memuat pemisah — hanya satu perintah per baris.`);
+  }
+  const kata = bersih.split(/\s+/)[0].toLowerCase();
+  if (!PERINTAH_BOLEH.has(kata)) {
+    throw new PerintahDitolak(
+      `Perintah "${kata}" ditolak: sambungan ke OLT bersifat BACA-SAJA. ` +
+        `Yang diizinkan: ${[...PERINTAH_BOLEH].join(", ")}.`
+    );
+  }
+}
+
 export interface SesiOpsi {
   host: string;
   /** Dari `OltDevice.telnetPort`. HSGQ memakai 1024/1025, bukan 23. */
@@ -154,6 +197,10 @@ export function tandaGagalMasuk(teks: string): boolean {
  */
 export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<string> {
   const { host, port = 23, user, password, timeoutMs = 15_000 } = opsi;
+
+  // Diperiksa SEBELUM soket dibuka: perintah yang mengubah keadaan tidak
+  // pernah sampai ke perangkat, bahkan tidak membuat sambungan.
+  for (const p of perintah) periksaPerintahBaca(p);
 
   return new Promise((resolve, reject) => {
     const sock = new net.Socket();
