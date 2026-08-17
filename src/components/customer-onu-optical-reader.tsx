@@ -1,7 +1,7 @@
 "use client";
 
 import { Activity, Radio } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { bacaDayaOnuAction } from "@/app/(app)/crm/customers/actions";
 import { formatUiDateTime } from "@/components/ui-formatters";
 
@@ -34,19 +34,32 @@ export function CustomerOnuOpticalReader({
   const [state, formAction, pending] = useActionState(readOpticalPower, null);
   const hasPosition = Boolean(onuPosition?.trim());
 
+  // Muat sekali saat halaman dibuka — meniru ALUS yang menampilkan Rx/Tx
+  // langsung. SATU pelanggan = SATU sesi ke OLT, dan hanya sekali: `sudahMuat`
+  // menahannya dari menembak ulang tiap render. Membukanya berkali-kali di
+  // daftar tidak terjadi, sebab komponen ini hanya ada di halaman detail satu
+  // pelanggan. Tombol di bawah tetap untuk memuat ulang manual.
+  const sudahMuat = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (sudahMuat.current || !hasPosition) return;
+    sudahMuat.current = true;
+    formRef.current?.requestSubmit();
+  }, [hasPosition]);
+
   return (
     <div className="customer-onu-optical" aria-label="Pembacaan daya optik ONU">
       <div className="customer-onu-optical-heading">
         <div className="min-w-0">
           <strong><Radio aria-hidden="true" /> Daya optik ONU</strong>
-          <span>Pembacaan manual dari OLT. Hasilnya adalah snapshot saat tombol ditekan.</span>
+          <span>Dibaca otomatis dari OLT saat halaman dibuka. Muat ulang untuk snapshot terbaru.</span>
         </div>
         {hasPosition ? (
-          <form action={formAction} aria-busy={pending}>
+          <form ref={formRef} action={formAction} aria-busy={pending}>
             <input type="hidden" name="subscriptionId" value={subscriptionId} />
             <button type="submit" className="btn-secondary customer-onu-optical-button" disabled={pending}>
               <Activity aria-hidden="true" />
-              {pending ? "Membaca dari OLT…" : "Baca daya ONU"}
+              {pending ? "Membaca dari OLT…" : state ? "Muat ulang" : "Baca daya ONU"}
             </button>
           </form>
         ) : (

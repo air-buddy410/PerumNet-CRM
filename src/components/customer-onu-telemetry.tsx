@@ -1,5 +1,6 @@
 import type { PenilaianOnu } from "@/lib/onu-telemetry";
 import { CustomerOnuOpticalReader } from "@/components/customer-onu-optical-reader";
+import { CustomerOnuReboot } from "@/components/customer-onu-reboot";
 
 export interface CustomerOnuTelemetryItem {
   subscriptionId: string;
@@ -62,6 +63,7 @@ export function CustomerOnuTelemetry({ items }: { items: CustomerOnuTelemetryIte
                   </ul>
                 )}
                 <CustomerOnuOpticalReader subscriptionId={item.subscriptionId} onuPosition={item.onuPosition} />
+                <CustomerOnuReboot subscriptionId={item.subscriptionId} hasPosition={Boolean(item.onuPosition?.trim())} />
               </article>
             );
           })}

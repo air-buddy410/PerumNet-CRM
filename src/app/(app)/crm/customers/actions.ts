@@ -14,6 +14,7 @@ import { simpanBerkasPelanggan } from "@/lib/customer-dossier-service";
 import { BERKAS_PII } from "@/lib/customer-dossier";
 import { aturSandiPortal, keluarkanSemuaPerangkat } from "@/lib/portal-service";
 import { bacaDayaOnu } from "@/lib/onu-optical-service";
+import { bolehMintaReboot, AKSI_REBOOT_ONU, PESAN_ANTRE } from "@/lib/onu-reboot";
 
 export type AksiBerkas = { ok: true } | { ok: false; error: string };
 
@@ -244,4 +245,68 @@ export async function bacaDayaOnuAction(formData: FormData) {
     return { ok: false as const, sebab: "GALAT" as const, pesan: "Langganan tidak disebutkan." };
   }
   return bacaDayaOnu(subscriptionId);
+}
+
+/**
+ * Meminta reboot ONU pelanggan — DIANTREKAN, tidak dieksekusi (Fase 88b).
+ *
+ * Menulis satu baris NetworkAccessJob berstatus QUEUED ke basis data KITA, dan
+ * berhenti di situ. Tidak ada yang menyentuh perangkat: antrean ini tanpa
+ * eksekutor, dan eksekusinya menunggu cutover. Meniru tombol reboot ALUS tanpa
+ * melanggar mode baca-saja.
+ */
+export async function mintaRebootOnuAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.CTICKETS_VIEW);
+  const subscriptionId = String(formData.get("subscriptionId") ?? "");
+  if (!subscriptionId) return { ok: false as const, error: "Langganan tidak disebutkan." };
+
+  const sub = await db.subscription.findUnique({
+    where: { id: subscriptionId },
+    select: {
+      serviceNumber: true,
+      onuPosition: true,
+      odpPort: {
+        select: {
+          odp: { select: { ponPort: { select: { olt: { select: { networkDeviceId: true } } } } } },
+        },
+      },
+    },
+  });
+  if (!sub) return { ok: false as const, error: "Langganan tidak ditemukan." };
+
+  const antreanAda = await db.networkAccessJob.findFirst({
+    where: { subscriptionId, action: AKSI_REBOOT_ONU, status: "QUEUED" },
+    select: { id: true },
+  });
+
+  const izin = bolehMintaReboot({
+    adaPosisiOnu: Boolean(sub.onuPosition?.trim()),
+    sudahAdaAntrean: Boolean(antreanAda),
+  });
+  if (!izin.boleh) return { ok: false as const, error: izin.alasan };
+
+  await db.networkAccessJob.create({
+    data: {
+      subscriptionId,
+      // Perangkatnya OLT-nya, bukan router. Null bila ODP belum tertaut.
+      routerId: sub.odpPort?.odp.ponPort?.olt.networkDeviceId ?? null,
+      action: AKSI_REBOOT_ONU,
+      // payload menyimpan posisinya apa adanya — yang kelak diketik eksekutor.
+      payload: JSON.stringify({ onuPosition: sub.onuPosition, diminta: "reboot" }),
+      status: "QUEUED",
+    },
+  });
+
+  await logAudit({
+    userId: user.id,
+    action: "ONU_REBOOT_ENQUEUE",
+    module: "noc",
+    entityType: "Subscription",
+    entityId: subscriptionId,
+    description:
+      `Permintaan reboot ONU ${sub.serviceNumber} (${sub.onuPosition ?? "-"}) diantrekan. ` +
+      `TIDAK dieksekusi — menunggu cutover.`,
+  });
+
+  return { ok: true as const, pesan: PESAN_ANTRE };
 }
