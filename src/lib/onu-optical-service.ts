@@ -30,6 +30,8 @@ import {
   bacaJawabanRxZte,
   perintahRxHsgq,
   bacaJawabanRxHsgq,
+  perintahJarakZte,
+  bacaJarakZte,
   nilaiMutu,
   keteranganMutu,
   type MutuSinyal,
@@ -47,6 +49,12 @@ export interface HasilDayaOnu {
   keterangan: string;
   /** Nama ONU menurut perangkat — pembanding pemetaan, bukan hiasan. */
   namaDiPerangkat: string | null;
+  /**
+   * Jarak ONU dari OLT dalam meter. NULL berarti perangkatnya tidak memberi —
+   * hanya CLI ZTE yang memuatnya; HSGQ tidak menyediakan, dan C300 menunggu
+   * kredensial CLI-nya sendiri.
+   */
+  jarakMeter: number | null;
   dibacaPada: Date;
 }
 
@@ -115,7 +123,7 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
   // Seluruh jalur CLI melewati daftar putih perintah di `olt-telnet.ts`:
   // hanya membaca, dan perintah pengubah ditolak sebelum menyentuh soket.
   const namaOlt = olt.name ?? olt.networkDevice.hostname;
-  const jadi = (rx: BacaanRx, namaDiPerangkat: string | null): HasilDayaOnu | GagalDayaOnu => {
+  const jadi = (rx: BacaanRx, namaDiPerangkat: string | null, jarakMeter: number | null = null): HasilDayaOnu | GagalDayaOnu => {
     if (rx.dBm === null) {
       return { ok: false, sebab: "TAK_TERBACA", pesan: rx.alasan ?? "Perangkat tidak memberikan nilai." };
     }
@@ -129,6 +137,7 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
       mutu,
       keterangan: keteranganMutu(mutu),
       namaDiPerangkat,
+      jarakMeter,
       dibacaPada: new Date(),
     };
   };
@@ -165,7 +174,9 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
 
   const ports = [olt.telnetPort ?? 23, 23];
   const zte = olt.vendor === "ZTE";
-  const perintah = zte ? [perintahRxZte(posisi)] : perintahRxHsgq(posisi);
+  // Pada ZTE, jarak ikut dibaca DALAM SESI YANG SAMA — dua perintah satu
+  // login, bukan dua login. Sesi konsol OLT terbatas jumlahnya.
+  const perintah = zte ? [perintahRxZte(posisi), perintahJarakZte(posisi)] : perintahRxHsgq(posisi);
 
   try {
     const { keluaran } = await jalankanPerintahMultiPort(
@@ -173,7 +184,11 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
       ports,
       perintah
     );
-    return jadi(zte ? bacaJawabanRxZte(keluaran) : bacaJawabanRxHsgq(keluaran), null);
+    return jadi(
+      zte ? bacaJawabanRxZte(keluaran) : bacaJawabanRxHsgq(keluaran),
+      null,
+      zte ? bacaJarakZte(keluaran) : null
+    );
   } catch (e) {
     const pesan = e instanceof OltTelnetError ? e.message : String(e);
     return { ok: false, sebab: "GALAT", pesan };

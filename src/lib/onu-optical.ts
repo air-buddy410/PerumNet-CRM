@@ -186,3 +186,39 @@ export function bacaJawabanRxHsgq(keluaran: string): BacaanRx {
   }
   return sahkanDbm(Number(m[1]));
 }
+
+// ── Jarak ONU (Fase 88b lanjutan kedua) ─────────────────────────
+//
+// Peta kemampuannya, dari penjelajahan 17 Agustus 2026 malam:
+//
+//   ZTE C600 : `show gpon onu detail-info` memuat `ONU Distance: 811m` ✓
+//   ZTE C300 : perintah yang sama ada, tetapi butuh kredensial CLI sendiri
+//              (OLT_PSG_CRED) — tabel SNMP-nya TIDAK memuat jarak
+//   HSGQ     : tidak menyediakan jarak sama sekali — konteks gpon-nya sudah
+//              disisir penuh (ont-info, ont-optical, optical-state)
+//
+// Jadi jarak bersifat OPSIONAL pada hasil: null berarti perangkatnya tidak
+// memberi, bukan pembacaannya gagal.
+
+/** Perintah detail ONU pada ZTE — satu-satunya yang memuat jarak. */
+export function perintahJarakZte(p: PosisiOnu): string {
+  return `show gpon onu detail-info gpon_onu-1/${p.slot}/${p.port}:${p.index}`;
+}
+
+/** Batas jarak yang masuk akal: GPON kelas B+ menjangkau ±20 km; 60 km sudah mustahil. */
+const JARAK_MAKS_M = 60_000;
+
+/**
+ * Membaca `ONU Distance:         811m` dari jawaban detail-info.
+ *
+ * Nol DITERIMA di sini — beda dari daya. ONU yang baru menyala bisa terukur
+ * 0 m sebelum ranging selesai, dan itu keadaan sungguhan yang layak tampil,
+ * bukan sentinel.
+ */
+export function bacaJarakZte(keluaran: string): number | null {
+  const m = /ONU\s*Distance\s*:\s*(\d+)\s*m/i.exec(keluaran);
+  if (!m) return null;
+  const meter = Number(m[1]);
+  if (!Number.isFinite(meter) || meter < 0 || meter > JARAK_MAKS_M) return null;
+  return meter;
+}

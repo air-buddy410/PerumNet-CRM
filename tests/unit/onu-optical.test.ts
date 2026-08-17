@@ -110,3 +110,50 @@ describe("jalur CLI HSGQ", () => {
     assert.equal(h.dBm, null);
   });
 });
+
+// ── Jarak ONU — jawaban C600 sungguhan, 17 Agustus 2026 malam ───
+
+import { perintahJarakZte, bacaJarakZte } from "@/lib/onu-optical";
+
+const JAWAB_DETAIL_C600 =
+  "show gpon onu detail-info gpon_onu-1/17/3:2\r\n\r\n" +
+  "ONU interface:          gpon_onu-1/17/3:2\r\n" +
+  "  Type:                 ALL-ONT\r\n" +
+  "  Phase state:          working\r\n" +
+  "  Serial number:        ZTEGD06572BC\r\n" +
+  "  ONU Distance:         811m\r\n" +
+  "  Online Duration:      2h 3m\r\nZXAN#";
+
+describe("jarak ONU (ZTE)", () => {
+  test("perintahnya detail-info pada posisi yang sama", () => {
+    assert.equal(perintahJarakZte({ slot: 17, port: 3, index: 2 }), "show gpon onu detail-info gpon_onu-1/17/3:2");
+  });
+
+  test("jawaban sungguhan terbaca — 811m", () => {
+    assert.equal(bacaJarakZte(JAWAB_DETAIL_C600), 811);
+  });
+
+  test("NOL meter DITERIMA — beda dari daya", () => {
+    // ONU yang baru menyala bisa terukur 0 m sebelum ranging selesai. Itu
+    // keadaan sungguhan, bukan sentinel — menolaknya menyembunyikan ONU yang
+    // justru sedang menarik perhatian.
+    assert.equal(bacaJarakZte("  ONU Distance:         0m\r\n"), 0);
+  });
+
+  test("tanpa baris Distance menghasilkan null, bukan nol", () => {
+    assert.equal(bacaJarakZte("Phase state: working\r\nZXAN#"), null);
+  });
+
+  test("jarak mustahil dibuang", () => {
+    assert.equal(bacaJarakZte("ONU Distance: 99999999m"), null);
+  });
+
+  test("transkrip dua perintah: RX dan jarak terbaca dari sesi yang sama", () => {
+    // Klien pernah me-reset keluaran tiap perintah dan hanya mengembalikan
+    // jawaban terakhir — RX-nya terbuang diam-diam. Tes ini menjaga bentuk
+    // transkrip gabungan tetap bisa diurai kedua parser.
+    const transkrip = JAWAB_C600 + "\r\n" + JAWAB_DETAIL_C600;
+    assert.equal(bacaJawabanRxZte(transkrip).dBm, -18.29);
+    assert.equal(bacaJarakZte(transkrip), 811);
+  });
+});

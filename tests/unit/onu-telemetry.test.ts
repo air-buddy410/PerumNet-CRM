@@ -43,6 +43,6 @@ describe("nilaiOnu", () => {
     const h = nilaiOnu({ sesi: "ONLINE", portPon: "up", tetanggaPadam: 0, tetangga: 20 });
     assert.equal(h.keadaan, "NYALA");
     assert.ok(h.belumDiketahui.some((x) => /Baca daya optik/.test(x)));
-    assert.ok(h.belumDiketahui.some((x) => /Jarak ONU.*belum bisa dibaca/.test(x)));
+    assert.ok(h.belumDiketahui.some((x) => /Jarak ONU.*ikut terbaca.*HSGQ tidak menyediakannya/.test(x)));
   });
 });

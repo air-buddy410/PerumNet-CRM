@@ -154,6 +154,21 @@ export interface SesiOpsi {
 }
 
 /**
+ * Menjawab penomoran halaman konsol.
+ *
+ * ZTE memenggal keluaran panjang dengan ` --More--` dan menunggu tombol.
+ * Tanpa jawaban, prompt tidak pernah datang dan sesi mati kehabisan waktu —
+ * bukan karena perangkatnya lambat, melainkan karena ia sopan menunggu kita.
+ * Spasi meminta halaman berikutnya; penandanya sendiri dibuang dari keluaran
+ * supaya parser tidak menemukannya di tengah nilai.
+ */
+export const TANDA_MORE = /[ \t]*--More--[ \t]*/g;
+
+export function adaMore(teks: string): boolean {
+  return /--More--\s*$/.test(teks);
+}
+
+/**
  * Apakah teks ini berakhir pada prompt konsol.
  *
  * Baris log yang diselipkan HSGQ tanpa diminta dibuang lebih dulu — kalau
@@ -212,6 +227,13 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
     let tahap: "USER" | "PASS" | "MASUK" | "PERINTAH" | "SELESAI" = "USER";
     let sisa = [...perintah];
     let keluaran = "";
+    /**
+     * Seluruh jawaban sesi, lintas perintah. `keluaran` di-reset tiap kali
+     * perintah baru dikirim — itu perlu untuk deteksi prompt — tetapi pemanggil
+     * berhak atas semuanya: sesi dua-perintah yang hanya mengembalikan jawaban
+     * terakhir membuang jawaban pertama diam-diam.
+     */
+    let transkrip = "";
     let beres = false;
 
     const tutup = (err?: Error, hasil?: string) => {
@@ -260,6 +282,14 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
       buffer += Buffer.from(teks).toString("utf8");
       if (tahap !== "USER" && tahap !== "PASS") keluaran += Buffer.from(teks).toString("utf8");
 
+      // Halaman berikutnya diminta SEBELUM deteksi prompt — selama --More--
+      // menggantung, prompt memang tidak akan pernah muncul.
+      if ((tahap === "MASUK" || tahap === "PERINTAH") && adaMore(keluaran)) {
+        keluaran = keluaran.replace(TANDA_MORE, "\n");
+        sock.write(" ");
+        return;
+      }
+
       const bawah = buffer.toLowerCase();
 
       if (tahap === "USER" && /(username|login)\s*:/.test(bawah)) {
@@ -291,7 +321,7 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
             // bukan sebaliknya. Menunggu jawaban atas `exit` berarti menunggu
             // RST yang akan dilaporkan sebagai kegagalan.
             tahap = "SELESAI";
-            tutup(undefined, "MASUK");
+            tutup(undefined, transkrip || "MASUK");
             try { sock.write("exit\r\n"); } catch { /* sesi sudah lepas */ }
             return;
           }
@@ -306,13 +336,14 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
         if (adaPrompt(keluaran)) {
           const berikut = sisa.shift();
           if (berikut !== undefined) {
+            transkrip += keluaran;
             keluaran = "";
             sock.write(`${berikut}\r\n`);
           } else {
             // Prompt terlihat lagi berarti jawaban perintah terakhir sudah
             // lengkap. Sama seperti di atas: selesaikan dulu, baru berpamitan.
             tahap = "SELESAI";
-            const hasil = keluaran;
+            const hasil = transkrip + keluaran;
             tutup(undefined, hasil);
             try { sock.write("exit\r\n"); } catch { /* sesi sudah lepas */ }
           }

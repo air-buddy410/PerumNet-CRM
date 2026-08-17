@@ -2821,3 +2821,16 @@ disiapkan di `pesan`:
    ONU yang benar.
 5. `dibacaPada` selalu tampil — pembacaan itu potret sesaat, bukan status
    yang terus segar.
+
+### §47 tambahan — jarak ONU ikut pada jawaban yang sama
+
+`bacaDayaOnuAction` kini juga mengembalikan **`jarakMeter: number | null`** —
+tanpa perubahan lain pada kontraknya.
+
+- Terisi untuk **OLT ZTE C600** (dibaca dalam sesi CLI yang sama).
+- `null` berarti perangkatnya tidak memberi: **HSGQ tidak menyediakan jarak
+  sama sekali** (konteks konsolnya sudah disisir penuh), dan **C300 menunggu
+  kredensial CLI-nya** (`OLT_PSG_CRED`) — SNMP-nya tidak memuat jarak.
+- **Nol meter itu nilai sah**, bukan kosong: ONU yang baru menyala bisa
+  terukur 0 m sebelum ranging selesai. Tampilkan "0 m", jangan "—".
+- Tampilkan sebagai keterangan kecil di samping dBm; null → "—".

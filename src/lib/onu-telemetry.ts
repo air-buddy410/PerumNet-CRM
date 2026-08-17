@@ -68,7 +68,7 @@ export function nilaiOnu(b: BahanOnu): PenilaianOnu {
   // di satu pun vendor.
   const belumDiketahui = [
     "Daya terima ONU (dBm) tidak tampil otomatis — baca dengan tombol \"Baca daya optik\" di bawah.",
-    "Jarak ONU dari OLT — belum bisa dibaca.",
+    "Jarak ONU dari OLT — ikut terbaca tombol yang sama pada OLT ZTE; HSGQ tidak menyediakannya.",
   ];
 
   if (b.portPon === "down") {

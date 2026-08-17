@@ -19,7 +19,8 @@ const jumlah = Number(process.argv[3] ?? 10);
 async function satu(subId: string) {
   const h = await bacaDayaOnu(subId);
   if (!h.ok) { console.log(`  ✗ [${h.sebab}] ${h.pesan}`); return null; }
-  console.log(`  ${h.serviceNumber.padEnd(14)} ${h.posisi.padEnd(10)} ${String(h.dBm).padStart(7)} dBm  ${h.mutu.padEnd(8)} nama-di-perangkat: ${h.namaDiPerangkat ?? "—"}`);
+  const jarak = h.jarakMeter === null ? "—" : `${h.jarakMeter}m`;
+  console.log(`  ${h.serviceNumber.padEnd(14)} ${h.posisi.padEnd(10)} ${String(h.dBm).padStart(7)} dBm  ${h.mutu.padEnd(8)} jarak ${jarak.padEnd(7)} nama: ${h.namaDiPerangkat ?? "—"}`);
   return h;
 }
 
