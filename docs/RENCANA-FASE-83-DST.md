@@ -363,3 +363,50 @@ basis data** (pola Fase 13).
 **Membaca 1.698 ONU lewat CLI berarti membuka sesi ke perangkat produksi
 berulang kali.** Harus dibatasi lajunya dan dijadwalkan jarang — OLT yang sibuk
 melayani permintaan pembacaan adalah OLT yang tidak sedang melayani pelanggan.
+
+---
+
+## Fase 91 — Brankas kredensial perangkat  ✅ BACKEND SELESAI 17 Agustus 2026
+
+Diminta pemilik jaringan: *"fitur untuk login telnet / ssh untuk device juga
+dong, biar bisa auto add lewat crm, ga nambah file env supaya NOC ku gampang
+add device nanti, jadi team IT ga repot ngoding lagi."*
+
+Masalahnya nyata. Pola Fase 13 menyimpan **nama** env var di
+`OltDevice.credentialRef` dan nilainya di `.env`. Aman, tetapi berarti setiap
+perangkat baru menuntut orang menyunting berkas di server lalu menyalakan ulang
+container — NOC tidak bisa, jadi tim IT yang dipanggil, setiap kali.
+
+### Yang dibangun
+
+Sandi disimpan di basis data dalam keadaan **tersegel AES-256-GCM**; kuncinya
+satu-satunya ada di `DEVICE_CRED_KEY`. NOC menambah perangkat dari layar; IT
+cukup memasang satu kunci sekali seumur sistem.
+
+- `src/lib/rahasia-perangkat.ts` — segel/buka, IV acak per catatan, tag GCM
+  menangkap catatan yang diutak-atik langsung di basis data.
+- `src/lib/kredensial-perangkat-service.ts` — **brankas dibaca dulu, env var
+  jadi cadangan.** Lima OLT yang sudah berjalan tidak perlu disentuh, dan
+  isian NOC langsung berlaku tanpa menunggu siapa pun.
+- `DeviceCredential` di skema, `onDelete: Cascade` ke `NetworkDevice`.
+- Rute `/noc/devices/[id]/kredensial` — kerangka berfungsi; tampilan ke Luna
+  lewat HANDOFF §50.
+- `scripts/_pindah-kredensial-ke-brankas.ts` — memindahkan `OLT_*_CRED` yang
+  ada. Bawaannya lapor-saja.
+
+### Keputusan yang menahan diri
+
+- **Uji kredensial hanya MASUK, tidak menjalankan perintah apa pun.** Sampai di
+  prompt sudah membuktikan kredensialnya benar, dan itu menghapus seluruh kelas
+  galat "perintah tidak dikenal" dari jalur diagnosis. Dinding baca-saja utuh.
+- **Sandi tidak pernah kembali ke layar.** `loadKredensial` mengembalikan
+  metadata saja. Kotak sandi di form selalu kosong — bukan disembunyikan,
+  memang tidak ada nilainya untuk dikirim.
+- **`DEVICE_CRED_KEY` opsional, bukan wajib.** Tanpa kunci aplikasi tetap
+  menyala dan OLT lama tetap jalan; hanya penambahan baru yang tertahan.
+
+### Yang tersisa
+
+Menunggu produksi: `prisma db push`, lalu skrip pindah dijalankan. Sesudah itu
+baris `OLT_*_CRED` boleh dihapus dari `.env` satu per satu — hanya setelah
+tombol uji perangkat itu menjawab hijau.

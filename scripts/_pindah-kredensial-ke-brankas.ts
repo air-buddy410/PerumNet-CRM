@@ -1,5 +1,5 @@
 /**
- * Fase 89 — memindahkan kredensial OLT dari env var ke brankas basis data.
+ * Fase 91 — memindahkan kredensial OLT dari env var ke brankas basis data.
  *
  * Dijalankan SEKALI di produksi, setelah `DEVICE_CRED_KEY` terpasang dan tabel
  * `DeviceCredential` sudah dibuat:

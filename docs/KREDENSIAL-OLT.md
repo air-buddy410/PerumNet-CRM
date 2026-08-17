@@ -94,9 +94,9 @@ dulu, pembacaan menyusul — bukan sebaliknya.
 
 ---
 
-## DEVICE_CRED_KEY — kunci brankas (Fase 89)
+## DEVICE_CRED_KEY — kunci brankas (Fase 91)
 
-Sejak Fase 89, perangkat baru **tidak lagi perlu variabel env sendiri**. NOC
+Sejak Fase 91, perangkat baru **tidak lagi perlu variabel env sendiri**. NOC
 mengisi telnet/SSH dari layar; sandinya disegel AES-256-GCM dan disimpan di
 tabel `DeviceCredential`. Yang ada di env tinggal **satu** kunci utama.
 

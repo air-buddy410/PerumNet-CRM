@@ -1,4 +1,4 @@
-// ── Membaca & menyimpan kredensial perangkat (Fase 89) ──────────
+// ── Membaca & menyimpan kredensial perangkat (Fase 91) ──────────
 //
 // Aturan kriptonya ada di `rahasia-perangkat.ts` dan sudah diuji tanpa basis
 // data.

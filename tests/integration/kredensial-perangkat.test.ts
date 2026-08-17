@@ -10,7 +10,7 @@ import {
 } from "@/lib/kredensial-perangkat-service";
 import { ENV_KUNCI } from "@/lib/rahasia-perangkat";
 
-// Fase 89 — NOC menambah perangkat dari layar, bukan dari berkas .env.
+// Fase 91 — NOC menambah perangkat dari layar, bukan dari berkas .env.
 //
 // Aturan kriptonya sudah diuji tanpa basis data di `tests/unit/rahasia-perangkat`.
 // Yang diuji DI SINI adalah hal-hal yang hanya muncul begitu basis data ikut
@@ -29,7 +29,7 @@ async function perangkat(label: string) {
   });
 }
 
-describe("kredensial perangkat (Fase 89)", () => {
+describe("kredensial perangkat (Fase 91)", () => {
   let userId: string;
   let kunciAsli: string | undefined;
 
@@ -142,7 +142,7 @@ describe("kredensial perangkat (Fase 89)", () => {
       assert.equal((await loadKredensial(d.id)).sumber, "ENV");
 
       // Sesudah NOC mengisi dari layar: brankas yang dipakai, tanpa siapa pun
-      // menyentuh .env. Ini inti Fase 89.
+      // menyentuh .env. Ini inti Fase 91.
       await simpanKredensial(
         d.id,
         { protokol: "TELNET", port: null, username: "baru", sandi: "sandibaru" },

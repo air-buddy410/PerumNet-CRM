@@ -14,7 +14,7 @@ import {
 
 export const metadata = { title: "Kredensial Perangkat" };
 
-// Fase 89 — layar tempat NOC mengisi login telnet/SSH sendiri.
+// Fase 91 — layar tempat NOC mengisi login telnet/SSH sendiri.
 //
 // Halaman ini SENGAJA minimal: aturan bisnisnya ada di service, tampilannya
 // milik Luna (§50). Yang penting di sini adalah perilakunya, dan satu hal yang
