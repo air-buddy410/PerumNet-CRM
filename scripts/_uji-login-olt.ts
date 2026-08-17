@@ -17,7 +17,7 @@ const hanya = process.argv[2];
 
 async function main() {
   const olts = await db.oltDevice.findMany({
-    select: { name: true, vendor: true, model: true, credentialRef: true, networkDevice: { select: { hostname: true } } },
+    select: { name: true, vendor: true, model: true, credentialRef: true, telnetPort: true, networkDevice: { select: { hostname: true } } },
     orderBy: { name: "asc" },
   });
 
@@ -37,13 +37,13 @@ async function main() {
       continue;
     }
 
-    // ZTE: `show version` ada di semua model. HSGQ berbeda, jadi dipakai
-    // perintah yang paling netral dan biarkan keluarannya yang bicara.
-    const perintah = o.vendor === "ZTE" ? ["show version"] : ["?"];
+    // TANPA perintah apa pun: sampai di prompt SUDAH membuktikan masuknya.
+    // Versi pertama menjalankan `show version`, yang ternyata tidak dikenal
+    // C600 — dan galat perintahnya salah dibaca sebagai kredensial ditolak.
+    const port = o.telnetPort ?? 23;
     try {
-      const keluaran = await jalankanPerintah({ host, user: kred.user, password: kred.password }, perintah);
-      const cuplik = keluaran.replace(/\s+/g, " ").trim().slice(0, 70);
-      console.log(`  ✓ ${label} MASUK sebagai "${kred.user}" — jawaban: ${cuplik || "(kosong)"}`);
+      await jalankanPerintah({ host, port, user: kred.user, password: kred.password }, []);
+      console.log(`  ✓ ${label} MASUK sebagai "${kred.user}" lewat port ${port}`);
     } catch (e) {
       const pesan = e instanceof OltTelnetError ? e.message : String(e);
       console.log(`  ✗ ${label} ${pesan}`);

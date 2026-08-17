@@ -14,6 +14,25 @@
 //     hidup bersamaan — biasanya lima. Sesi yang bocor karena galat akan
 //     menumpuk sampai teknisi sungguhan tidak bisa masuk ke perangkatnya
 //     sendiri, dan sebabnya sulit ditebak dari luar.
+//
+// TIGA HAL YANG DIPELAJARI DARI PERANGKAT SUNGGUHAN, 17 Agustus 2026:
+//
+//  a. **Kegagalan masuk hanya bisa disimpulkan SEBELUM prompt pertama.**
+//     Versi pertama memeriksa pola galat sepanjang sesi, dan `%Error 140303`
+//     dari sebuah perintah yang salah ketik dilaporkan sebagai "kredensial
+//     ditolak" — diagnosis yang membuat orang memeriksa password yang
+//     sebenarnya sudah benar. Begitu prompt terlihat, kita SUDAH masuk;
+//     apa pun sesudahnya adalah jawaban perintah.
+//
+//  b. **Port telnet BUKAN selalu 23.** HSGQ G008 melayaninya di 1024/1025 —
+//     nilai yang sudah tersimpan di `OltDevice.telnetPort` sejak Fase 81.
+//     Memaku 23 membuat dua OLT dijawab "ECONNREFUSED", yang terbaca seperti
+//     perangkat mati padahal cuma salah pintu.
+//
+//  c. **HSGQ mengirim baris log tanpa diminta.** Di tengah sesi ia menyelipkan
+//     `[2026/08/17 11:34:19] Info: ONU ... authorization success`. Prompt
+//     karena itu tidak selalu berada di ujung buffer, dan deteksi yang
+//     menuntut demikian akan menunggu selamanya.
 
 import net from "node:net";
 
@@ -41,10 +60,31 @@ export function bacaKredensialOlt(credentialRef: string | null): { user: string;
 
 export interface SesiOpsi {
   host: string;
+  /** Dari `OltDevice.telnetPort`. HSGQ memakai 1024/1025, bukan 23. */
   port?: number;
   user: string;
   password: string;
   timeoutMs?: number;
+}
+
+/**
+ * Apakah teks ini berakhir pada prompt konsol.
+ *
+ * Baris log yang diselipkan HSGQ tanpa diminta dibuang lebih dulu — kalau
+ * tidak, prompt tidak pernah berada di ujung dan sesi menggantung sampai
+ * kehabisan waktu.
+ */
+export function adaPrompt(teks: string): boolean {
+  const bersih = teks
+    .split(/\r?\n/)
+    .filter((b) => !/^\s*\[\d{4}[/-]\d{2}[/-]\d{2}/.test(b))
+    .join("\n");
+  return /[#>]\s*$/.test(bersih);
+}
+
+/** Pola yang HANYA berarti kegagalan masuk — diperiksa sebelum prompt pertama. */
+export function tandaGagalMasuk(teks: string): boolean {
+  return /(login|authentication)\s*(failed|incorrect|error)|access denied|permission denied|bad password/i.test(teks);
 }
 
 /**
@@ -61,7 +101,7 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
   return new Promise((resolve, reject) => {
     const sock = new net.Socket();
     let buffer = "";
-    let tahap: "USER" | "PASS" | "PERINTAH" | "SELESAI" = "USER";
+    let tahap: "USER" | "PASS" | "MASUK" | "PERINTAH" | "SELESAI" = "USER";
     let sisa = [...perintah];
     let keluaran = "";
     let beres = false;
@@ -107,7 +147,7 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
       if (balas.length) sock.write(Buffer.from(balas));
 
       buffer += Buffer.from(teks).toString("utf8");
-      if (tahap === "PERINTAH" || tahap === "SELESAI") keluaran += Buffer.from(teks).toString("utf8");
+      if (tahap !== "USER" && tahap !== "PASS") keluaran += Buffer.from(teks).toString("utf8");
 
       const bawah = buffer.toLowerCase();
 
@@ -118,17 +158,38 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
         return;
       }
       if (tahap === "PASS" && /password\s*:/.test(bawah)) {
-        tahap = "PERINTAH";
+        tahap = "MASUK";
         buffer = "";
+        keluaran = "";
         sock.write(`${password}\r\n`);
         return;
       }
-      if (tahap === "PERINTAH") {
-        if (/(login|authentication)\s*(failed|incorrect)|%\s*error|access denied/i.test(keluaran)) {
+
+      // Sebelum prompt pertama: satu-satunya tempat kegagalan masuk bisa
+      // disimpulkan. Sesudahnya, galat apa pun milik perintah — bukan sandi.
+      if (tahap === "MASUK") {
+        if (tandaGagalMasuk(keluaran)) {
           return tutup(new OltTelnetError(`Kredensial ditolak oleh ${host}. Periksa isi env var-nya.`));
         }
-        // Prompt konsol: berakhiran # atau >
-        if (/[#>]\s*$/.test(keluaran)) {
+        if (adaPrompt(keluaran)) {
+          tahap = "PERINTAH";
+          keluaran = "";
+          if (sisa.length === 0) {
+            // Tidak ada perintah: masuknya sendiri yang diuji.
+            tahap = "SELESAI";
+            sock.write("exit\r\n");
+            setTimeout(() => tutup(undefined, "MASUK"), 200);
+            return;
+          }
+          const pertama = sisa.shift()!;
+          sock.write(`${pertama}\r\n`);
+          return;
+        }
+        return;
+      }
+
+      if (tahap === "PERINTAH") {
+        if (adaPrompt(keluaran)) {
           const berikut = sisa.shift();
           if (berikut !== undefined) {
             keluaran = "";
