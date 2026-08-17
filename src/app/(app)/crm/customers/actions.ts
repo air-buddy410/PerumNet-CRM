@@ -13,6 +13,7 @@ import { bertopeng } from "@/lib/customer-pii";
 import { simpanBerkasPelanggan } from "@/lib/customer-dossier-service";
 import { BERKAS_PII } from "@/lib/customer-dossier";
 import { aturSandiPortal, keluarkanSemuaPerangkat } from "@/lib/portal-service";
+import { bacaDayaOnu } from "@/lib/onu-optical-service";
 
 export type AksiBerkas = { ok: true } | { ok: false; error: string };
 
@@ -228,4 +229,19 @@ export async function keluarkanSemuaPerangkatAction(formData: FormData): Promise
   await keluarkanSemuaPerangkat(customerId, user.id);
   revalidatePath(`/crm/customers/${customerId}`);
   return { ok: true };
+}
+
+/**
+ * Membaca daya optik ONU seorang pelanggan, langsung dari OLT-nya (Fase 88b).
+ *
+ * SATU klik = SATU SNMP GET — tidak ada penyapuan massal. Hanya membaca;
+ * aksi tulis ke perangkat tetap terlarang sampai cutover.
+ */
+export async function bacaDayaOnuAction(formData: FormData) {
+  await requirePermission(PERMISSIONS.CUSTOMERS_VIEW);
+  const subscriptionId = String(formData.get("subscriptionId") ?? "");
+  if (!subscriptionId) {
+    return { ok: false as const, sebab: "GALAT" as const, pesan: "Langganan tidak disebutkan." };
+  }
+  return bacaDayaOnu(subscriptionId);
 }
