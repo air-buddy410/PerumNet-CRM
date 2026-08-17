@@ -100,3 +100,26 @@ describe("tandaGagalMasuk", () => {
     assert.equal(tandaGagalMasuk("Access denied"), true);
   });
 });
+
+describe("tandaGagalMasuk — kalimat vendor yang sungguhan", () => {
+  test("ZTE C600: '% Username or password error' dikenali", () => {
+    // Kalimat ini tidak memuat "failed" maupun "denied". Daftar kata kunci
+    // saja melewatkannya, dan sesi menggantung sampai kehabisan waktu — yang
+    // terbaca seperti perangkat mati, padahal sandinya yang salah.
+    assert.equal(tandaGagalMasuk("\r\n% Username or password error\r\nUsername:"), true);
+  });
+
+  test("kembali ke prompt Username = penolakan, apa pun bahasanya", () => {
+    // Tanda yang tidak bergantung vendor: sesudah sandi dikirim, satu-satunya
+    // alasan perangkat menanyakan nama lagi adalah karena yang tadi ditolak.
+    assert.equal(tandaGagalMasuk("\r\nUsername:"), true);
+    assert.equal(tandaGagalMasuk("login: "), true);
+  });
+
+  test("prompt Username SEBELUM sandi dikirim tidak ikut terjaring", () => {
+    // Pemeriksaan ini hanya berjalan pada tahap MASUK — sesudah sandi
+    // terkirim — jadi banner awal tidak pernah sampai ke sini.
+    assert.equal(tandaGagalMasuk(BANNER_C600), false);
+    assert.equal(tandaGagalMasuk(BANNER_HSGQ), false);
+  });
+});

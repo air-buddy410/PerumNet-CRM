@@ -121,9 +121,27 @@ export function adaPrompt(teks: string): boolean {
   return /[#>]\s*$/.test(bersih);
 }
 
-/** Pola yang HANYA berarti kegagalan masuk — diperiksa sebelum prompt pertama. */
+/**
+ * Pola yang HANYA berarti kegagalan masuk — diperiksa sebelum prompt pertama.
+ *
+ * Dua jenis tanda, dan yang kedua yang paling bisa diandalkan:
+ *
+ *  1. Kalimat galat. Tiap vendor menulisnya lain: ZTE C600 memakai
+ *     `% Username or password error`, yang tidak memuat kata "failed" maupun
+ *     "denied" sama sekali — daftar kata kunci saja akan melewatkannya, dan
+ *     sesi menggantung sampai kehabisan waktu alih-alih menyebut sebabnya.
+ *
+ *  2. **Perangkat menanyakan Username LAGI.** Ini tanda yang tidak bergantung
+ *     bahasa maupun vendor: setelah sandi dikirim, satu-satunya alasan ia
+ *     kembali ke prompt nama adalah karena yang tadi ditolak.
+ */
 export function tandaGagalMasuk(teks: string): boolean {
-  return /(login|authentication)\s*(failed|incorrect|error)|access denied|permission denied|bad password/i.test(teks);
+  if (/(login|authentication)\s*(failed|incorrect|error)/i.test(teks)) return true;
+  if (/access denied|permission denied|bad password/i.test(teks)) return true;
+  if (/username or password/i.test(teks)) return true;
+  // Kembali ke prompt nama = sandi tadi ditolak.
+  if (/(username|login)\s*:\s*$/i.test(teks.trimEnd())) return true;
+  return false;
 }
 
 /**
