@@ -437,3 +437,37 @@ Posisi ONU         1.698      baru
 ODP bertaut PON      549
 Port ODP terisi    1.687      (+3)
 ```
+
+## Gladi penagihan menangkap dua hal yang tidak menghasilkan galat (17 Agustus 2026)
+
+Keduanya jenis kekeliruan yang paling sulit ditemukan: **tidak ada yang gagal,
+tidak ada pesan galat, dan layarnya terlihat normal.**
+
+**1. Kolom yang keliru.** Gladi pertama menghitung 3 tagihan dari 1.594
+pelanggan aktif. Sebabnya `Subscription.activatedAt` — kosong untuk seluruh
+1.711 hasil impor, sebab impor mengisi profil tagihannya, bukan tanggal
+aktifnya. Yang menentukan tagihan `BillingProfile.billingStartAt`. Kedua kolom
+bertipe sama dan tes lulus dengan keduanya.
+
+**2. Impor tanpa profil tagihan.** Empat pelanggan yang diimpor hari itu punya
+langganan lengkap tetapi tanpa `BillingProfile` — artinya tidak akan pernah
+ditagih, tanpa satu pun tanda. Sudah dibuatkan, dan peringatannya dipasang di
+kepala `_impor-pelanggan.ts` supaya langkah keduanya tidak terlupa lagi.
+
+Sesudah keduanya dibetulkan:
+
+```
+Periode 2026-08 · AKAN terbit 1.650 tagihan · Rp370.718.600
+Dilewati 65 — 27 INACTIVE · 26 berharga nol (akun gratis) · 6 PROSPECT
+              · 4 mulai ditagih setelah periode
+```
+
+Rata-rata Rp224.678, jatuh tepat di rentang paketnya (Rp175.000–300.000).
+
+**Dua langganan sengaja dibiarkan tanpa profil** — `PN102052505` dan
+`PN102062543` tidak ada di berkas tanggal penagihan sistem lama. Menebak
+tanggalnya berarti menagih orang pada hari yang dikarang.
+
+**Angka ini masuk akal, belum terbukti.** Yang membuktikan adalah perbandingan
+per pelanggan dengan nominal tagihan sistem lama pada periode yang sama —
+lihat `CUTOVER.md` bagian A.

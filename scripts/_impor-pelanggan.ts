@@ -11,6 +11,20 @@
  *
  * Baris pertama TSV adalah judul kolom; yang dikenali ada di `ALIAS` pada
  * `src/lib/customer-import.ts`. Kolom dikenali dari NAMANYA, bukan urutannya.
+ *
+ * ══ LANGKAH KEDUA YANG WAJIB ══
+ *
+ * Skrip ini TIDAK membuat `BillingProfile`. Langganan yang dihasilkannya
+ * lengkap dalam segala hal kecuali satu: ia tidak akan pernah ditagih, dan
+ * ketiadaan itu TIDAK menghasilkan galat apa pun — hanya pelanggan yang
+ * diam-diam gratis. Empat pelanggan yang diimpor 17 Agustus 2026 nyaris
+ * tertinggal begitu; ketahuan lewat gladi penagihan, bukan lewat kegagalan.
+ *
+ * Jadi sesudah menjalankan ini, jalankan juga:
+ *
+ *   npx tsx scripts/_siapkan-profil-tagihan.ts tagih.tsv --terapkan
+ *
+ * dan pastikan nomor layanan yang baru ADA di `tagih.tsv`.
  */
 import { readFileSync } from "node:fs";
 import { applyCustomerFromRows, buildPlan } from "@/lib/customer-import-service";
