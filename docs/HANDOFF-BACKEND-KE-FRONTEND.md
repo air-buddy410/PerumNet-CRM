@@ -2834,3 +2834,74 @@ tanpa perubahan lain pada kontraknya.
 - **Nol meter itu nilai sah**, bukan kosong: ONU yang baru menyala bisa
   terukur 0 m sebelum ranging selesai. Tampilkan "0 m", jangan "—".
 - Tampilkan sebagai keterangan kecil di samping dBm; null → "—".
+
+---
+
+## §48 — TV Wall NOC: layar dinding untuk ruangan
+
+Fase 85. Rutenya `/noc/wall`, **bukan** `/helpdesk/wall` — dan alasannya
+menentukan seluruh isinya.
+
+### Kenapa bukan dinding tiket
+
+Rencana semula menyebut TV Wall helpdesk, meniru `/schedule` di sistem lama.
+Tetapi **tabel tiket kita nol baris**, dan di sistem lama pun hari ini nol —
+Open 0, Pending 0, Inprogress 0. Dinding tiket berarti televisi 50 inci yang
+menampilkan "tidak ada tiket" sepanjang hari; setelah dua hari orang berhenti
+melihatnya, dan ketika akhirnya ada tiket, tidak ada lagi yang menoleh.
+
+Yang HIDUP hari ini justru jaringannya:
+
+```
+1.612 sesi ONLINE · 21 OFFLINE · 99 DISABLED
+```
+
+Jadi dindingnya menampilkan **keadaan jaringan**, dengan tiket sebagai salah
+satu panel — bukan sebaliknya. Ketika ticketing pindah ke CRM saat cutover,
+panel itu terisi sendiri tanpa layar baru.
+
+### Satu pemanggilan
+
+```ts
+import { loadNocWall } from "@/lib/noc-wall";
+const w = await loadNocWall();
+```
+
+| Bidang | Isi |
+|---|---|
+| `sesi` | `{ online, offline, disabled }` — dari router, bukan dari tagihan |
+| `padamMenggerombol[]` | `{ odp, jumlah, ponPort, olt }` — ODP dengan ≥2 pelanggan padam |
+| `padamTersebar` | berapa pelanggan padam yang ODP-nya hanya satu-satunya |
+| `router[]` | `{ hostname, sejak, gagalBeruntun }` |
+| `tugas` | `{ macet, terlambat }` dari kesegaran penjadwal (§45) |
+| `tiket` | `{ terbuka, lewatSla, mttrMenit }` — nol hari ini, terisi setelah cutover |
+| `vonis` | `SEHAT` · `PERHATIAN` · `GAWAT` |
+| `diperbaruiPada` | waktu muat, dalam WITA |
+
+### Lima aturan yang membuat dinding berguna
+
+**1. Terbaca dari lima meter.** Ini bukan halaman, ini papan. Angka besar,
+kontras tinggi, tanpa sidebar dan tanpa navigasi. Empat sampai enam blok saja;
+dinding yang penuh sama tidak terbacanya dengan dinding kosong.
+
+**2. `padamMenggerombol` adalah bintangnya.** Satu pelanggan padam itu urusan
+teknisi; **dua pelanggan padam di ODP yang sama** itu urusan seratnya, dan
+itulah yang harus menyala paling terang. Hari ini `BGY 04` punya dua — persis
+kasus yang dindingnya ada untuk menangkapnya.
+
+**3. Angka nol yang SEHAT jangan merah.** 0 tiket dan 0 alarm hari ini adalah
+kabar baik. Merah hanya untuk `padamMenggerombol`, router `gagalBeruntun ≥ 3`,
+dan tugas `macet`.
+
+**4. Segarkan sendiri tiap 60 detik**, dan tampilkan `diperbaruiPada`. Dinding
+yang diam tanpa jam tidak bisa dibedakan dari dinding yang macet — dan dinding
+macet yang menampilkan "semua sehat" adalah kebohongan yang paling mahal.
+
+**5. Panel tiket tetap ditampilkan meski nol**, dengan keterangan singkat
+bahwa ticketing masih di sistem lama. Menyembunyikannya membuat orang mengira
+CRM tidak punya helpdesk.
+
+### Yang TIDAK ada di dinding
+
+Tidak ada tombol, tidak ada tautan, tidak ada aksi. Papan hanya memberi tahu;
+yang bertindak membuka layar aslinya di komputernya.
