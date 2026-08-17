@@ -2772,3 +2772,52 @@ tidak dijalankan. Gladinya lewat terminal.
 
 Kalau kamu menambahkan sesuatu di sana, pastikan **tidak** ada tombol yang
 bisa menerbitkan atau mengisolir sebelum cutover.
+
+---
+
+## §47 — Daya optik ONU: tombol "Baca dari OLT" (Fase 88b)
+
+Yang kemarin masuk daftar `belumDiketahui` kini bisa dibaca — untuk pelanggan
+**C300 Pesagi** (±350 orang). Diverifikasi langsung di produksi: 24 pelanggan
+berbayar dibaca, nama ONU di perangkat cocok dengan `pppoeUsername` semua.
+
+### Satu action
+
+```ts
+import { bacaDayaOnuAction } from "@/app/(app)/crm/customers/actions";
+// FormData: subscriptionId
+```
+
+Sukses:
+
+```ts
+{ ok: true, serviceNumber, olt, posisi, dBm: -26.02,
+  mutu: "BAGUS" | "WASPADA" | "KRITIS", keterangan, namaDiPerangkat, dibacaPada }
+```
+
+Gagal — dan **keempatnya bukan galat merah**, masing-masing kalimatnya sudah
+disiapkan di `pesan`:
+
+| `sebab` | Artinya | Tampilkan sebagai |
+|---|---|---|
+| `BELUM_DIDUKUNG` | OLT-nya C600/HSGQ — tidak memancarkan DDM lewat SNMP | keterangan netral, BUKAN error |
+| `TANPA_POSISI` | pelanggan belum punya posisi ONU / port ODP | keterangan |
+| `TAK_TERBACA` | ONU-nya sedang mati atau tidak memberi nilai | keterangan |
+| `GALAT` | OLT/LibreNMS tidak menjawab | boleh merah |
+
+### Aturan tampilannya
+
+1. **Tombol, bukan otomatis.** Satu klik = satu SNMP GET ke OLT produksi.
+   Jangan panggil saat halaman dimuat, jangan auto-refresh.
+2. **Tampilkan tombolnya untuk SEMUA pelanggan ber-posisi-ONU**, termasuk
+   C600/HSGQ — jawab `BELUM_DIDUKUNG`-nya apa adanya. Menyembunyikan tombol
+   untuk mereka membuat orang mengira fiturnya tidak ada; menampilkannya
+   dengan jawaban jujur membuat orang tahu apa yang sedang ditunggu
+   (kredensial CLI).
+3. **`WASPADA` dan `KRITIS` layak mencolok** — itulah gunanya fitur ini:
+   menemukan sinyal yang memburuk SEBELUM pelanggannya menelepon. −26.02 dBm
+   pada PN102012506 tadi contoh nyatanya.
+4. `namaDiPerangkat` boleh ditampilkan kecil — ia bukti pembacaannya menunjuk
+   ONU yang benar.
+5. `dibacaPada` selalu tampil — pembacaan itu potret sesaat, bukan status
+   yang terus segar.

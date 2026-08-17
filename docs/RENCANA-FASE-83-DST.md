@@ -292,7 +292,7 @@ absen ber-geofence, lembur, arus kas, perubahan modal, rasio keuangan.
 
 ---
 
-## Fase 88b — daya optik ONU: apa yang sudah dipastikan (17 Agustus 2026)
+## Fase 88b — daya optik ONU  ◑ C300 SELESAI 17 Agustus 2026 — C600/HSGQ menunggu kredensial CLI
 
 Pemilik jaringan menanyakan kenapa daya ONU belum kelihatan di halaman
 pelanggan. Panel Fase 88a memang **sengaja mengatakannya** lewat daftar
@@ -328,7 +328,21 @@ sama.
   | HSGQ-102-SerayaBarat | `:1024` | 1615 |
   | HSGQ-102-SerayaTengah | `:1025` | 1616 |
 
-### Jalan yang tersisa, berurutan menurut ongkosnya
+### HASIL (malam yang sama): C300 tembus lewat SNMP
+
+Vendor tidak bisa ditanya, jadi jalannya dibalik: OID klasik ZXA10 yang kemarin
+gagal ternyata **dicoba di perangkat yang salah** — di C300 Pesagi ia hidup,
+lengkap dengan tabel nama ONU berisi username pelanggan. Rumus indeks
+diverifikasi terhadap indeks yang sungguh diamati, penyandian nilai
+diverifikasi lewat sebaran 352 ONU, dan ujian akhirnya: **24 pelanggan
+berbayar dibaca langsung dari OLT produksi, nama di perangkat cocok dengan
+pppoeUsername seluruhnya.** Satu langsung ketahuan WASPADA (−26,02 dBm).
+
+`bacaDayaOnuAction` siap dipakai Luna (§47). Dibaca saat diminta — satu klik
+satu GET, tanpa penyapuan. C600 dan HSGQ ditutup dengan bukti: keduanya memang
+tidak memancarkan DDM lewat SNMP; jalannya CLI telnet, menunggu kredensial.
+
+### Jalan yang tersisa untuk C600 + HSGQ, berurutan menurut ongkosnya
 
 1. **Tanya vendor sistem lama** OID atau perintah yang mereka pakai. Mereka
    sudah memecahkannya — halaman OLT-nya menampilkan RX dBm per ONU. Ini jalan
