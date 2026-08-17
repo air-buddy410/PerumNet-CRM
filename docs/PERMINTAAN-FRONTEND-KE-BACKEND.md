@@ -126,3 +126,35 @@ Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman
 - **Layar:** `/crm/customers/[id]` dan dashboard laporan
 - **Butuh:** loader agregasi permission-scoped untuk jumlah tiket, status, SLA/MTTR, dan rentang waktu dengan filter yang terdokumentasi.
 - **Kenapa tidak bisa di sisi frontend:** menghitung laporan dari daftar tiket parsial dapat menghasilkan angka salah dan membebani server/browser. Fase 85 hanya membawa konteks customer/subscription saat membuat tiket.
+
+## Fase 84–88a — Kontrak portal dan dossier yang masih diperlukan
+
+### Upload berkas customer
+- **Layar:** `/crm/customers/[id]`
+- **Butuh:** wrapper server-side resmi untuk `simpanBerkasPelanggan` yang menerima multipart, memeriksa permission/jenis berkas, ukuran, MIME, magic byte, dan audit log.
+- **Kenapa tidak bisa di sisi frontend:** halaman saat ini hanya menampilkan metadata berkas secara read-only. Browser tidak boleh memanggil service internal langsung atau menganggap upload berhasil tanpa action resmi.
+
+### Login dan keluar portal pelanggan
+- **Layar:** `/pelanggan/login`, `/pelanggan`
+- **Butuh:** wrapper action/route resmi untuk `masukPortal` dan `keluarPortal`, dengan cookie portal terpisah, jawaban error generik, rate limit, dan invalidasi sesi yang tetap server-side.
+- **Kenapa tidak bisa di sisi frontend:** frontend tidak boleh meng-hash atau menyimpan sandi pelanggan, membuat cookie sesi, atau memanggil service autentikasi langsung dari browser.
+
+### Public route dan sesi portal pelanggan
+- **Layar:** `/pelanggan/login`, `/pelanggan`
+- **Butuh:** middleware/route guard mengenali sesi portal yang terpisah dari `perumnet_session`; `/pelanggan/login` perlu dibuka tanpa sesi staf, sedangkan `/pelanggan` hanya boleh diteruskan bila `pelangganSekarang()` valid.
+- **Kenapa tidak bisa di sisi frontend:** middleware adalah batas keamanan server. Saat ini route publik hanya mencakup `/login` dan `/verify`, sehingga browser tanpa sesi staf belum dapat mencapai login portal. Luna tidak mengubah middleware atau memvalidasi cookie portal di browser.
+
+### Laporan gangguan portal
+- **Layar:** `/pelanggan`
+- **Butuh:** wrapper resmi untuk `laporGangguan` yang mengembalikan hasil aman, termasuk pesan operasional ketika laporan terbuka sudah ada dan duplicate incident ditolak.
+- **Kenapa tidak bisa di sisi frontend:** pembuatan tiket harus melalui kategori, actor sistem, audit log, dan aturan duplicate incident backend; tombol submit tidak boleh terlihat aktif tanpa kontrak tersebut.
+
+### Password dan sesi portal
+- **Layar:** detail akun customer dan portal pelanggan
+- **Butuh:** wrapper resmi untuk `aturSandiPortal` dan `keluarkanSemuaPerangkat`, termasuk permission staf, audit log, invalidasi seluruh sesi, dan response error yang aman.
+- **Kenapa tidak bisa di sisi frontend:** frontend tidak menerima password lama/hash, tidak boleh mengubah `sessionEpoch`, dan tidak boleh mengklaim reset berhasil melalui state lokal.
+
+### Portal frontend yang sudah tersedia
+- **Layar:** `/pelanggan`, `/pelanggan/login`
+- **Status:** UI read-only dan layout terpisah sudah tersedia. Beranda memakai `loadBerandaPortal()` hanya setelah sesi portal resmi valid; pesan tagihan lama ditampilkan apa adanya sampai cutover.
+- **Catatan:** status `BELUM DIKETAHUI` bukan status offline. Kontrol write-flow tetap menunggu wrapper Opus dan tidak dibuat sebagai form palsu.

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { redactCustomer } from "@/lib/customer-pii";
+import { loadBerkasPelanggan, loadRiwayatPelanggan } from "@/lib/customer-dossier-service";
+import { nilaiOnu } from "@/lib/onu-telemetry";
 import {
   PERMISSIONS,
   CUSTOMER_TYPES,
@@ -12,6 +14,8 @@ import {
 } from "@/lib/constants";
 import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui";
 import { CustomerPiiFields } from "@/components/customer-pii-fields";
+import { CustomerDossierPanel } from "@/components/customer-dossier-panel";
+import { CustomerOnuTelemetry, type CustomerOnuTelemetryItem } from "@/components/customer-onu-telemetry";
 import { updateCustomerAction } from "../actions";
 
 export const metadata = { title: "Detail Customer" };
@@ -45,7 +49,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const [rawCustomer, areas, users] = await Promise.all([
+  const [rawCustomer, areas, users, customerFiles, customerHistory] = await Promise.all([
     db.customer.findUnique({
       where: { id },
       include: {
@@ -66,6 +70,20 @@ export default async function CustomerDetailPage({
                 odp: {
                   include: {
                     parent: { select: { id: true, code: true } },
+                    ports: {
+                      select: {
+                        subscription: {
+                          select: {
+                            id: true,
+                            pppoeSessions: {
+                              orderBy: { updatedAt: "desc" },
+                              take: 1,
+                              select: { id: true, status: true },
+                            },
+                          },
+                        },
+                      },
+                    },
                     ponPort: {
                       include: {
                         olt: {
@@ -91,10 +109,15 @@ export default async function CustomerDetailPage({
           },
           orderBy: { createdAt: "desc" },
         },
+        portalAccount: {
+          select: { isActive: true, lastLoginAt: true, updatedAt: true },
+        },
       },
     }),
     db.area.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    loadBerkasPelanggan(id),
+    loadRiwayatPelanggan(id),
   ]);
   if (!rawCustomer) notFound();
 
@@ -112,6 +135,45 @@ export default async function CustomerDetailPage({
   const googleMapsHref = hasCustomerCoordinates
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${customer.latitude},${customer.longitude}`)}`
     : null;
+
+  const ponLookups = customer.subscriptions
+    .map((subscription) => {
+      const pon = subscription.odpPort?.odp.ponPort;
+      const deviceId = pon?.olt.networkDevice.id;
+      return pon?.label && deviceId ? { deviceId, ifName: pon.label } : null;
+    })
+    .filter((lookup): lookup is { deviceId: string; ifName: string } => Boolean(lookup));
+  const networkPorts = ponLookups.length > 0
+    ? await db.networkPort.findMany({
+      where: {
+        OR: ponLookups.map((lookup) => ({ deviceId: lookup.deviceId, ifName: lookup.ifName })),
+      },
+      select: { deviceId: true, ifName: true, operStatus: true },
+    })
+    : [];
+  const ponStatusByKey = new Map(networkPorts.map((port) => [`${port.deviceId}:${port.ifName}`, port.operStatus]));
+  const onuTelemetryItems: CustomerOnuTelemetryItem[] = customer.subscriptions.map((subscription) => {
+    const session = subscription.pppoeSessions[0] ?? null;
+    const odp = subscription.odpPort?.odp ?? null;
+    const pon = odp?.ponPort ?? null;
+    const ponDeviceId = pon?.olt.networkDevice.id;
+    const ponStatus = pon?.label && ponDeviceId ? ponStatusByKey.get(`${ponDeviceId}:${pon.label}`) ?? null : null;
+    const neighboringSessions = (odp?.ports ?? [])
+      .map((port) => port.subscription?.pppoeSessions[0] ?? null)
+      .filter((neighbor): neighbor is NonNullable<typeof neighbor> => Boolean(neighbor))
+      .filter((neighbor) => neighbor.id !== session?.id);
+    return {
+      serviceNumber: subscription.serviceNumber,
+      onuPosition: subscription.onuPosition,
+      ponStatus,
+      evaluation: nilaiOnu({
+        sesi: session?.status ?? null,
+        portPon: ponStatus,
+        tetanggaPadam: neighboringSessions.filter((neighbor) => neighbor.status === "OFFLINE").length,
+        tetangga: neighboringSessions.length,
+      }),
+    };
+  });
   const terminationSubscriptionIds = new Set(
     customer.terminations
       .filter((termination) => ["DRAFT", "SUBMITTED", "APPROVED", "EFFECTIVE"].includes(termination.status))
@@ -380,6 +442,44 @@ export default async function CustomerDetailPage({
               );
             })}
           </div>
+        )}
+      </section>
+
+      <CustomerDossierPanel
+        files={customerFiles}
+        history={customerHistory}
+        canViewPii={canViewPii}
+      />
+
+      <CustomerOnuTelemetry items={onuTelemetryItems} />
+
+      <section className="card mt-6 min-w-0" aria-labelledby="customer-portal-account-title">
+        <div className="crm-panel-heading">
+          <div>
+            <h2 id="customer-portal-account-title">Akun portal pelanggan</h2>
+            <p>Status akses portal ditampilkan sebagai informasi. Password tidak pernah ditampilkan di CRM.</p>
+          </div>
+          <span className={`system-status-pill ${customer.portalAccount?.isActive ? "is-healthy" : "is-disabled"}`}>
+            {customer.portalAccount?.isActive ? "Aktif" : "Belum aktif"}
+          </span>
+        </div>
+        {customer.portalAccount ? (
+          <dl className="customer-portal-account-grid">
+            <div>
+              <dt>Status akun</dt>
+              <dd>{customer.portalAccount.isActive ? "Dapat digunakan" : "Dinonaktifkan"}</dd>
+            </div>
+            <div>
+              <dt>Masuk terakhir</dt>
+              <dd>{customer.portalAccount.lastLoginAt ? formatDateTime(customer.portalAccount.lastLoginAt) : "Belum pernah masuk"}</dd>
+            </div>
+            <div>
+              <dt>Diperbarui</dt>
+              <dd>{formatDateTime(customer.portalAccount.updatedAt)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <div className="crm-empty-state">Pelanggan ini belum memiliki akun portal.</div>
         )}
       </section>
 

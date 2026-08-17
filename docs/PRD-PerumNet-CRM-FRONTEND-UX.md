@@ -1240,3 +1240,62 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800 tanpa
   horizontal overflow, overlap, password/PII sensitif, hydration warning,
   atau console error.
+
+## 46. Handoff Opus Fase 84–88a — Status, Dossier, Telemetri, dan Portal Pelanggan
+
+### Status Sistem
+
+- `/settings/status` memakai `loadStatusSistem()` dan permission `noc.view`.
+  Layar menyatukan vonis `SEHAT`, `PERHATIAN`, atau `GAWAT`, gejala, tugas
+  scheduler, router/polling, antrean router, LibreNMS, dan ringkasan OLT/ODP.
+- Tugas atau polling yang memang `MATI` ditampilkan netral sebagai
+  “Dimatikan”; UI tidak mengubahnya menjadi error. Refresh dilakukan manual
+  melalui route yang sama, tanpa polling agresif.
+- Dashboard menampilkan kartu ringkas untuk user yang memiliki
+  `dashboard.view`. Detail operasional tetap ditautkan ke halaman sumber dan
+  hanya dibuka untuk user yang memiliki `noc.view`.
+
+### Dossier dan riwayat customer
+
+- Detail customer menampilkan berkas dan riwayat aktivitas dalam mode
+  read-only. KTP/`CustomerIdCard` disaring dari response UI kecuali user
+  memiliki `customers.pii_view`.
+- Berkas privat dibuka melalui `/api/files/<id>`; frontend tidak membuat
+  URL storage publik dan tidak menambahkan upload sebelum action resmi.
+- Status akun portal ditampilkan sebagai status operasional saja (aktif,
+  nonaktif, login terakhir, dan waktu pembaruan). Password, hash, dan token
+  portal tidak pernah ditampilkan.
+
+### Telemetri ONU
+
+- Detail customer menampilkan penilaian `NYALA`, `PADAM_SENDIRIAN`,
+  `PADAM_SEPON`, `PON_TAK_TERPANTAU`, dan `TAK_DIketahui` sesuai helper
+  `nilaiOnu()` serta data sesi/PON yang benar-benar tersedia.
+- `PADAM_SEPON` diberi penekanan operasional agar staf memeriksa jalur PON
+  terlebih dahulu dan tidak langsung mengirim engineer ke rumah customer.
+- Bila PON atau data tetangga belum dapat dipantau, UI menyatakan apa yang
+  belum diketahui. Frontend tidak membuat hubungan router/OLT/PON/ODP dari
+  tebakan dan tidak menampilkan password PPPoE.
+
+### Portal pelanggan terpisah
+
+- Route `/pelanggan`, `/pelanggan/login`, dan layout-nya berdiri di luar
+  layout staf serta tidak memakai sidebar Portal Lapangan `/portal`.
+- Beranda portal read-only menampilkan nama, nomor layanan, paket, status
+  koneksi, waktu terakhir terlihat, alamat, pengumuman, tiket terbuka, dan
+  pesan tagihan lama apa adanya sampai cutover billing.
+- `BELUM DIKETAHUI` tidak diberi arti offline. Status koneksi memakai warna
+  dan keterangan netral ketika sumber monitoring belum memberikan kepastian.
+- Login, logout, laporan gangguan, reset password portal, keluarkan semua
+  sesi, dan upload berkas belum diberi kontrol palsu. UI menunggu wrapper
+  server-side resmi dari Opus agar credential, rate limit, audit, dan
+  perlindungan duplicate incident tetap berada di backend.
+
+### Acceptance responsive Fase 84–88a
+
+- Status Sistem, dossier, riwayat, telemetri, dan portal harus diuji pada
+  1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+- Tidak boleh ada KTP/PII yang bocor, password/token yang tampil, tabel atau
+  panel keluar card, teks panjang menabrak kontrol, hydration warning,
+  horizontal overflow, atau status `BELUM DIKETAHUI` yang terbaca sebagai
+  offline.

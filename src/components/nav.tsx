@@ -154,6 +154,7 @@ const iconByRoute: Record<string, LucideIcon> = {
   "/noc/map": MapPinned,
   "/noc/ftth": RadioTower,
   "/noc/pemetaan": FileClock,
+  "/settings/status": Activity,
   "/noc/access-jobs": ListChecks,
   "/it/tickets": Ticket,
   "/it/access": KeyRound,

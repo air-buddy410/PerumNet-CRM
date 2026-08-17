@@ -187,6 +187,7 @@ export default async function AppLayout({
       { href: "/noc/map", label: "Peta Jaringan" },
       { href: "/noc/ftth", label: "FTTH (OLT/ODP)" },
       ...(can(PERMISSIONS.FTTH_MANAGE) ? [{ href: "/noc/pemetaan", label: "Impor Pemetaan" }] : []),
+      { href: "/settings/status", label: "Status Sistem" },
         { href: "/noc/access-jobs", label: "Antrian Router" },
       ],
     });

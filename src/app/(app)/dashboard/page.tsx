@@ -7,6 +7,8 @@ import { birthdaysToday } from "@/lib/birthday-service";
 import { PERMISSIONS, APPROVAL_STATUS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
 import { isEligibleApprover } from "@/lib/approval";
+import { loadStatusSistem } from "@/lib/system-status-service";
+import { SystemStatusSummaryCard } from "@/components/system-status-view";
 import { Activity, ArrowRight, ClipboardCheck, ShieldCheck, UsersRound } from "lucide-react";
 
 export const metadata = { title: "Dashboard" };
@@ -38,6 +40,13 @@ export default async function DashboardPage() {
       }),
       birthdaysToday(),
     ]);
+
+  let systemStatus: Awaited<ReturnType<typeof loadStatusSistem>> | null = null;
+  try {
+    systemStatus = await loadStatusSistem();
+  } catch {
+    // Dashboard tetap dapat dipakai bila ringkasan operasional sedang gagal dimuat.
+  }
 
   const myPending = pendingAll
     .filter((r) => {
@@ -75,6 +84,13 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </section>
+
+      <div className="mt-[15px]">
+        <SystemStatusSummaryCard
+          status={systemStatus}
+          canOpen={user.permissions.has(PERMISSIONS.NOC_VIEW)}
+        />
+      </div>
 
       {birthdays.length > 0 && (
         <section className="crm-panel crm-birthday-panel" aria-labelledby="birthday-panel-title">
