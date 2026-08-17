@@ -33,7 +33,15 @@
 //     dipakai — perangkat sendiri yang memberi tahu pintunya, bukan tebakan
 //     kita.
 //
-//  c. **HSGQ mengirim baris log tanpa diminta.** Di tengah sesi ia menyelipkan
+//  c. **ZTE memutus sambungan MENDADAK saat `exit`.** Ia tidak menutup rapi;
+//     ia mengirim RST. Versi pertama menunggu 200 ms sebelum menyelesaikan
+//     janjinya, dan RST yang datang lebih dulu membuat penangan galat menolak
+//     hasil yang SUDAH didapat — login berhasil dilaporkan sebagai
+//     "ECONNRESET". Karena itu hasil diselesaikan pada saat diputuskan, bukan
+//     ditunda, dan galat sesudah itu diabaikan: sambungan yang putus setelah
+//     jawabannya lengkap bukan kegagalan.
+//
+//  d. **HSGQ mengirim baris log tanpa diminta.** Di tengah sesi ia menyelipkan
 //     `[2026/08/17 11:34:19] Info: ONU ... authorization success`. Prompt
 //     karena itu tidak selalu berada di ujung buffer, dan deteksi yang
 //     menuntut demikian akan menunggu selamanya.
@@ -151,11 +159,14 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
     );
     sock.on("close", () => clearTimeout(jam));
 
-    sock.on("error", (e) =>
-      // Pesan aslinya dibiarkan — ia berisi alamat dan kode kesalahan, tidak
-      // pernah berisi apa yang kita kirim.
-      tutup(new OltTelnetError(`Tidak bisa menyambung ke ${host}:${port} — ${e.message}`))
-    );
+    sock.on("error", (e) => {
+      // Galat SESUDAH jawaban lengkap diabaikan. ZTE memutus dengan RST saat
+      // `exit`, dan menolak hasil karenanya berarti membuang pembacaan yang
+      // sudah benar. Pesan aslinya dibiarkan apa adanya — ia berisi alamat dan
+      // kode kesalahan, tidak pernah berisi apa yang kita kirim.
+      if (beres) return;
+      tutup(new OltTelnetError(`Tidak bisa menyambung ke ${host}:${port} — ${e.message}`));
+    });
 
     sock.on("data", (chunk) => {
       // Negosiasi telnet (IAC, 0xFF) dijawab menolak semua opsi: perangkat ini
@@ -206,10 +217,13 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
           tahap = "PERINTAH";
           keluaran = "";
           if (sisa.length === 0) {
-            // Tidak ada perintah: masuknya sendiri yang diuji.
+            // Tidak ada perintah: sampai di prompt SUDAH membuktikan masuknya.
+            // Diselesaikan SEKARANG, lalu `exit` dikirim sebagai kesopanan —
+            // bukan sebaliknya. Menunggu jawaban atas `exit` berarti menunggu
+            // RST yang akan dilaporkan sebagai kegagalan.
             tahap = "SELESAI";
-            sock.write("exit\r\n");
-            setTimeout(() => tutup(undefined, "MASUK"), 200);
+            tutup(undefined, "MASUK");
+            try { sock.write("exit\r\n"); } catch { /* sesi sudah lepas */ }
             return;
           }
           const pertama = sisa.shift()!;
@@ -226,9 +240,12 @@ export function jalankanPerintah(opsi: SesiOpsi, perintah: string[]): Promise<st
             keluaran = "";
             sock.write(`${berikut}\r\n`);
           } else {
+            // Prompt terlihat lagi berarti jawaban perintah terakhir sudah
+            // lengkap. Sama seperti di atas: selesaikan dulu, baru berpamitan.
             tahap = "SELESAI";
-            sock.write("exit\r\n");
-            setTimeout(() => tutup(undefined, keluaran), 250);
+            const hasil = keluaran;
+            tutup(undefined, hasil);
+            try { sock.write("exit\r\n"); } catch { /* sesi sudah lepas */ }
           }
         }
       }
