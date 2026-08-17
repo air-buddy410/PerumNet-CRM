@@ -515,3 +515,59 @@ pembuat. Dihapus atas permintaan pemilik jaringan; tabel alarm kini kosong.
 **Tidak akan terulang sendiri.** Pesan itu berasal dari uji transport manual di
 LibreNMS, bukan dari aturan peringatan. Aturan yang hidup di LibreNMS tinggal
 satu — **"Perangkat mati"** (critical), dan itu memang seharusnya ada.
+
+## Tanggal terbit & jatuh tempo diselaraskan dengan sistem lama (17 Agustus 2026)
+
+Ditemukan saat menyelidiki dua langganan tanpa profil tagihan, dan ternyata
+menyangkut hampir seluruh basis pelanggan.
+
+**Dua kekeliruan bertumpuk.** `invoiceDay` diturunkan dari tanggal mulai tagih
+tiap orang sehingga tersebar merata di 28 tanggal; sistem lama menerbitkan
+**seluruh tagihan pada tanggal 1**. Dan `dueDays` seragam 20 — nilai bawaan
+impor — sehingga pada 1.663 profil jatuh temponya jatuh sesudah tanggal
+isolirnya sendiri.
+
+**Arah akibatnya kebalikan dari dugaan pertama**, dan itu perlu dicatat supaya
+tidak salah dibaca lagi. `evaluateDunning` menuntut DUA syarat: hari ini
+melewati `isolirDay` DAN ada invoice lewat tempo. Syarat kedua yang mengikat.
+Jadi pelanggan tidak diputus lebih cepat — mereka diputus **sekitar dua minggu
+lebih lambat** daripada di sistem lama. Bukan bahaya bagi pelanggan; kerugian
+bagi kas, tiap bulan, pada 1.663 orang.
+
+### Buktinya, bukan dugaannya
+
+Sembilan belas pelanggan sungguhan diperiksa langsung ke riwayat tagihan sistem
+lama, dipilih justru karena `invoiceDay`-nya di CRM beragam (1, 2, 7, 15, 27,
+28, …): **17 terbit 2026-08-01.** Dua sisanya baru mulai bulan itu, jadi
+tagihan pertamanya memang jatuh di tengah bulan.
+
+Aturan tempo diperiksa terhadap tanggal isolir 3, 6, 7, 15, 20, 24, 25, dan 28:
+**jatuh tempo = tanggal isolir − 1**, cocok pada tujuh dari delapan.
+
+### Hasilnya
+
+```
+1.575 profil diselaraskan · 139 dilewati
+terbit tanggal 1   : 1.613 dari 1.715
+jatuh tempo tepat  : 1.576 (isolir − 1)
+```
+
+Sesudahnya, tujuh dari delapan sampel **cocok persis** dengan tanggal jatuh
+tempo yang tercatat di sistem lama. Yang kedelapan (`PN102012528`, isolir 28,
+tempo 15 di sana) menyimpang dan tampak disesuaikan tangan — dibiarkan.
+
+### Seratus sembilan yang sengaja tidak disentuh
+
+Tanggal isolirnya 1 atau 2, sehingga rumus `isolir − 1` menghasilkan angka nol
+atau negatif. Ditelusuri ke sistem lama: **mereka pembayar seketika** —
+invoice Agustusnya lunas pada hari terbitnya juga (01/08 pukul 09.00 dan
+07.25), dan tanggal jatuh temponya kosong. Isolir tanggal 1–2 di sini berarti
+"bayar di muka", bukan salah data. Rumusnya memang tidak berlaku untuk mereka.
+
+Tiga puluh sisanya akun gratis tanpa tanggal isolir sama sekali.
+
+### Simulasi sesudahnya
+
+```
+1.652 tagihan · Rp371.218.600 · dilewati 63
+```
