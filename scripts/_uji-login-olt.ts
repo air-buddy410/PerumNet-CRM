@@ -11,7 +11,7 @@
  * HANYA MEMBACA.
  */
 import { db } from "@/lib/db";
-import { bacaKredensialOlt, jalankanPerintah, OltTelnetError } from "@/lib/olt-telnet";
+import { bacaKredensialOlt, jalankanPerintahMultiPort, OltTelnetError } from "@/lib/olt-telnet";
 
 const hanya = process.argv[2];
 
@@ -40,9 +40,11 @@ async function main() {
     // TANPA perintah apa pun: sampai di prompt SUDAH membuktikan masuknya.
     // Versi pertama menjalankan `show version`, yang ternyata tidak dikenal
     // C600 — dan galat perintahnya salah dibaca sebagai kredensial ditolak.
-    const port = o.telnetPort ?? 23;
+    // Port tersimpan DAN 23 sama-sama dicoba: yang satu benar untuk HSGQ,
+    // yang lain untuk ZTE lewat alamat langsung.
+    const ports = [o.telnetPort ?? 23, 23];
     try {
-      await jalankanPerintah({ host, port, user: kred.user, password: kred.password }, []);
+      const { port } = await jalankanPerintahMultiPort({ host, user: kred.user, password: kred.password }, ports, []);
       console.log(`  ✓ ${label} MASUK sebagai "${kred.user}" lewat port ${port}`);
     } catch (e) {
       const pesan = e instanceof OltTelnetError ? e.message : String(e);

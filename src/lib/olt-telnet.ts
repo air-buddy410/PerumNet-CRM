@@ -24,10 +24,14 @@
 //     sebenarnya sudah benar. Begitu prompt terlihat, kita SUDAH masuk;
 //     apa pun sesudahnya adalah jawaban perintah.
 //
-//  b. **Port telnet BUKAN selalu 23.** HSGQ G008 melayaninya di 1024/1025 —
-//     nilai yang sudah tersimpan di `OltDevice.telnetPort` sejak Fase 81.
-//     Memaku 23 membuat dua OLT dijawab "ECONNREFUSED", yang terbaca seperti
-//     perangkat mati padahal cuma salah pintu.
+//  b. **Port telnet berbeda per perangkat, DAN per jalur.** HSGQ G008
+//     melayaninya di 1024/1025 pada alamatnya sendiri; ZTE di 23. Angka
+//     231/232 yang tersimpan di `OltDevice.telnetPort` ternyata port
+//     PENERUSAN pada 172.30.10.6 — sah untuk jalur itu, salah untuk alamat
+//     langsung. Memaku 23 menggagalkan HSGQ; memaku nilai tersimpan
+//     menggagalkan ZTE. Karena itu keduanya dicoba, dan yang menjawab
+//     dipakai — perangkat sendiri yang memberi tahu pintunya, bukan tebakan
+//     kita.
 //
 //  c. **HSGQ mengirim baris log tanpa diminta.** Di tengah sesi ia menyelipkan
 //     `[2026/08/17 11:34:19] Info: ONU ... authorization success`. Prompt
@@ -37,6 +41,33 @@
 import net from "node:net";
 
 export class OltTelnetError extends Error {}
+
+/**
+ * Mencoba beberapa port sampai ada yang menjawab.
+ *
+ * Dipakai karena satu perangkat bisa dijangkau lewat lebih dari satu jalur
+ * dengan port berbeda, dan catatan kita hanya menyimpan salah satunya. Yang
+ * gagal karena SAMBUNGAN dicoba lagi di port berikutnya; yang gagal karena
+ * KREDENSIAL tidak — password yang salah tetap salah di pintu mana pun, dan
+ * mencobanya berulang hanya menghitung percobaan gagal di perangkatnya.
+ */
+export async function jalankanPerintahMultiPort(
+  opsi: Omit<SesiOpsi, "port">,
+  ports: number[],
+  perintah: string[]
+): Promise<{ keluaran: string; port: number }> {
+  let terakhir: Error | null = null;
+  for (const port of [...new Set(ports)]) {
+    try {
+      const keluaran = await jalankanPerintah({ ...opsi, port }, perintah);
+      return { keluaran, port };
+    } catch (e) {
+      terakhir = e as Error;
+      if (/ditolak/i.test(terakhir.message)) throw terakhir;
+    }
+  }
+  throw terakhir ?? new OltTelnetError("Tidak ada port yang dicoba.");
+}
 
 /** Kredensial dibaca dari env var yang NAMANYA disimpan di database. */
 export function bacaKredensialOlt(credentialRef: string | null): { user: string; password: string } {
