@@ -64,6 +64,14 @@ services:
       # saat menyala: login portal melempar galat begitu disubmit, dan tombol
       # baca daya menjawab "token belum terisi".
       PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET:-}
+      # Fase 88b — kredensial telnet OLT, "user:password" per perangkat.
+      # Yang tersimpan di basis data hanya NAMA variabelnya
+      # (OltDevice.credentialRef); nilainya hanya di sini.
+      OLT_PSG_CRED: ${OLT_PSG_CRED:-}
+      OLT_KCC_CRED: ${OLT_KCC_CRED:-}
+      OLT_ABG_CRED: ${OLT_ABG_CRED:-}
+      OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
+      OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
     ports:
       - "${APP_PORT:-3300}:3300"
@@ -114,6 +122,15 @@ services:
       # variabel tidak pernah sampai ke dalam container — Compose memakai .env
       # untuk interpolasi, bukan untuk meneruskannya otomatis.
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
+      PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET:-}
+      # Fase 88b — kredensial telnet OLT, "user:password" per perangkat.
+      # Yang tersimpan di basis data hanya NAMA variabelnya
+      # (OltDevice.credentialRef); nilainya hanya di sini.
+      OLT_PSG_CRED: ${OLT_PSG_CRED:-}
+      OLT_KCC_CRED: ${OLT_KCC_CRED:-}
+      OLT_ABG_CRED: ${OLT_ABG_CRED:-}
+      OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
+      OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       WORKER_TICK_MS: ${WORKER_TICK_MS:-15000}
     volumes:
       - uploads:/app/uploads
@@ -156,6 +173,14 @@ services:
       # saat menyala: login portal melempar galat begitu disubmit, dan tombol
       # baca daya menjawab "token belum terisi".
       PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET:-}
+      # Fase 88b — kredensial telnet OLT, "user:password" per perangkat.
+      # Yang tersimpan di basis data hanya NAMA variabelnya
+      # (OltDevice.credentialRef); nilainya hanya di sini.
+      OLT_PSG_CRED: ${OLT_PSG_CRED:-}
+      OLT_KCC_CRED: ${OLT_KCC_CRED:-}
+      OLT_ABG_CRED: ${OLT_ABG_CRED:-}
+      OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
+      OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
       APP_URL: ${APP_URL:-http://localhost:3300}
       MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}
