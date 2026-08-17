@@ -44,6 +44,26 @@ dihentikan oleh orang, di sana.
       dari sana, lalu jalankan `--banding`. **Tanpa perbandingan itu, angka di
       atas baru masuk akal — belum terbukti.**
 
+- [ ] **PENAHAN BARU: tanggal terbit & jatuh tempo diselaraskan dengan sistem
+      lama.** Ditemukan 17 Agustus. `invoiceDay` kita diturunkan dari tanggal
+      mulai tagih tiap orang sehingga tersebar di 28 tanggal, sedangkan sistem
+      lama menerbitkan **seluruh tagihan pada tanggal 1** — diperiksa terhadap
+      19 pelanggan sungguhan, 17 terbit 2026-08-01. Dan `dueDays` seragam 20,
+      nilai bawaan impor, sehingga pada 1.663 profil jatuh temponya jatuh
+      SESUDAH tanggal isolirnya.
+
+      Akibatnya bukan pelanggan diputus lebih cepat — `evaluateDunning`
+      menuntut dua syarat sekaligus, dan syarat "ada invoice lewat tempo" yang
+      mengikat. Jadi mereka diputus **sekitar dua minggu lebih lambat**
+      daripada di sistem lama. Bukan bahaya bagi pelanggan; kerugian bagi kas,
+      tiap bulan, pada 1.663 orang.
+
+      Alatnya siap dan sudah dijalankan kering:
+      `scripts/_selaraskan-tempo.ts` → **1.575 profil diselaraskan, 139
+      dilewati** (109 pasangan tanggalnya tidak masuk akal, 30 akun gratis
+      tanpa tanggal isolir). **Menunggu keputusan pemilik** — ini menentukan
+      hari pemutusan 1.575 orang, jadi tidak diterapkan sendiri.
+
 - [ ] **Lima langganan tanpa tanggal mulai tagih diselesaikan.** Mereka tidak
       akan pernah ditagih selama kolomnya kosong, dan itu tidak akan
       menghasilkan galat apa pun — hanya pelanggan yang diam-diam gratis.
