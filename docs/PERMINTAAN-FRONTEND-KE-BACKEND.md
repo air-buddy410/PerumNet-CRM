@@ -178,3 +178,18 @@ Frontend tidak menambahkan reset password mandiri pelanggan karena wrapper
 tersebut belum tersedia. Validasi file di browser hanya guard kenyamanan 5 MB;
 validasi MIME, magic byte, izin, audit, hash, dan session invalidation tetap
 menjadi tanggung jawab backend.
+
+## Fase 88b — Wrapper pembacaan daya optik ONU sudah dipakai frontend
+
+`bacaDayaOnuAction` kini dipakai pada panel Keadaan ONU di detail customer.
+Frontend mengirim hanya `subscriptionId` melalui FormData setelah tombol ditekan
+dan tidak menjalankan pembacaan otomatis, polling, atau penyimpanan hasil.
+
+- Sukses memakai `dBm`, `mutu`, `keterangan`, `namaDiPerangkat`, `olt`,
+  `posisi`, dan `dibacaPada` dari hasil action.
+- `BELUM_DIDUKUNG`, `TANPA_POSISI`, dan `TAK_TERBACA` dipresentasikan netral;
+  `GALAT` dipresentasikan sebagai error. Pesan backend ditampilkan apa adanya.
+- C600/HSGQ tetap menampilkan tombol bila posisi ONU tersedia. Dukungan CLI
+  resmi tetap menjadi dependency backend/infrastruktur; frontend tidak membuat
+  nilai daya atau status pengganti.
+- Tidak ada kontrak penyimpanan historis yang dibutuhkan untuk UI ini.

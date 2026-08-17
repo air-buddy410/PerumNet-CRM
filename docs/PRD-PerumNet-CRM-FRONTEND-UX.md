@@ -1323,3 +1323,27 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Acceptance responsive: login, laporan, upload, reset password, dan kontrol
   sesi harus rapi pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan
   360×800 tanpa overflow, overlap, teks keluar card, atau tombol tanpa state.
+
+## 48. Pembacaan Daya Optik ONU (§47)
+
+- Detail customer menampilkan kontrol pembacaan daya optik pada setiap layanan
+  yang memiliki posisi ONU. Pembacaan hanya berjalan setelah staf menekan
+  tombol; halaman tidak mengirim request saat dimuat dan tidak melakukan
+  polling atau menyimpan hasil sebagai telemetri historis.
+- Kontrol mengirim `subscriptionId` melalui `bacaDayaOnuAction` resmi. Setiap
+  baris memiliki state loading sendiri agar pembacaan satu layanan tidak
+  menonaktifkan layanan lain.
+- Hasil sukses menampilkan nilai dBm, mutu `BAGUS`, `WASPADA`, atau `KRITIS`,
+  keterangan backend, nama ONU di perangkat bila tersedia, OLT, posisi ONU,
+  serta waktu pembacaan dalam timezone `Asia/Makassar`. Mutu `WASPADA` dan
+  `KRITIS` diberi penekanan visual untuk membantu triase.
+- `BELUM_DIDUKUNG`, `TANPA_POSISI`, dan `TAK_TERBACA` ditampilkan sebagai
+  keterangan netral sesuai `pesan` dari backend. `GALAT` ditampilkan sebagai
+  error operasional. Frontend tidak membuat angka, status, atau keterangan
+  pengganti.
+- Layanan tanpa posisi ONU menampilkan “Posisi ONU belum tersedia” dan tidak
+  menampilkan tombol pembacaan. C600/HSGQ tetap dapat menampilkan tombol bila
+  posisinya tersedia agar jawaban `BELUM_DIDUKUNG` terlihat secara jujur.
+- Acceptance responsive: pembacaan, status, metadata, dan pesan panjang tetap
+  berada di dalam card pada 1440×900, 1920×1080, 1024×768, 768×1024,
+  390×844, dan 360×800; tidak ada overflow horizontal atau teks keluar card.

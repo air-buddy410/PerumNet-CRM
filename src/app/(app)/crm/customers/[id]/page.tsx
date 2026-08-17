@@ -164,6 +164,7 @@ export default async function CustomerDetailPage({
       .filter((neighbor): neighbor is NonNullable<typeof neighbor> => Boolean(neighbor))
       .filter((neighbor) => neighbor.id !== session?.id);
     return {
+      subscriptionId: subscription.id,
       serviceNumber: subscription.serviceNumber,
       onuPosition: subscription.onuPosition,
       ponStatus,

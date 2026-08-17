@@ -558,6 +558,30 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-onu-row > p { margin: 8px 0 0; color: #607573; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .customer-onu-dispatch-note { color: #a83e39 !important; font-weight: 750; }
 .customer-onu-unknown-list { display: grid; gap: 3px; margin: 8px 0 0; padding-left: 17px; color: #879795; font-size: 10px; line-height: 1.4; }
+.customer-onu-optical { display: grid; gap: 9px; min-width: 0; margin-top: 11px; padding-top: 11px; border-top: 1px solid #e1ece9; }
+.customer-onu-optical-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.customer-onu-optical-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-onu-optical-heading strong { display: flex; align-items: center; gap: 5px; min-width: 0; color: #526767; font-size: 11px; font-weight: 800; overflow-wrap: anywhere; }
+.customer-onu-optical-heading strong svg { flex: 0 0 auto; width: 14px; height: 14px; color: #008d85; }
+.customer-onu-optical-heading span { color: #879795; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-onu-optical-heading form { flex: 0 0 auto; }
+.customer-onu-optical-button { min-height: 38px; white-space: nowrap; }
+.customer-onu-optical-button svg { width: 14px; height: 14px; }
+.customer-onu-optical-note, .customer-onu-optical-message { margin: 0; color: #879795; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.customer-onu-optical-result { display: grid; gap: 9px; min-width: 0; padding: 10px; background: #f7fbfa; border: 1px solid #dfece9; border-radius: 8px; }
+.customer-onu-optical-result.is-healthy { border-color: #cdebd9; background: #f3fbf6; }
+.customer-onu-optical-result.is-attention { border-color: #f1d29a; background: #fffaf0; }
+.customer-onu-optical-result.is-critical { border-color: #f1c7c3; background: #fff7f6; }
+.customer-onu-optical-result.is-disabled { border-color: #dfe8e6; background: #f8fbfa; }
+.customer-onu-optical-result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.customer-onu-optical-result-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-onu-optical-result-heading strong, .customer-onu-optical-result-heading span { overflow-wrap: anywhere; }
+.customer-onu-optical-result-heading strong { color: #3e5152; font-size: 13px; font-weight: 850; }
+.customer-onu-optical-result-heading div > span { color: #607573; font-size: 10px; line-height: 1.45; }
+.customer-onu-optical-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-width: 0; margin: 0; }
+.customer-onu-optical-meta > div { min-width: 0; }
+.customer-onu-optical-meta dt { color: #879795; font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.customer-onu-optical-meta dd { margin: 3px 0 0; color: #526767; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .customer-portal-account-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-width: 0; padding: 18px; }
 .customer-portal-account-grid > div { min-width: 0; padding: 12px; background: #f7fbfa; border: 1px solid #e5efed; border-radius: 10px; }
 .customer-portal-account-grid dt { color: #849693; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
@@ -1033,6 +1057,9 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
   .system-status-summary-card { align-items: flex-start; flex-wrap: wrap; padding: 14px; }
   .system-status-summary-link { margin-left: 56px; }
   .customer-dossier-row, .customer-onu-heading { align-items: flex-start; flex-direction: column; }
+  .customer-onu-optical-heading, .customer-onu-optical-result-heading { align-items: flex-start; flex-direction: column; }
+  .customer-onu-optical-heading form, .customer-onu-optical-button { width: 100%; }
+  .customer-onu-optical-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .customer-dossier-row .btn-secondary { align-self: flex-start; }
   .customer-history-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
   .crm-birthday-panel { margin-top: 10px; }
@@ -1187,6 +1214,7 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 }
 
 @media (max-width: 480px) {
+  .customer-onu-optical-meta { grid-template-columns: 1fr; }
   .customer-portal-shell { width: calc(100% - 24px); padding-bottom: 20px; }
   .customer-portal-header { align-items: flex-start; flex-direction: column; gap: 10px; }
   .customer-portal-header-actions { align-items: center; justify-content: space-between; width: 100%; }

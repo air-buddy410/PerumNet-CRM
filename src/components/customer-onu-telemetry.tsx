@@ -1,6 +1,8 @@
 import type { PenilaianOnu } from "@/lib/onu-telemetry";
+import { CustomerOnuOpticalReader } from "@/components/customer-onu-optical-reader";
 
 export interface CustomerOnuTelemetryItem {
+  subscriptionId: string;
   serviceNumber: string;
   onuPosition: string | null;
   ponStatus: string | null;
@@ -59,6 +61,7 @@ export function CustomerOnuTelemetry({ items }: { items: CustomerOnuTelemetryIte
                     {item.evaluation.belumDiketahui.map((reason) => <li key={reason}>{reason}</li>)}
                   </ul>
                 )}
+                <CustomerOnuOpticalReader subscriptionId={item.subscriptionId} onuPosition={item.onuPosition} />
               </article>
             );
           })}
