@@ -571,3 +571,53 @@ Tiga puluh sisanya akun gratis tanpa tanggal isolir sama sekali.
 ```
 1.652 tagihan · Rp371.218.600 · dilewati 63
 ```
+
+# Fase 88b tuntas: daya optik SEMUA OLT + peta ODP utuh (17 Agustus 2026, malam)
+
+## Peta ODP selesai: 577 dari 577
+
+`OLT HSGQ Kecicang` — lima hari tercatat "hidup tapi tidak bisa dipantau" —
+ternyata hanya separuh benar: SNMP-nya memang tidak ada, **CLI-nya terbuka
+penuh**. Alamatnya ditemukan lewat pola port telnet sistem lama
+(1023/1024/1025 → .10/.11/.12), dibuktikan dengan pindai, dan empat ONU di
+port 8-nya cocok persis dengan data sistem lama.
+
+Kini terdaftar sebagai perangkat keenam, 28 ODP-nya tertaut:
+
+```
+ODP bertaut PON : 549 → 577  (SELURUHNYA — nol sisa)
+ODP ber-site    : 557 → 577
+```
+
+## Daya optik ONU: kelima jalur terbukti pada pelanggan sungguhan
+
+| OLT | Jalur | Bukti |
+|---|---|---|
+| C300 Pesagi | SNMP | PN102012505 · −18.96 dBm |
+| C600 Kecicang | CLI `show pon power onu-rx` | PN100012524 · −18.29 dBm |
+| C600 Abang | CLI | PN260711812 · −21.37 dBm |
+| HSGQ SerayaBarat | CLI `interface gpon N` → `show ont-optical` | PN102060016 · −15.83 dBm |
+| **HSGQ Kecicang** | **CLI** | **PN100220169 · −22.01 dBm** |
+
+Jawaban HSGQ memuat tiga angka dBm sekaligus (Transmit +2.25, Receive −17.27,
+OLT Rx −23.98); parser mengunci baris **Receive**, dan tesnya menjaga itu.
+
+## Dua penjaga yang lahir dari kejadian nyata malam ini
+
+**Tembok baca-saja pada sambungan OLT** — diminta pemilik jaringan. Daftar
+putih perintah (`show`/`display`/`enable`/`configure`/`interface`/`exit`/
+`quit`/`end`/`?`), diperiksa kata pertamanya sebelum soket dibuka; pemisah
+`;`/baris-baru/`|` ditolak. Uji mutasi sempat menunjukkan temboknya bisa
+dilepas tanpa ada tes yang jatuh — kini ada tes yang menjaga temboknya
+TERPASANG, bukan cuma tersedia.
+
+**`rapikanPonPort` melewati OLT yang tidak pernah di-poll** — jalan pertamanya
+menghapus kedelapan port PON HSGQ Kecicang karena memperlakukan ketiadaan data
+sinkron sebagai bukti port usang, padahal ia cuma bukti perangkatnya tidak
+di-poll. Membangun ulang dari ketiadaan berarti menghapus.
+
+## Keadaan pembacaan daya per pelanggan
+
+1.547 pelanggan ber-OLT + 97 HSGQ Kecicang yang baru tertaut = **±1.644 dari
+1.715 pelanggan kini bisa dibaca daya ONU-nya dari CRM** — sisanya pelanggan
+tanpa posisi ONU di data sumber.
