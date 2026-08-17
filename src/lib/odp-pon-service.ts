@@ -58,6 +58,14 @@ export async function rapikanPonPort(userId?: string): Promise<HasilRapi> {
       select: { ifName: true, ifType: true, ifSpeedBps: true },
       orderBy: { librenmsPortId: "asc" },
     });
+
+    // OLT tanpa SATU PUN port tersinkron dilewati seluruhnya — membangun ulang
+    // dari ketiadaan berarti menghapus. HSGQ Kecicang didaftarkan manual
+    // (modelnya tanpa SNMP, tidak akan pernah ada di LibreNMS), dan jalan
+    // pertama fungsi ini sempat menghapus kedelapan port PON buatannya:
+    // ketiadaan data sinkron diperlakukan sebagai bukti port itu usang,
+    // padahal ia cuma bukti perangkatnya tidak di-poll.
+    if (ports.length === 0) continue;
     const pon = ports.filter(
       (p) =>
         /^gpon/i.test(p.ifName) ||
