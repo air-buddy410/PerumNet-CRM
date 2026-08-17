@@ -289,3 +289,63 @@ membaca SOP ini, dan tiap kalimatnya menunjuk layar yang benar-benar ada.
 **Yang masih di luar rencana ini:** SUPERPOP/rak, fiber core & OTDR, Legal &
 Compliance, checkpoint ODP berevidence, dokumen IRF/DO/STO terpisah, lokasi
 absen ber-geofence, lembur, arus kas, perubahan modal, rasio keuangan.
+
+---
+
+## Fase 88b — daya optik ONU: apa yang sudah dipastikan (17 Agustus 2026)
+
+Pemilik jaringan menanyakan kenapa daya ONU belum kelihatan di halaman
+pelanggan. Panel Fase 88a memang **sengaja mengatakannya** lewat daftar
+`belumDiketahui` — tetapi pertanyaannya wajar, dan penyelidikannya menghasilkan
+temuan yang layak dicatat supaya orang berikutnya tidak mengulang langkah yang
+sama.
+
+### Yang sudah dicoret
+
+- **LibreNMS tidak punya datanya.** Ia menyimpan enam sensor `dbm`, tetapi
+  seluruhnya milik SFP+ router `PRM_NAGABASUKIH_D` — uplink, bukan ONU.
+- **OID ZXA10 yang lazim tidak ada di perangkat ini.** `3902.1012.*` menjawab
+  *No Such Object*; cabang yang hidup pada C600 adalah **`3902.1082`** dan
+  `3902.3`.
+- **`1082.30.40.2.*` bukan pembacaan hidup.** Ia tampak menjanjikan — 1.480
+  baris, contoh nilai `-4509` — tetapi kolom tetangganya berisi
+  `_DEFAULT_ALARM_PROFILE` dan sebagian besar nilainya `2147483647`. Itu tabel
+  **ambang alarm**, bukan daya terima. Nyaris terpakai kalau tidak diperiksa
+  kolom sebelahnya.
+
+### Yang sudah terbukti bisa
+
+- **SNMP dari VPS ke OLT jalan.** `snmpwalk` tersedia, community tersimpan di
+  LibreNMS (v2c, port 161), pohon MIB terbaca penuh.
+- **Ada jalur telnet per-OLT yang selama ini tidak dipakai**, tersimpan sejak
+  impor Fase 81:
+
+  | OLT | telnet | snmp |
+  |---|---|---|
+  | ZTE-C300-102-Pesagi | `172.30.10.6:23` | 1610 |
+  | ZTE-C600-100-Kecicang | `:231` | 1612 |
+  | ZTE-C600-104-Abang | `:232` | 1613 |
+  | HSGQ-102-SerayaBarat | `:1024` | 1615 |
+  | HSGQ-102-SerayaTengah | `:1025` | 1616 |
+
+### Jalan yang tersisa, berurutan menurut ongkosnya
+
+1. **Tanya vendor sistem lama** OID atau perintah yang mereka pakai. Mereka
+   sudah memecahkannya — halaman OLT-nya menampilkan RX dBm per ONU. Ini jalan
+   termurah, dan menanyakannya bukan aib.
+2. **Baca CLI lewat telnet** (`show pon power onu-rx` pada ZTE). Cara yang
+   lazim untuk ZTE, dan hampir pasti yang dipakai sistem lama — port telnetnya
+   ikut dicatat per-OLT, dan itu tidak dicatat kalau tidak dipakai.
+3. **Cari MIB ZTE resmi** untuk C600 V2.0.0 dan C300 V2.1.0, lalu lewat SNMP.
+
+### Dua prasyarat yang mudah terlewat
+
+**Kredensial OLT belum pernah disimpan.** `OltDevice.credentialRef` kelimanya
+masih berisi `LIBRENMS_API_TOKEN` — penanda sementara dari Fase 81, bukan
+kredensial OLT. Membaca CLI menuntut user/password yang belum kita punya, dan
+menyimpannya menuntut keputusan: **nama env var per OLT, bukan nilainya di
+basis data** (pola Fase 13).
+
+**Membaca 1.698 ONU lewat CLI berarti membuka sesi ke perangkat produksi
+berulang kali.** Harus dibatasi lajunya dan dijadwalkan jarang — OLT yang sibuk
+melayani permintaan pembacaan adalah OLT yang tidak sedang melayani pelanggan.
