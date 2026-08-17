@@ -227,15 +227,27 @@ export async function saveLinkAction(formData: FormData): Promise<void> {
 // ── Fase 89: kredensial perangkat dari layar, bukan dari berkas ──
 
 /**
+ * Kembali ke layar kredensial sambil membawa hasilnya.
+ *
+ * Pola `redirect` yang sama dengan aksi NOC lain: hasil disampaikan lewat
+ * query, bukan nilai balik, supaya `<form action={...}>` biasa cukup dan
+ * halaman tidak perlu jadi komponen klien hanya untuk menampilkan satu pesan.
+ */
+function kembaliKeKredensial(deviceId: string, hasil: { ok: boolean; pesan: string }): never {
+  const q = new URLSearchParams(hasil.ok ? { ok: hasil.pesan } : { error: hasil.pesan });
+  redirect(`/noc/devices/${deviceId}/kredensial?${q.toString()}`);
+}
+
+/**
  * Menyimpan kredensial telnet/SSH sebuah perangkat.
  *
  * Sandinya disegel sebelum menyentuh basis data. Tidak ada env var yang perlu
  * ditambah — NOC mengisinya sendiri, IT cukup memasang satu kunci utama sekali.
  */
-export async function simpanKredensialPerangkatAction(formData: FormData) {
+export async function simpanKredensialPerangkatAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
   const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
-  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+  if (!networkDeviceId) redirect("/noc/devices?error=Perangkat+tidak+disebutkan.");
 
   const portRaw = String(formData.get("port") ?? "").trim();
   const hasil = await simpanKredensial(
@@ -248,47 +260,56 @@ export async function simpanKredensialPerangkatAction(formData: FormData) {
     },
     user.id
   );
-  if (hasil.ok) revalidatePath("/noc/devices");
-  return hasil;
+  revalidatePath(`/noc/devices/${networkDeviceId}/kredensial`);
+  kembaliKeKredensial(networkDeviceId, {
+    ok: hasil.ok,
+    pesan: hasil.ok ? "Kredensial tersimpan tersegel." : hasil.error,
+  });
 }
 
-/** Menghapus kredensial perangkat. */
-export async function hapusKredensialPerangkatAction(formData: FormData) {
+/** Menghapus kredensial perangkat dari brankas. */
+export async function hapusKredensialPerangkatAction(formData: FormData): Promise<void> {
   const user = await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
   const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
-  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+  if (!networkDeviceId) redirect("/noc/devices?error=Perangkat+tidak+disebutkan.");
+
   await hapusKredensial(networkDeviceId, user.id);
-  revalidatePath("/noc/devices");
-  return { ok: true as const };
+  revalidatePath(`/noc/devices/${networkDeviceId}/kredensial`);
+  kembaliKeKredensial(networkDeviceId, { ok: true, pesan: "Kredensial dihapus dari brankas." });
 }
 
 /**
  * Menguji kredensial dengan MASUK saja — tanpa menjalankan perintah apa pun.
  *
  * Sampai di prompt sudah membuktikan kredensialnya benar, dan itu menghapus
- * seluruh kelas galat "perintah tidak dikenal" dari jalur diagnosis.
+ * seluruh kelas galat "perintah tidak dikenal" dari jalur diagnosis. Sekaligus
+ * menjaga dinding baca-saja: tidak ada satu perintah pun yang dikirim.
  */
-export async function ujiKredensialPerangkatAction(formData: FormData) {
+export async function ujiKredensialPerangkatAction(formData: FormData): Promise<void> {
   await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
   const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
-  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+  if (!networkDeviceId) redirect("/noc/devices?error=Perangkat+tidak+disebutkan.");
 
   const perangkat = await db.networkDevice.findUnique({
     where: { id: networkDeviceId },
     select: { hostname: true },
   });
-  if (!perangkat) return { ok: false as const, error: "Perangkat tidak ditemukan." };
+  if (!perangkat) redirect("/noc/devices?error=Perangkat+tidak+ditemukan.");
 
   let kred;
   try {
     kred = await pakaiKredensial(networkDeviceId);
   } catch (e) {
-    return { ok: false as const, error: (e as Error).message };
+    kembaliKeKredensial(networkDeviceId, { ok: false, pesan: (e as Error).message });
   }
   if (kred.protokol !== "TELNET") {
-    return { ok: false as const, error: "Uji otomatis baru tersedia untuk TELNET. SSH menyusul." };
+    kembaliKeKredensial(networkDeviceId, {
+      ok: false,
+      pesan: "Uji otomatis baru tersedia untuk TELNET. SSH menyusul.",
+    });
   }
 
+  let hasil: { ok: boolean; pesan: string };
   try {
     await jalankanPerintahMultiPort(
       { host: perangkat.hostname, user: kred.user, password: kred.password },
@@ -296,9 +317,10 @@ export async function ujiKredensialPerangkatAction(formData: FormData) {
       []
     );
     await tandaiTerbukti(networkDeviceId);
-    revalidatePath("/noc/devices");
-    return { ok: true as const, pesan: `Masuk berhasil sebagai "${kred.user}".` };
+    hasil = { ok: true, pesan: `Masuk berhasil sebagai "${kred.user}".` };
   } catch (e) {
-    return { ok: false as const, error: e instanceof OltTelnetError ? e.message : String(e) };
+    hasil = { ok: false, pesan: e instanceof OltTelnetError ? e.message : String(e) };
   }
+  revalidatePath(`/noc/devices/${networkDeviceId}/kredensial`);
+  kembaliKeKredensial(networkDeviceId, hasil);
 }

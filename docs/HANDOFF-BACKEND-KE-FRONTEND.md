@@ -2983,3 +2983,68 @@ bergeser.
 Data, query, dan Server Action peta sudah benar; jangan diubah. Kalau setelah
 dua perbaikan itu masih ada ODP yang tidak mau terbuka, lempar balik ke aku
 lewat `PERMINTAAN-FRONTEND-KE-BACKEND.md` dengan id ODP-nya.
+
+---
+
+## §50 — Layar kredensial perangkat (Fase 89)
+
+NOC sekarang bisa menambah login telnet/SSH perangkat **sendiri dari layar**,
+tanpa siapa pun menyunting `.env` dan tanpa tim IT menulis kode. Backend-nya
+sudah jalan dan sudah diuji. Yang saya buat cuma kerangka yang berfungsi —
+tampilannya milikmu.
+
+**Rute:** `/noc/devices/[id]/kredensial`
+**Hak akses:** lihat = `NOC_VIEW`, ubah = `NET_INVENTORY_MANAGE`
+
+### Yang sudah siap dipakai
+
+`loadKredensial(networkDeviceId)` mengembalikan:
+
+```ts
+{
+  ada: boolean;
+  protokol: "TELNET" | "SSH" | null;
+  port: number | null;
+  username: string | null;
+  sumber: "BRANKAS" | "ENV" | "BELUM ADA";
+  terakhirTerbukti: Date | null;
+  diperbaruiOleh: string | null;
+  diperbaruiPada: Date | null;
+}
+```
+
+Tiga Server Action, semuanya `Promise<void>` dan memakai pola redirect
+`?ok=` / `?error=` seperti aksi NOC lain — jadi `<form action={...}>` biasa
+sudah cukup, tidak perlu komponen klien:
+
+- `simpanKredensialPerangkatAction` — field: `networkDeviceId`, `protokol`,
+  `port` (boleh kosong → 23/22), `username`, `sandi`
+- `hapusKredensialPerangkatAction` — field: `networkDeviceId`
+- `ujiKredensialPerangkatAction` — field: `networkDeviceId`
+
+### Satu hal yang TIDAK boleh berubah
+
+**Kotak sandi selalu kosong saat halaman dibuka, termasuk ketika kredensialnya
+sudah tersimpan.** Sandi tidak pernah dikirim ke browser — bukan disembunyikan
+dengan `type="password"`, memang tidak ada nilainya untuk dikirim. Jadi jangan
+sekali-kali menambahkan `defaultValue` di situ "supaya enak diedit"; tidak ada
+yang bisa diisikan, dan mencoba mengisinya berarti membocorkannya.
+
+Selebihnya bebas kamu rombak: tata letak, urutan, ikon, kalimat, semuanya.
+
+### Yang perlu kamu tambahkan
+
+1. **Tautan dari daftar perangkat.** `/noc/devices` belum punya jalan ke layar
+   ini, jadi sekarang hanya bisa dibuka lewat URL langsung. Tambahkan tautan
+   per baris — dan enaknya kalau baris yang belum punya kredensial kelihatan
+   berbeda, karena itu yang perlu ditindaklanjuti NOC.
+2. **Rapikan tampilannya.** Punyaku memakai `card`, `label`, `input`,
+   `btn-primary`, `btn-secondary` apa adanya. Silakan disesuaikan.
+3. **Keadaan "kunci belum terpasang".** Kalau `DEVICE_CRED_KEY` belum ada di
+   server, tombol simpan mati dan ada peringatan kuning. Itu keadaan nyata yang
+   akan dilihat orang, bukan kasus teoretis — pastikan terbaca jelas.
+
+### Yang jangan kamu sentuh
+
+`src/lib/rahasia-perangkat.ts` dan `src/lib/kredensial-perangkat-service.ts`.
+Di situ aturan kriptonya, dan tesnya akan menangkapmu kalau tergeser.
