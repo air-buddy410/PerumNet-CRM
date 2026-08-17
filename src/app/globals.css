@@ -575,8 +575,10 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-onu-optical-result.is-disabled { border-color: #dfe8e6; background: #f8fbfa; }
 .customer-onu-optical-result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
 .customer-onu-optical-result-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-onu-optical-reading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .customer-onu-optical-result-heading strong, .customer-onu-optical-result-heading span { overflow-wrap: anywhere; }
 .customer-onu-optical-result-heading strong { color: #3e5152; font-size: 13px; font-weight: 850; }
+.customer-onu-optical-distance { color: #526767 !important; font-size: 10px !important; font-weight: 800; white-space: nowrap; }
 .customer-onu-optical-result-heading div > span { color: #607573; font-size: 10px; line-height: 1.45; }
 .customer-onu-optical-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-width: 0; margin: 0; }
 .customer-onu-optical-meta > div { min-width: 0; }

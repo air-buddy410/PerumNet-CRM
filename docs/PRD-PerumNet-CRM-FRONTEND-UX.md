@@ -1335,8 +1335,10 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   menonaktifkan layanan lain.
 - Hasil sukses menampilkan nilai dBm, mutu `BAGUS`, `WASPADA`, atau `KRITIS`,
   keterangan backend, nama ONU di perangkat bila tersedia, OLT, posisi ONU,
-  serta waktu pembacaan dalam timezone `Asia/Makassar`. Mutu `WASPADA` dan
-  `KRITIS` diberi penekanan visual untuk membantu triase.
+  jarak ONU, serta waktu pembacaan dalam timezone `Asia/Makassar`. Nilai
+  `jarakMeter` berasal dari snapshot backend: angka termasuk `0` ditampilkan
+  sebagai meter (contoh `0 m`), sedangkan `null` ditampilkan sebagai `—`.
+  Mutu `WASPADA` dan `KRITIS` diberi penekanan visual untuk membantu triase.
 - `BELUM_DIDUKUNG`, `TANPA_POSISI`, dan `TAK_TERBACA` ditampilkan sebagai
   keterangan netral sesuai `pesan` dari backend. `GALAT` ditampilkan sebagai
   error operasional. Frontend tidak membuat angka, status, atau keterangan

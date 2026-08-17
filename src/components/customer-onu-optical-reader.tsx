@@ -62,7 +62,12 @@ export function CustomerOnuOpticalReader({
         <div className={`customer-onu-optical-result ${state.mutu === "WASPADA" ? "is-attention" : state.mutu === "KRITIS" ? "is-critical" : "is-healthy"}`} role="status" aria-live="polite">
           <div className="customer-onu-optical-result-heading">
             <div className="min-w-0">
-              <strong>{state.dBm.toFixed(2)} dBm</strong>
+              <div className="customer-onu-optical-reading">
+                <strong>{state.dBm.toFixed(2)} dBm</strong>
+                <span className="customer-onu-optical-distance">
+                  Jarak ONU: {state.jarakMeter === null ? "—" : `${state.jarakMeter} m`}
+                </span>
+              </div>
               <span>{state.keterangan}</span>
             </div>
             <span className={`system-status-pill ${state.mutu === "WASPADA" ? "is-attention" : state.mutu === "KRITIS" ? "is-critical" : "is-healthy"}`}>
