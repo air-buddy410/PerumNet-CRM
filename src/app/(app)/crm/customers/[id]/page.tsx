@@ -16,6 +16,7 @@ import { PageHeader, Flash, BackLink, Badge, EmptyState } from "@/components/ui"
 import { CustomerPiiFields } from "@/components/customer-pii-fields";
 import { CustomerDossierPanel } from "@/components/customer-dossier-panel";
 import { CustomerOnuTelemetry, type CustomerOnuTelemetryItem } from "@/components/customer-onu-telemetry";
+import { CustomerPortalAccountActions } from "@/components/customer-portal-account-actions";
 import { updateCustomerAction } from "../actions";
 
 export const metadata = { title: "Detail Customer" };
@@ -446,8 +447,10 @@ export default async function CustomerDetailPage({
       </section>
 
       <CustomerDossierPanel
+        customerId={customer.id}
         files={customerFiles}
         history={customerHistory}
+        canEdit={canEdit}
         canViewPii={canViewPii}
       />
 
@@ -481,6 +484,11 @@ export default async function CustomerDetailPage({
         ) : (
           <div className="crm-empty-state">Pelanggan ini belum memiliki akun portal.</div>
         )}
+        <CustomerPortalAccountActions
+          customerId={customer.id}
+          canEdit={canEdit}
+          hasAccount={Boolean(customer.portalAccount)}
+        />
       </section>
 
       {customer.terminations.length > 0 && (

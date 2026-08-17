@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { BarisRiwayat } from "@/lib/customer-dossier";
 import type { BerkasPelanggan } from "@/lib/customer-dossier-service";
 import { formatUiDateTime } from "@/components/ui-formatters";
+import { CustomerDossierUploadForm } from "@/components/customer-dossier-upload-form";
 
 function fileSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes < 0) return "Ukuran tidak tersedia";
@@ -10,7 +11,19 @@ function fileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function CustomerDossierPanel({ files, history, canViewPii }: { files: BerkasPelanggan[]; history: BarisRiwayat[]; canViewPii: boolean }) {
+export function CustomerDossierPanel({
+  customerId,
+  files,
+  history,
+  canEdit,
+  canViewPii,
+}: {
+  customerId: string;
+  files: BerkasPelanggan[];
+  history: BarisRiwayat[];
+  canEdit: boolean;
+  canViewPii: boolean;
+}) {
   const visibleFiles = files.filter((file) => canViewPii || file.jenis !== "CustomerIdCard");
   const hiddenPiiCount = files.filter((file) => file.jenis === "CustomerIdCard" && !canViewPii).length;
 
@@ -47,7 +60,11 @@ export function CustomerDossierPanel({ files, history, canViewPii }: { files: Be
         {hiddenPiiCount > 0 && (
           <p className="customer-dossier-protected">{hiddenPiiCount} berkas identitas dilindungi dan tidak ditampilkan tanpa izin PII.</p>
         )}
-        <p className="customer-dossier-note">Upload berkas akan tersedia setelah action resmi dari Opus diterbitkan.</p>
+        {canEdit ? (
+          <CustomerDossierUploadForm customerId={customerId} canViewPii={canViewPii} />
+        ) : (
+          <p className="customer-dossier-note">Upload berkas memerlukan izin edit customer.</p>
+        )}
       </section>
 
       <section className="card min-w-0" aria-labelledby="customer-history-title">

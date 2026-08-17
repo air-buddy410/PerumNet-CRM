@@ -523,6 +523,18 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-dossier-meta { margin-top: 4px; color: #879795; font-size: 10px; line-height: 1.4; }
 .customer-dossier-protected, .customer-dossier-note { margin: 10px 18px 0; color: #8a6b38; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
 .customer-dossier-note { margin-bottom: 17px; color: #879795; }
+.customer-dossier-upload { display: grid; gap: 12px; min-width: 0; margin: 14px 18px 18px; padding: 14px; background: #f7fbfa; border: 1px solid #e1eeeb; border-radius: 11px; }
+.customer-dossier-upload-heading, .customer-dossier-upload-fields { display: grid; min-width: 0; gap: 12px; }
+.customer-dossier-upload-heading { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.customer-dossier-upload-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-dossier-upload-heading strong { color: #3e5152; font-size: 12px; font-weight: 800; }
+.customer-dossier-upload-heading span { color: #879795; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-dossier-upload-heading svg { width: 18px; height: 18px; color: #008d85; }
+.customer-dossier-upload-fields { grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); }
+.customer-dossier-upload input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; color: #526767; font-size: 11px; }
+.customer-dossier-upload input[type="file"]::file-selector-button { margin-right: 8px; padding: 8px 10px; color: #007e76; background: #e4f7f5; border: 1px solid #ccebe7; border-radius: 7px; font-size: 10px; font-weight: 800; cursor: pointer; }
+.customer-dossier-upload-submit { justify-self: start; }
+.customer-dossier-upload-success { margin: 0; padding: 8px 10px; color: #157c4b; background: #ecf9f1; border: 1px solid #cdebd9; border-radius: 8px; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
 .customer-history-list { padding: 14px 18px 17px; }
 .customer-history-row { position: relative; display: flex; gap: 11px; min-width: 0; padding: 0 0 15px 2px; }
 .customer-history-row:not(:last-child)::before { position: absolute; top: 15px; bottom: 0; left: 6px; width: 1px; background: #dfece9; content: ""; }
@@ -550,15 +562,37 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-portal-account-grid > div { min-width: 0; padding: 12px; background: #f7fbfa; border: 1px solid #e5efed; border-radius: 10px; }
 .customer-portal-account-grid dt { color: #849693; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .customer-portal-account-grid dd { margin: 5px 0 0; overflow-wrap: anywhere; color: #526767; font-size: 13px; font-weight: 700; }
+.customer-portal-account-note { margin: 0 18px 18px; color: #879795; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.customer-portal-account-actions { display: grid; gap: 14px; min-width: 0; margin: 0 18px 18px; padding: 14px; background: #f7fbfa; border: 1px solid #e1eeeb; border-radius: 11px; }
+.customer-portal-account-action-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
+.customer-portal-account-action-heading > div { display: grid; min-width: 0; gap: 3px; }
+.customer-portal-account-action-heading strong { color: #3e5152; font-size: 12px; font-weight: 800; }
+.customer-portal-account-action-heading span { color: #879795; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-portal-account-action-heading svg { width: 18px; height: 18px; flex: 0 0 auto; color: #008d85; }
+.customer-portal-password-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px; min-width: 0; }
+.customer-portal-password-form > button { min-height: 40px; }
+.customer-portal-revoke-form { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding-top: 12px; border-top: 1px solid #e1eeeb; }
+.customer-portal-revoke-form > div { display: grid; min-width: 0; gap: 3px; }
+.customer-portal-revoke-form strong { display: inline-flex; align-items: center; gap: 6px; color: #a83e39; font-size: 11px; }
+.customer-portal-revoke-form strong svg { width: 14px; height: 14px; }
+.customer-portal-revoke-form span { color: #879795; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-portal-revoke-form button { flex: 0 0 auto; white-space: nowrap; }
 
 .customer-portal-root { min-height: 100dvh; background: radial-gradient(circle at 15% 0%, #dff7f3 0, transparent 38%), linear-gradient(145deg, #f7fbfa 0%, #edf7f5 100%); color: #33484a; }
 .customer-portal-shell { width: min(1180px, calc(100% - 40px)); min-width: 0; margin: 0 auto; padding: 25px 0 30px; }
 .customer-portal-shell-centered { display: grid; min-height: 100dvh; place-items: center; padding: 24px 0; }
 .customer-portal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; padding: 0 0 21px; border-bottom: 1px solid #d9e9e5; }
+.customer-portal-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 13px; min-width: 0; }
 .customer-portal-brand { display: inline-flex; align-items: center; gap: 10px; min-width: 0; color: #33484a; text-decoration: none; }
 .customer-portal-brand > span { color: #008d85; font-size: 10px; font-weight: 850; letter-spacing: .12em; white-space: nowrap; }
 .customer-portal-brand-static { justify-content: center; margin-bottom: 26px; }
 .customer-portal-service { max-width: 45%; overflow: hidden; color: #718582; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.customer-portal-logout-form { flex: 0 0 auto; }
+.customer-portal-logout-button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 11px; color: #657a77; background: #fff; border: 1px solid #dcebe7; border-radius: 9px; font-size: 10px; font-weight: 800; cursor: pointer; }
+.customer-portal-logout-button:hover { color: #007e76; border-color: #a9dcd6; background: #f6fcfb; }
+.customer-portal-logout-button:focus-visible { outline: 3px solid #04a99f3d; outline-offset: 2px; }
+.customer-portal-logout-button:disabled { cursor: wait; opacity: .65; }
+.customer-portal-logout-button svg { width: 14px; height: 14px; }
 .customer-portal-content { display: grid; min-width: 0; gap: 18px; padding-top: 25px; }
 .customer-portal-welcome { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; min-width: 0; }
 .customer-portal-welcome > div:first-child { min-width: 0; }
@@ -595,6 +629,14 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-portal-muted { margin: 17px 0 0; color: #849693; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
 .customer-portal-card-icon { display: grid; flex: 0 0 auto; place-items: center; width: 31px; height: 31px; color: #008d85; background: #e4f7f5; border-radius: 9px; font-weight: 850; }
 .customer-portal-readonly-action { display: inline-flex; margin-top: 17px; color: #849693; font-size: 11px; font-weight: 750; }
+.customer-portal-incident { display: grid; gap: 0; }
+.customer-portal-incident-form { display: grid; gap: 12px; min-width: 0; margin-top: 16px; }
+.customer-portal-submit { justify-self: start; min-height: 40px; }
+.customer-portal-submit svg { width: 16px; height: 16px; }
+.customer-portal-field-help { margin: 5px 0 0; color: #8a9b98; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.customer-portal-form-error, .customer-portal-form-success { margin: 0; padding: 9px 11px; border-radius: 8px; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.customer-portal-form-error { color: #a83e39; background: #fff7f6; border: 1px solid #f0ccc8; }
+.customer-portal-form-success { color: #157c4b; background: #ecf9f1; border: 1px solid #cdebd9; }
 .customer-portal-billing { padding-bottom: 18px; }
 .customer-portal-announcement-list { display: grid; gap: 10px; min-width: 0; margin-top: 17px; }
 .customer-portal-announcement { min-width: 0; padding: 13px; background: #f7fbfa; border: 1px solid #e4efec; border-radius: 11px; }
@@ -613,6 +655,9 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .customer-portal-login-card { text-align: center; }
 .customer-portal-login-card .customer-portal-eyebrow { margin-bottom: 7px; }
 .customer-portal-back-link { justify-content: center; min-width: 130px; }
+.customer-portal-login-form { display: grid; gap: 14px; margin-top: 21px; text-align: left; }
+.customer-portal-login-form .customer-portal-submit { justify-self: stretch; justify-content: center; }
+.customer-portal-login-form .customer-portal-back-link { display: block; margin-top: 1px; text-align: center; }
 
 .crm-profile-page { max-width: 1040px; }
 .crm-profile-hero { display: flex; align-items: center; gap: 18px; padding: 24px; margin-bottom: 15px; }
@@ -1136,12 +1181,16 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
   .customer-portal-card-wide { grid-column: auto; }
   .customer-portal-footer { flex-direction: column; gap: 5px; }
   .customer-portal-account-grid { grid-template-columns: 1fr; }
+  .customer-dossier-upload-fields, .customer-portal-password-form { grid-template-columns: 1fr; }
+  .customer-portal-revoke-form { align-items: stretch; flex-direction: column; }
+  .customer-portal-revoke-form button { align-self: flex-start; }
 }
 
 @media (max-width: 480px) {
   .customer-portal-shell { width: calc(100% - 24px); padding-bottom: 20px; }
   .customer-portal-header { align-items: flex-start; flex-direction: column; gap: 10px; }
-  .customer-portal-service { max-width: 100%; }
+  .customer-portal-header-actions { align-items: center; justify-content: space-between; width: 100%; }
+  .customer-portal-service { max-width: calc(100% - 90px); }
   .customer-portal-content { gap: 12px; padding-top: 18px; }
   .customer-portal-welcome h1 { font-size: 27px; }
   .customer-portal-welcome p { font-size: 12px; }
@@ -1152,4 +1201,7 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
   .customer-portal-empty-card { padding: 24px 17px; }
   .customer-portal-empty-card h1 { font-size: 21px; }
   .customer-portal-empty-card .btn-secondary { width: 100%; justify-content: center; }
+  .customer-dossier-upload { margin-right: 12px; margin-left: 12px; padding: 12px; }
+  .customer-portal-account-actions { margin-right: 12px; margin-left: 12px; padding: 12px; }
+  .customer-portal-submit, .customer-dossier-upload-submit { width: 100%; justify-content: center; }
 }

@@ -3,6 +3,8 @@ import type { BerandaPortal } from "@/lib/portal-service";
 import { formatRupiah } from "@/lib/constants";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import { Logo } from "@/components/logo";
+import { CustomerPortalIncidentForm } from "@/components/customer-portal-incident-form";
+import { CustomerPortalLogoutButton } from "@/components/customer-portal-logout-button";
 
 const connectionMeta: Record<string, { label: string; className: string; description: string }> = {
   ONLINE: { label: "Online", className: "is-online", description: "Koneksi terakhir terpantau aktif." },
@@ -29,7 +31,10 @@ export function CustomerPortalHome({ data }: { data: BerandaPortal }) {
           <Logo markClassName="h-9 w-8" textClassName="text-[19px]" />
           <span>PORTAL PELANGGAN</span>
         </Link>
-        <span className="customer-portal-service">{data.nomorLayanan}</span>
+        <div className="customer-portal-header-actions">
+          <span className="customer-portal-service">{data.nomorLayanan}</span>
+          <CustomerPortalLogoutButton />
+        </div>
       </header>
 
       <div className="customer-portal-content">
@@ -98,9 +103,10 @@ export function CustomerPortalHome({ data }: { data: BerandaPortal }) {
             <p className="customer-portal-muted">
               {data.tiketTerbuka > 0 ? "Laporan Anda sedang ditangani oleh tim kami." : "Belum ada laporan gangguan yang terbuka."}
             </p>
-            <div className="customer-portal-readonly-action">Pelaporan gangguan segera tersedia</div>
           </article>
         </section>
+
+        <CustomerPortalIncidentForm openTicketCount={data.tiketTerbuka} />
 
         <section className="customer-portal-card customer-portal-billing" aria-labelledby="customer-portal-billing-title">
           <div className="customer-portal-card-heading">

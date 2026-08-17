@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { CustomerPortalLoginForm } from "@/components/customer-portal-login-form";
 import { Logo } from "@/components/logo";
 
 export const metadata = { title: "Portal Pelanggan" };
@@ -13,13 +13,8 @@ export default function CustomerPortalLoginPage() {
         </div>
         <span className="customer-portal-eyebrow">Akses pelanggan</span>
         <h1>Masuk ke layanan Anda</h1>
-        <p>
-          Login portal pelanggan sedang menunggu penyambungan autentikasi resmi. Tidak ada form sementara yang menyimpan atau mengirim sandi.
-        </p>
-        <div className="customer-portal-honest-note">
-          Gunakan nomor layanan dan sandi portal setelah integrasi resmi dari server tersedia.
-        </div>
-        <Link href="/login" className="btn-secondary customer-portal-back-link">Kembali</Link>
+        <p>Masuk menggunakan nomor layanan dan kata sandi portal yang diberikan oleh PerumNet.</p>
+        <CustomerPortalLoginForm />
       </section>
     </main>
   );

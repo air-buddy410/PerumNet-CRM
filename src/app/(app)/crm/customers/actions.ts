@@ -201,7 +201,17 @@ export async function aturSandiPortalAction(formData: FormData): Promise<AksiBer
   const user = await requirePermission(PERMISSIONS.CUSTOMERS_EDIT);
   const customerId = String(formData.get("customerId") ?? "");
   const sandi = String(formData.get("sandi") ?? "");
+  const konfirmasi = String(formData.get("konfirmasiSandi") ?? "");
   if (!customerId) return { ok: false, error: "Pelanggan tidak disebutkan." };
+
+  // Konfirmasi diperiksa DI SINI juga, bukan hanya di layar. Pemeriksaan yang
+  // cuma ada di peramban bisa dilewati — dan akibatnya bukan celah keamanan
+  // melainkan sesuatu yang lebih senyap: sandi salah ketik tersimpan, staf
+  // mengira sudah benar, dan pelanggan tidak bisa masuk tanpa siapa pun tahu
+  // sebabnya. Bidangnya opsional supaya pemanggil lain tidak ikut terikat.
+  if (konfirmasi && sandi !== konfirmasi) {
+    return { ok: false, error: "Konfirmasi kata sandi belum sama." };
+  }
 
   const hasil = await aturSandiPortal(customerId, sandi, user.id);
   if (!hasil.ok) return hasil;

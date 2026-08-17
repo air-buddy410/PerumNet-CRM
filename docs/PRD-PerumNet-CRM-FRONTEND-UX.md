@@ -1299,3 +1299,27 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   panel keluar card, teks panjang menabrak kontrol, hydration warning,
   horizontal overflow, atau status `BELUM DIKETAHUI` yang terbaca sebagai
   offline.
+
+## 47. Aktivasi Wrapper Portal dan Dossier Customer
+
+- Login portal `/pelanggan/login` memakai `masukPortalAction` resmi dengan
+  nomor layanan, password visibility toggle, loading state, dan pesan gagal
+  generik. Password tidak disimpan di localStorage, URL, atau state global.
+- Beranda `/pelanggan` menyediakan logout melalui `keluarPortalAction` dan
+  panel inline laporan gangguan melalui `laporGangguanAction`. Validasi judul
+  dan detail membantu pengguna di browser, sedangkan duplicate incident,
+  kategori, actor, audit, dan pembatasan laporan tetap ditentukan backend.
+- Detail customer menyediakan upload berkas inline melalui
+  `unggahBerkasPelangganAction`. Pilihan KTP hanya tersedia bagi user dengan
+  `customers.pii_view`; file lain tetap mengikuti `customers.edit`. Guard
+  client membatasi ukuran 5 MB, sementara MIME dan magic byte tetap divalidasi
+  server.
+- Detail akun portal menyediakan pengaturan atau reset password melalui
+  `aturSandiPortalAction` dan pengeluaran seluruh sesi melalui
+  `keluarkanSemuaPerangkatAction`. Password, hash, token, dan session epoch
+  tidak pernah ditampilkan.
+- Portal pelanggan tetap memakai layout terpisah dari Portal Lapangan/staf.
+  Tagihan lama ditampilkan apa adanya dan `BELUM DIKETAHUI` tetap bukan offline.
+- Acceptance responsive: login, laporan, upload, reset password, dan kontrol
+  sesi harus rapi pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan
+  360×800 tanpa overflow, overlap, teks keluar card, atau tombol tanpa state.

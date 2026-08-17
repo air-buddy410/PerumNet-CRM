@@ -158,3 +158,23 @@ Frontend sudah menyediakan preview kartu dua sisi ISO B4, rotasi manual, halaman
 - **Layar:** `/pelanggan`, `/pelanggan/login`
 - **Status:** UI read-only dan layout terpisah sudah tersedia. Beranda memakai `loadBerandaPortal()` hanya setelah sesi portal resmi valid; pesan tagihan lama ditampilkan apa adanya sampai cutover.
 - **Catatan:** status `BELUM DIKETAHUI` bukan status offline. Kontrol write-flow tetap menunggu wrapper Opus dan tidak dibuat sebagai form palsu.
+
+## Fase 87 — Wrapper portal dan dossier sudah aktif
+
+Opus sudah menerbitkan wrapper resmi pada `src/app/pelanggan/actions.ts` dan
+`src/app/(app)/crm/customers/actions.ts`. Frontend kini dapat mengaktifkan
+flow berikut tanpa memanggil service internal langsung dari browser:
+
+- `masukPortalAction` dan `keluarPortalAction` untuk login/logout portal dengan
+  cookie portal terpisah dan error generik.
+- `laporGangguanAction` untuk laporan milik sesi pelanggan; duplicate incident,
+  kategori, actor sistem, audit, dan revalidasi tetap dikerjakan server.
+- `unggahBerkasPelangganAction` untuk upload multipart. KTP tetap menuntut
+  `customers.pii_view`, sedangkan berkas lain memakai `customers.edit`.
+- `aturSandiPortalAction` untuk staf membuat atau mengatur ulang sandi portal.
+- `keluarkanSemuaPerangkatAction` untuk staf mengakhiri seluruh sesi portal.
+
+Frontend tidak menambahkan reset password mandiri pelanggan karena wrapper
+tersebut belum tersedia. Validasi file di browser hanya guard kenyamanan 5 MB;
+validasi MIME, magic byte, izin, audit, hash, dan session invalidation tetap
+menjadi tanggung jawab backend.
