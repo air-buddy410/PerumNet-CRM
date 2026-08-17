@@ -72,6 +72,7 @@ services:
       OLT_ABG_CRED: ${OLT_ABG_CRED:-}
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
+      OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
     ports:
       - "${APP_PORT:-3300}:3300"
@@ -131,6 +132,7 @@ services:
       OLT_ABG_CRED: ${OLT_ABG_CRED:-}
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
+      OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
       WORKER_TICK_MS: ${WORKER_TICK_MS:-15000}
     volumes:
       - uploads:/app/uploads
@@ -181,6 +183,7 @@ services:
       OLT_ABG_CRED: ${OLT_ABG_CRED:-}
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
+      OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
       APP_URL: ${APP_URL:-http://localhost:3300}
       MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}

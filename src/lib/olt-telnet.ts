@@ -113,7 +113,11 @@ export function bacaKredensialOlt(credentialRef: string | null): { user: string;
 // harus jadi keputusan sadar yang terlihat di riwayat berkas ini.
 
 /** Kata pertama yang boleh dikirim ke konsol perangkat. */
-const PERINTAH_BOLEH = new Set(["show", "display", "enable", "configure", "exit", "quit", "end", "?"]);
+// `interface` ikut diizinkan dengan sadar: pada HSGQ, perintah baca optik
+// hidup DI DALAM konteks `interface gpon N`, dan masuk ke konteks itu tidak
+// mengubah apa pun — yang mengubah adalah perintah yang dikirim di dalamnya,
+// dan itulah yang tetap disaring daftar ini.
+const PERINTAH_BOLEH = new Set(["show", "display", "enable", "configure", "interface", "exit", "quit", "end", "?"]);
 
 export class PerintahDitolak extends OltTelnetError {}
 

@@ -121,3 +121,68 @@ export function keteranganMutu(m: MutuSinyal): string {
       return "Di bawah batas penerima GPON — sambungan kemungkinan sudah tidak stabil.";
   }
 }
+
+// ── Jalur CLI: ZTE C600 dan HSGQ (Fase 88b lanjutan) ────────────
+//
+// Ditemukan 17 Agustus 2026 dengan menjelajah konsolnya langsung, sebab kedua
+// firmware ini tidak memancarkan DDM lewat SNMP:
+//
+//   ZTE C600 : `show pon power onu-rx gpon_onu-1/17/3:2`
+//              → `gpon_onu-1/17/3:2    -18.292(dbm)`
+//   HSGQ     : `interface gpon 6` lalu `show ont-optical 1`
+//              → `Receive power(dBm)   :-17.2720`
+//
+// Nilainya SUDAH dBm — beda dari SNMP C300 yang tersandi 0.002x−30. Penjaga
+// rentangnya tetap sama: angka di luar jendela kerja GPON dibuang, bukan
+// ditampilkan.
+
+/** Batas bersama untuk nilai yang sudah berbentuk dBm. */
+export function sahkanDbm(dBm: number): BacaanRx {
+  if (!Number.isFinite(dBm)) {
+    return { dBm: null, alasan: "Perangkat tidak memberikan angka." };
+  }
+  if (dBm < -45 || dBm > -8) {
+    return { dBm: null, alasan: `Nilai ${dBm} dBm di luar rentang kerja GPON — dibuang, bukan ditampilkan.` };
+  }
+  return { dBm: Math.round(dBm * 100) / 100, alasan: null };
+}
+
+/** Perintah pembaca RX pada ZTE (C600 maupun C300 lewat CLI). */
+export function perintahRxZte(p: PosisiOnu): string {
+  return `show pon power onu-rx gpon_onu-1/${p.slot}/${p.port}:${p.index}`;
+}
+
+/**
+ * Membaca jawaban `show pon power onu-rx`.
+ *
+ * Bentuk sungguhannya: `gpon_onu-1/17/3:2    -18.292(dbm)`. ONU yang tidak
+ * dikenal dijawab kalimat galat tanpa angka — dan itu dikembalikan sebagai
+ * "tidak ditemukan", bukan diarang jadi nol.
+ */
+export function bacaJawabanRxZte(keluaran: string): BacaanRx {
+  const m = /(-?\d+(?:\.\d+)?)\s*\(\s*dbm\s*\)/i.exec(keluaran);
+  if (!m) {
+    return { dBm: null, alasan: "Perangkat tidak mengembalikan nilai RX — ONU mungkin tidak dikenal atau sedang mati." };
+  }
+  return sahkanDbm(Number(m[1]));
+}
+
+/**
+ * Rangkaian perintah pembaca RX pada HSGQ.
+ *
+ * `enable` dan `configure` hanya berpindah mode; `interface gpon N` masuk ke
+ * konteks port. Tidak satu pun mengubah keadaan, dan daftar putih di
+ * `olt-telnet.ts` tetap menyaring semuanya.
+ */
+export function perintahRxHsgq(p: PosisiOnu): string[] {
+  return ["enable", "configure", `interface gpon ${p.port}`, `show ont-optical ${p.index}`];
+}
+
+/** Membaca `Receive power(dBm)   :-17.2720` dari jawaban HSGQ. */
+export function bacaJawabanRxHsgq(keluaran: string): BacaanRx {
+  const m = /receive\s*power\s*\(dBm\)\s*:\s*(-?\d+(?:\.\d+)?)/i.exec(keluaran);
+  if (!m) {
+    return { dBm: null, alasan: "Perangkat tidak mengembalikan Receive power — ONU mungkin tidak dikenal atau sedang mati." };
+  }
+  return sahkanDbm(Number(m[1]));
+}

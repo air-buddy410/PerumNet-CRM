@@ -26,10 +26,16 @@ import {
   oidRxC300,
   oidNamaC300,
   bacaRxC300,
+  perintahRxZte,
+  bacaJawabanRxZte,
+  perintahRxHsgq,
+  bacaJawabanRxHsgq,
   nilaiMutu,
   keteranganMutu,
   type MutuSinyal,
+  type BacaanRx,
 } from "@/lib/onu-optical";
+import { bacaKredensialOlt, jalankanPerintahMultiPort, OltTelnetError } from "@/lib/olt-telnet";
 
 export interface HasilDayaOnu {
   ok: true;
@@ -71,6 +77,8 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
                       vendor: true,
                       model: true,
                       name: true,
+                      telnetPort: true,
+                      credentialRef: true,
                       networkDevice: { select: { hostname: true } },
                     },
                   },
@@ -98,29 +106,16 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
     return { ok: false, sebab: "TANPA_POSISI", pesan: "ODP pelanggan ini belum tertaut ke OLT mana pun." };
   }
 
-  // Hanya C300 yang memancarkan tabel optik lewat SNMP. C600 dan HSGQ sudah
-  // dijelajahi penuh dan memang tidak punya — lihat kepala `onu-optical.ts`.
-  const c300 = olt.vendor === "ZTE" && /300/.test(olt.model ?? "");
-  if (!c300) {
-    return {
-      ok: false,
-      sebab: "BELUM_DIDUKUNG",
-      pesan:
-        `OLT ${olt.name ?? olt.networkDevice.hostname} tidak memancarkan daya ONU lewat SNMP — ` +
-        `pembacaannya menunggu jalur CLI (perlu kredensial OLT).`,
-    };
-  }
-
-  const target = await targetSnmp(olt.networkDevice.hostname);
-  if (!target.ok) return { ok: false, sebab: "GALAT", pesan: target.error };
-
-  try {
-    const [rawRx, rawNama] = await snmpGet(target.host, target.community, [
-      oidRxC300(posisi),
-      oidNamaC300(posisi),
-    ]);
-
-    const rx = bacaRxC300(typeof rawRx === "number" ? rawRx : Number(rawRx));
+  // Tiga jalur, dipilih menurut apa yang perangkatnya sanggup:
+  //
+  //   C300  → SNMP  — satu-satunya yang memancarkan tabel optik
+  //   C600  → CLI   — `show pon power onu-rx`, ditemukan 17 Agustus 2026
+  //   HSGQ  → CLI   — `interface gpon N` lalu `show ont-optical`
+  //
+  // Seluruh jalur CLI melewati daftar putih perintah di `olt-telnet.ts`:
+  // hanya membaca, dan perintah pengubah ditolak sebelum menyentuh soket.
+  const namaOlt = olt.name ?? olt.networkDevice.hostname;
+  const jadi = (rx: BacaanRx, namaDiPerangkat: string | null): HasilDayaOnu | GagalDayaOnu => {
     if (rx.dBm === null) {
       return { ok: false, sebab: "TAK_TERBACA", pesan: rx.alasan ?? "Perangkat tidak memberikan nilai." };
     }
@@ -128,20 +123,60 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
     return {
       ok: true,
       serviceNumber: sub.serviceNumber,
-      olt: olt.name ?? olt.networkDevice.hostname,
+      olt: namaOlt,
       posisi: sub.onuPosition!,
       dBm: rx.dBm,
       mutu,
       keterangan: keteranganMutu(mutu),
-      namaDiPerangkat: rawNama == null ? null : String(rawNama),
+      namaDiPerangkat,
       dibacaPada: new Date(),
     };
+  };
+
+  const c300 = olt.vendor === "ZTE" && /300/.test(olt.model ?? "");
+  if (c300) {
+    const target = await targetSnmp(olt.networkDevice.hostname);
+    if (!target.ok) return { ok: false, sebab: "GALAT", pesan: target.error };
+    try {
+      const [rawRx, rawNama] = await snmpGet(target.host, target.community, [
+        oidRxC300(posisi),
+        oidNamaC300(posisi),
+      ]);
+      return jadi(
+        bacaRxC300(typeof rawRx === "number" ? rawRx : Number(rawRx)),
+        rawNama == null ? null : String(rawNama)
+      );
+    } catch (e) {
+      return { ok: false, sebab: "GALAT", pesan: `OLT tidak menjawab: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
+  // Jalur CLI — ZTE C600 dan HSGQ.
+  let kred;
+  try {
+    kred = bacaKredensialOlt(olt.credentialRef);
   } catch (e) {
     return {
       ok: false,
-      sebab: "GALAT",
-      pesan: `OLT tidak menjawab: ${e instanceof Error ? e.message : String(e)}`,
+      sebab: "BELUM_DIDUKUNG",
+      pesan: `OLT ${namaOlt} dibaca lewat CLI, tetapi kredensialnya belum siap: ${(e as Error).message}`,
     };
+  }
+
+  const ports = [olt.telnetPort ?? 23, 23];
+  const zte = olt.vendor === "ZTE";
+  const perintah = zte ? [perintahRxZte(posisi)] : perintahRxHsgq(posisi);
+
+  try {
+    const { keluaran } = await jalankanPerintahMultiPort(
+      { host: olt.networkDevice.hostname, user: kred.user, password: kred.password },
+      ports,
+      perintah
+    );
+    return jadi(zte ? bacaJawabanRxZte(keluaran) : bacaJawabanRxHsgq(keluaran), null);
+  } catch (e) {
+    const pesan = e instanceof OltTelnetError ? e.message : String(e);
+    return { ok: false, sebab: "GALAT", pesan };
   }
 }
 

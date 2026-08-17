@@ -6,7 +6,8 @@
     "192.168.100.12": "HSGQ-102-SerayaTengah",
     "192.168.100.30": "ZTE-C300-102-Pesagi",
     "192.168.100.60": "ZTE-C600-100-Kecicang",
-    "192.168.100.61": "ZTE-C600-104-Abang"
+    "192.168.100.61": "ZTE-C600-104-Abang",
+    "192.168.100.10": "HSGQ-100-Kecicang"
   },
   "_catatanOdp": "Nama sebagaimana ditulis berkas ODP → hostname LibreNMS.",
   "catatanOdp": {
@@ -14,12 +15,11 @@
     "OLT HSGQ Seraya Tengah": "192.168.100.12",
     "OLT ZTE C300 Pesagi": "192.168.100.30",
     "OLT ZTE C600 Kecicang": "192.168.100.60",
-    "OLT ZTE C600 Abang": "192.168.100.61"
+    "OLT ZTE C600 Abang": "192.168.100.61",
+    "OLT HSGQ Kecicang": "192.168.100.10"
   },
-  "_takTerpantau": "OLT HSGQ Kecicang HIDUP dan melayani 28 ODP serta 97 pelanggan, tetapi modelnya TIDAK MENDUKUNG SNMP — LibreNMS tidak akan pernah bisa menariknya, berapa lama pun ditunggu. Jadi ini bukan baris yang menunggu diisi: ia sengaja dikosongkan, dan pemilik jaringan sudah memutuskan membiarkannya (16 Agustus 2026). Menjodohkannya ke OLT Kecicang yang lain berarti mengarang jalur serat — jangan. Kalau suatu hari perangkatnya dicatat manual, barulah tambahkan barisnya di `catatanOdp`.",
-  "takTerpantau": [
-    "OLT HSGQ Kecicang"
-  ],
+  "_takTerpantau": "SEJARAH — DIBALIK 17 Agustus 2026 malam. OLT HSGQ Kecicang semula dicatat 'hidup tapi tidak bisa dipantau' karena modelnya tidak mendukung SNMP. Ternyata CLI-nya terbuka penuh di 192.168.100.10:1023 dan perangkatnya kini terdaftar di CRM (dibaca telnet, baca-saja). Yang tetap benar: LibreNMS tidak akan pernah bisa menariknya — jadi ia tidak akan muncul di sinkron SNMP, dan itu BUKAN kerusakan.",
+  "takTerpantau": [],
   "_samaDengan": "Nama pada berkas OLT → nama pada catatan ODP. Dipakai HANYA untuk memeriksa silang, tidak untuk memilih.",
   "samaDengan": {
     "HSGQ-100-Kecicang": "OLT HSGQ Kecicang",
@@ -35,6 +35,7 @@
     "192.168.100.60": "OLT_KCC_CRED",
     "192.168.100.61": "OLT_ABG_CRED",
     "192.168.100.11": "OLT_SRYB_CRED",
-    "192.168.100.12": "OLT_SRYT_CRED"
+    "192.168.100.12": "OLT_SRYT_CRED",
+    "192.168.100.10": "OLT_KCC_HSGQ_CRED"
   }
 }
