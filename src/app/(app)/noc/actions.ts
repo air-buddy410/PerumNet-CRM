@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { koordinatDariForm } from "@/lib/noc-site";
+import { simpanKredensial, hapusKredensial, pakaiKredensial, tandaiTerbukti } from "@/lib/kredensial-perangkat-service";
+import { jalankanPerintahMultiPort, OltTelnetError } from "@/lib/olt-telnet";
 import {
   PERMISSIONS,
   SITE_TYPES,
@@ -220,4 +222,83 @@ export async function saveLinkAction(formData: FormData): Promise<void> {
   });
   revalidatePath("/noc/links");
   redirect("/noc/links?ok=" + encodeURIComponent("Link tersimpan."));
+}
+
+// ── Fase 89: kredensial perangkat dari layar, bukan dari berkas ──
+
+/**
+ * Menyimpan kredensial telnet/SSH sebuah perangkat.
+ *
+ * Sandinya disegel sebelum menyentuh basis data. Tidak ada env var yang perlu
+ * ditambah — NOC mengisinya sendiri, IT cukup memasang satu kunci utama sekali.
+ */
+export async function simpanKredensialPerangkatAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
+  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+
+  const portRaw = String(formData.get("port") ?? "").trim();
+  const hasil = await simpanKredensial(
+    networkDeviceId,
+    {
+      protokol: String(formData.get("protokol") ?? "TELNET"),
+      port: portRaw ? Number(portRaw) : null,
+      username: String(formData.get("username") ?? ""),
+      sandi: String(formData.get("sandi") ?? ""),
+    },
+    user.id
+  );
+  if (hasil.ok) revalidatePath("/noc/devices");
+  return hasil;
+}
+
+/** Menghapus kredensial perangkat. */
+export async function hapusKredensialPerangkatAction(formData: FormData) {
+  const user = await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
+  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+  await hapusKredensial(networkDeviceId, user.id);
+  revalidatePath("/noc/devices");
+  return { ok: true as const };
+}
+
+/**
+ * Menguji kredensial dengan MASUK saja — tanpa menjalankan perintah apa pun.
+ *
+ * Sampai di prompt sudah membuktikan kredensialnya benar, dan itu menghapus
+ * seluruh kelas galat "perintah tidak dikenal" dari jalur diagnosis.
+ */
+export async function ujiKredensialPerangkatAction(formData: FormData) {
+  await requirePermission(PERMISSIONS.NET_INVENTORY_MANAGE);
+  const networkDeviceId = String(formData.get("networkDeviceId") ?? "");
+  if (!networkDeviceId) return { ok: false as const, error: "Perangkat tidak disebutkan." };
+
+  const perangkat = await db.networkDevice.findUnique({
+    where: { id: networkDeviceId },
+    select: { hostname: true },
+  });
+  if (!perangkat) return { ok: false as const, error: "Perangkat tidak ditemukan." };
+
+  let kred;
+  try {
+    kred = await pakaiKredensial(networkDeviceId);
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message };
+  }
+  if (kred.protokol !== "TELNET") {
+    return { ok: false as const, error: "Uji otomatis baru tersedia untuk TELNET. SSH menyusul." };
+  }
+
+  try {
+    await jalankanPerintahMultiPort(
+      { host: perangkat.hostname, user: kred.user, password: kred.password },
+      [kred.port, 23],
+      []
+    );
+    await tandaiTerbukti(networkDeviceId);
+    revalidatePath("/noc/devices");
+    return { ok: true as const, pesan: `Masuk berhasil sebagai "${kred.user}".` };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof OltTelnetError ? e.message : String(e) };
+  }
 }

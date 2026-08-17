@@ -37,7 +37,8 @@ import {
   type MutuSinyal,
   type BacaanRx,
 } from "@/lib/onu-optical";
-import { bacaKredensialOlt, jalankanPerintahMultiPort, OltTelnetError } from "@/lib/olt-telnet";
+import { jalankanPerintahMultiPort, OltTelnetError } from "@/lib/olt-telnet";
+import { pakaiKredensial } from "@/lib/kredensial-perangkat-service";
 
 export interface HasilDayaOnu {
   ok: true;
@@ -87,6 +88,7 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
                       name: true,
                       telnetPort: true,
                       credentialRef: true,
+                      networkDeviceId: true,
                       networkDevice: { select: { hostname: true } },
                     },
                   },
@@ -147,8 +149,16 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
   // C300 punya DUA jalur, dan CLI menang bila kredensialnya ada: SNMP-nya
   // memberi daya tetapi TIDAK memberi jarak. Tanpa kredensial ia tetap
   // terbaca lewat SNMP — separuh jawaban lebih baik daripada nol.
-  const c300PunyaKredensial =
-    c300 && !!olt.credentialRef && olt.credentialRef !== "LIBRENMS_API_TOKEN" && !!process.env[olt.credentialRef];
+  // Brankas basis data DULU, env var sebagai cadangan — urutan yang sama di
+  // seluruh sistem, supaya kredensial yang diisi NOC dari layar langsung
+  // berlaku tanpa menunggu siapa pun menyunting berkas.
+  let kred: Awaited<ReturnType<typeof pakaiKredensial>> | null = null;
+  try {
+    kred = await pakaiKredensial(olt.networkDeviceId, olt.telnetPort);
+  } catch {
+    kred = null;
+  }
+  const c300PunyaKredensial = c300 && kred !== null;
 
   if (c300 && !c300PunyaKredensial) {
     const target = await targetSnmp(olt.networkDevice.hostname);
@@ -168,18 +178,17 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
   }
 
   // Jalur CLI — ZTE C600 dan HSGQ.
-  let kred;
-  try {
-    kred = bacaKredensialOlt(olt.credentialRef);
-  } catch (e) {
+  if (!kred) {
     return {
       ok: false,
       sebab: "BELUM_DIDUKUNG",
-      pesan: `OLT ${namaOlt} dibaca lewat CLI, tetapi kredensialnya belum siap: ${(e as Error).message}`,
+      pesan:
+        `OLT ${namaOlt} dibaca lewat CLI, tetapi kredensialnya belum ada. ` +
+        `Isi dari layar perangkat — tidak perlu menyentuh berkas apa pun.`,
     };
   }
 
-  const ports = [olt.telnetPort ?? 23, 23];
+  const ports = [kred.port, olt.telnetPort ?? 23, 23];
   const zte = olt.vendor === "ZTE";
   const platform: "C600" | "C300" = c300 ? "C300" : "C600";
   // Pada ZTE, jarak ikut dibaca DALAM SESI YANG SAMA — dua perintah satu

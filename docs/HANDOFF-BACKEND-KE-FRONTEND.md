@@ -2905,3 +2905,81 @@ CRM tidak punya helpdesk.
 
 Tidak ada tombol, tidak ada tautan, tidak ada aksi. Papan hanya memberi tahu;
 yang bertindak membuka layar aslinya di komputernya.
+
+---
+
+## §49 — BUG PRODUKSI: peta jaringan, ODP tidak bisa dibuka
+
+Dilaporkan 17 Agustus 2026: *"buka detail odp di peta maps nge bug, tidak bisa
+ditampilkan"*. Sudah saya telusuri sampai ke produksi. **Sisi server bersih** —
+seluruh 577 halaman `/noc/ftth/odp/<id>` saya panggil satu per satu di
+`crm.perumnet.id`, semuanya HTTP 200, nol galat. Panel denah port di
+`/noc/map?odp=<id>` juga tampil benar. Jadi ini murni di `network-map.tsx`,
+dan itu wilayahmu.
+
+Dua cacat yang saya temukan, keduanya nyata dan terukur.
+
+### 49.1 — Kanvas peta tidak pernah menyesuaikan lebar kontainernya
+
+**Terukur di produksi:** kotak peta `387 × 360`, kanvas MapLibre di dalamnya
+`16 × 360`. Peta terjepit jadi pita selebar 16 piksel. Tidak ada satu pun ODP
+yang bisa diklik dalam keadaan itu — persis keluhan yang masuk.
+
+Sebabnya: `map.resize()` hanya dipanggil di dua tempat — saat `fullscreenchange`
+(baris 616) dan saat tombol fokus ditekan (baris 625). MapLibre sendiri hanya
+menyimak `resize` milik `window`. Kalau yang berubah **kontainernya** dan bukan
+jendelanya — sidebar dibuka/ditutup, kartu ditata ulang setelah data datang,
+font selesai dimuat — MapLibre tidak tahu, dan ukuran lamanya menetap selamanya.
+
+**Yang dibutuhkan:** satu `ResizeObserver` pada elemen kontainer peta yang
+memanggil `map.resize()`. Pasang saat peta dibuat, putuskan di cleanup effect
+yang sama. Itu sekaligus menutup kasus fullscreen dan tombol fokus, jadi dua
+pemanggilan `resize()` yang sekarang boleh tetap ada atau kamu rapikan —
+terserah kamu, itu presentasi.
+
+**Cara menguji:** buka `/noc/map` di jendela selebar ±700 px, tunggu basemap,
+lalu bandingkan `getBoundingClientRect()` kanvas dengan kontainernya. Harus
+sama. Sekarang tidak.
+
+### 49.2 — 576 `<a>` di dalam `<svg>` membuat skrip Cloudflare jatuh
+
+**Terukur di produksi:** 576 elemen `<a>` di dalam `<svg>`, dan di setiap
+pemuatan `/noc/map` konsol dibanjiri:
+
+```
+TypeError: o.href.indexOf is not a function
+  at .../cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js
+```
+
+Sebabnya: Cloudflare Email Address Obfuscation menyisir **semua** anchor di
+halaman dan memanggil `a.href.indexOf(...)`. Untuk anchor HTML `href` itu
+string. Untuk anchor **SVG** `href` adalah objek `SVGAnimatedString` — tidak
+punya `.indexOf`. Jadi skrip itu melempar sekali untuk tiap ODP.
+
+Yang bikin ini penting: baris 884 merender fallback SVG **hanya ketika
+`status !== "ready"`** — yaitu tepat saat basemap belum/gagal muat. Jadi
+keadaan "peta tidak tampil" dan keadaan "576 exception di konsol" adalah
+keadaan yang **sama**. Fallback yang mestinya menyelamatkan justru jadi yang
+paling rapuh.
+
+**Yang dibutuhkan:** ODP di fallback jangan lagi berupa `<a>` di dalam `<svg>`.
+Dua jalan, pilih yang paling enak buatmu:
+
+1. Bikin simpulnya `<g role="link" tabIndex={0}>` dengan `onClick` +
+   `onKeyDown` (Enter/Space) yang memanggil `router.push(href)`. Aksesibilitas
+   tetap terjaga, dan `href` tidak lagi ada di DOM sebagai `SVGAnimatedString`.
+2. Atau tinggalkan SVG untuk fallback dan gambar ODP sebagai elemen HTML
+   berposisi absolut di atas kotak peta. Anchor HTML biasa, tidak ada masalah.
+
+Aku menyarankan yang pertama — perubahannya lebih kecil dan tata letaknya tidak
+bergeser.
+
+**Cara menguji:** buka `/noc/map`, tahan sampai fallback muncul, lalu pastikan
+`document.querySelectorAll('svg a').length === 0` dan konsol bersih dari
+`email-decode`.
+
+### Yang TIDAK perlu kamu sentuh
+
+Data, query, dan Server Action peta sudah benar; jangan diubah. Kalau setelah
+dua perbaikan itu masih ada ODP yang tidak mau terbuka, lempar balik ke aku
+lewat `PERMINTAAN-FRONTEND-KE-BACKEND.md` dengan id ODP-nya.

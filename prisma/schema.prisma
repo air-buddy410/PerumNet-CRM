@@ -180,6 +180,7 @@ model User {
   recordsRestored       ArchivedRecord[]        @relation("ArchiveRestorer")
   cardsIssued           EmployeeCard[]          @relation("CardIssuer")
   cardsRevoked          EmployeeCard[]          @relation("CardRevoker")
+  deviceCredentials DeviceCredential[] @relation("DeviceCredentialEditor")
 }
 
 model Division {
@@ -1242,6 +1243,7 @@ model NetworkDevice {
   mikrotikRouter MikrotikRouter?
   probeTargets   ProbeTarget[]
   ports          NetworkPort[]
+  deviceCredential DeviceCredential?
 }
 
 /// Fase 71 — antarmuka jaringan yang ditarik dari LibreNMS.
@@ -3325,3 +3327,39 @@ model CustomerAccount {
 // endAt, isPublished) berikut layarnya di /channels/announcements. Portal
 // membacanya, tim marketing menulisnya di tempat yang sama seperti sekarang.
 
+
+// ═══════════════ Fase 89: Brankas kredensial perangkat ═══════════════
+//
+// Sandi perangkat disimpan TERENKRIPSI (AES-256-GCM); kuncinya satu-satunya di
+// env `DEVICE_CRED_KEY`. Cadangan basis data yang bocor tanpa kunci itu
+// menghasilkan teks acak.
+//
+// Ini menggantikan keharusan menyunting `.env` tiap menambah perangkat: NOC
+// mengisinya dari layar, IT memasang satu kunci sekali. Pola lama (env var
+// per perangkat, `OltDevice.credentialRef`) TETAP dibaca sebagai cadangan —
+// perangkat yang sudah berjalan tidak perlu disentuh.
+model DeviceCredential {
+  id              String @id @default(cuid())
+  networkDeviceId String @unique
+
+  protocol String // TELNET | SSH
+  port     Int
+  username String
+
+  /// Sandi tersandi, base64. BUKAN teks — jangan pernah menampilkannya.
+  secretCipher String
+  /// Nonce acak per catatan. Tidak rahasia, tetapi tidak boleh berulang.
+  secretIv     String
+  /// Tanda segel GCM: catatan yang diubah langsung di basis data gagal dibuka.
+  secretTag    String
+
+  /// Kapan terakhir dipakai berhasil — menolong NOC melihat mana yang basi.
+  lastVerifiedAt DateTime?
+  notes          String?
+  updatedById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  networkDevice NetworkDevice @relation(fields: [networkDeviceId], references: [id], onDelete: Cascade)
+  updatedBy     User          @relation("DeviceCredentialEditor", fields: [updatedById], references: [id])
+}
