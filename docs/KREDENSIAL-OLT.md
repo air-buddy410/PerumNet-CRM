@@ -91,3 +91,51 @@ diubah di basis data — yang tersimpan di sana cuma nama variabelnya.
 Begitu uji login lolos, saya sambungkan pembacaan daya optik lewat CLI untuk
 OLT tersebut. Perintah bacanya berbeda per vendor, jadi urutannya: kredensial
 dulu, pembacaan menyusul — bukan sebaliknya.
+
+---
+
+## DEVICE_CRED_KEY — kunci brankas (Fase 89)
+
+Sejak Fase 89, perangkat baru **tidak lagi perlu variabel env sendiri**. NOC
+mengisi telnet/SSH dari layar; sandinya disegel AES-256-GCM dan disimpan di
+tabel `DeviceCredential`. Yang ada di env tinggal **satu** kunci utama.
+
+### Memasangnya (sekali seumur sistem)
+
+Di **VPS produksi**, bukan di laptop:
+
+```bash
+openssl rand -hex 32
+```
+
+Tempel hasilnya ke `.env` di samping `docker-compose.yml`:
+
+```
+DEVICE_CRED_KEY=<hasil openssl tadi>
+```
+
+Lalu nyalakan ulang:
+
+```bash
+docker compose up -d app worker
+```
+
+### Aturan yang tidak boleh dilanggar
+
+- **Kunci ini tidak pernah dikirim lewat chat, tiket, WhatsApp, atau commit.**
+  Dia membuka SELURUH sandi perangkat sekaligus. Cukup ada di `.env` VPS dan
+  di brankas sandi pribadi pemilik sistem.
+- **Hilang kunci = hilang semua sandi tersegel.** Tidak ada pemulihan. Yang
+  tersisa hanya mengisi ulang tiap perangkat dari layar. Simpan cadangannya
+  sebelum menyentuh apa pun.
+- **Jangan diganti selagi ada catatan di `DeviceCredential`.** Kunci baru tidak
+  bisa membuka segel lama; semua kredensial akan terbaca rusak sekaligus.
+- Tanpa kunci, aplikasi **tetap menyala**. Lima OLT lama tetap jalan lewat
+  `OLT_*_CRED`; yang belum bisa hanya menambah perangkat baru dari layar.
+
+### Hubungannya dengan OLT_*_CRED lama
+
+Brankas dibaca **lebih dulu**, env var jadi cadangan. Jadi lima OLT yang sudah
+berjalan tidak perlu disentuh sama sekali. Kalau nanti dipindah ke brankas,
+barulah barisnya boleh dihapus dari `.env` — satu per satu, setelah tombol uji
+di layar perangkat itu menjawab hijau.

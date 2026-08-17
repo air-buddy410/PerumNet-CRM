@@ -73,6 +73,18 @@ services:
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
+      # Fase 89 — SATU kunci utama untuk seluruh brankas kredensial perangkat.
+      # Perangkat yang ditambah NOC lewat layar disimpan tersegel di basis
+      # data; ini yang membukanya. Sengaja TIDAK memakai `:?` — tanpa kunci,
+      # aplikasi tetap menyala dan lima OLT di atas tetap jalan lewat env var;
+      # yang belum bisa hanya menambah perangkat baru dari layar. Kalau baris
+      # ini dibuat wajib, deploy yang belum sempat memasang kunci akan mati
+      # total padahal tidak ada yang rusak.
+      #
+      # HILANGNYA KUNCI = HILANGNYA SEMUA SANDI TERSEGEL. Tidak ada jalan
+      # pemulihan; yang tersisa hanya mengisi ulang tiap perangkat dari layar.
+      # Simpan cadangannya di tempat rahasia Abang, bukan di repo ini.
+      DEVICE_CRED_KEY: ${DEVICE_CRED_KEY:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
     ports:
       - "${APP_PORT:-3300}:3300"
@@ -133,6 +145,18 @@ services:
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
+      # Fase 89 — SATU kunci utama untuk seluruh brankas kredensial perangkat.
+      # Perangkat yang ditambah NOC lewat layar disimpan tersegel di basis
+      # data; ini yang membukanya. Sengaja TIDAK memakai `:?` — tanpa kunci,
+      # aplikasi tetap menyala dan lima OLT di atas tetap jalan lewat env var;
+      # yang belum bisa hanya menambah perangkat baru dari layar. Kalau baris
+      # ini dibuat wajib, deploy yang belum sempat memasang kunci akan mati
+      # total padahal tidak ada yang rusak.
+      #
+      # HILANGNYA KUNCI = HILANGNYA SEMUA SANDI TERSEGEL. Tidak ada jalan
+      # pemulihan; yang tersisa hanya mengisi ulang tiap perangkat dari layar.
+      # Simpan cadangannya di tempat rahasia Abang, bukan di repo ini.
+      DEVICE_CRED_KEY: ${DEVICE_CRED_KEY:-}
       WORKER_TICK_MS: ${WORKER_TICK_MS:-15000}
     volumes:
       - uploads:/app/uploads
@@ -184,6 +208,18 @@ services:
       OLT_SRYB_CRED: ${OLT_SRYB_CRED:-}
       OLT_SRYT_CRED: ${OLT_SRYT_CRED:-}
       OLT_KCC_HSGQ_CRED: ${OLT_KCC_HSGQ_CRED:-}
+      # Fase 89 — SATU kunci utama untuk seluruh brankas kredensial perangkat.
+      # Perangkat yang ditambah NOC lewat layar disimpan tersegel di basis
+      # data; ini yang membukanya. Sengaja TIDAK memakai `:?` — tanpa kunci,
+      # aplikasi tetap menyala dan lima OLT di atas tetap jalan lewat env var;
+      # yang belum bisa hanya menambah perangkat baru dari layar. Kalau baris
+      # ini dibuat wajib, deploy yang belum sempat memasang kunci akan mati
+      # total padahal tidak ada yang rusak.
+      #
+      # HILANGNYA KUNCI = HILANGNYA SEMUA SANDI TERSEGEL. Tidak ada jalan
+      # pemulihan; yang tersisa hanya mengisi ulang tiap perangkat dari layar.
+      # Simpan cadangannya di tempat rahasia Abang, bukan di repo ini.
+      DEVICE_CRED_KEY: ${DEVICE_CRED_KEY:-}
       LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
       APP_URL: ${APP_URL:-http://localhost:3300}
       MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}
