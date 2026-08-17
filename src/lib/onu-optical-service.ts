@@ -143,7 +143,14 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
   };
 
   const c300 = olt.vendor === "ZTE" && /300/.test(olt.model ?? "");
-  if (c300) {
+
+  // C300 punya DUA jalur, dan CLI menang bila kredensialnya ada: SNMP-nya
+  // memberi daya tetapi TIDAK memberi jarak. Tanpa kredensial ia tetap
+  // terbaca lewat SNMP — separuh jawaban lebih baik daripada nol.
+  const c300PunyaKredensial =
+    c300 && !!olt.credentialRef && olt.credentialRef !== "LIBRENMS_API_TOKEN" && !!process.env[olt.credentialRef];
+
+  if (c300 && !c300PunyaKredensial) {
     const target = await targetSnmp(olt.networkDevice.hostname);
     if (!target.ok) return { ok: false, sebab: "GALAT", pesan: target.error };
     try {
@@ -174,9 +181,12 @@ export async function bacaDayaOnu(subscriptionId: string): Promise<HasilDayaOnu 
 
   const ports = [olt.telnetPort ?? 23, 23];
   const zte = olt.vendor === "ZTE";
+  const platform: "C600" | "C300" = c300 ? "C300" : "C600";
   // Pada ZTE, jarak ikut dibaca DALAM SESI YANG SAMA — dua perintah satu
   // login, bukan dua login. Sesi konsol OLT terbatas jumlahnya.
-  const perintah = zte ? [perintahRxZte(posisi), perintahJarakZte(posisi)] : perintahRxHsgq(posisi);
+  const perintah = zte
+    ? [perintahRxZte(posisi, platform), perintahJarakZte(posisi, platform)]
+    : perintahRxHsgq(posisi);
 
   try {
     const { keluaran } = await jalankanPerintahMultiPort(

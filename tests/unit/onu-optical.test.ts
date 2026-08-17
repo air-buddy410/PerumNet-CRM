@@ -157,3 +157,39 @@ describe("jarak ONU (ZTE)", () => {
     assert.equal(bacaJarakZte(transkrip), 811);
   });
 });
+
+// ── Penamaan antarmuka berbeda antar platform ZTE ───────────────
+
+import { namaAntarmukaOnu } from "@/lib/onu-optical";
+
+const JAWAB_C300 =
+  "show pon power onu-rx gpon-onu_1/2/4:33\r\n" +
+  "Onu                  Rx power\r\n" +
+  "gpon-onu_1/2/4:33   -18.890(dbm)\r\nZXAN#" +
+  "show gpon onu detail-info gpon-onu_1/2/4:33\r\n" +
+  "  Phase state:         working\r\n" +
+  "  ONU Distance:        1213m\r\nZXAN#";
+
+describe("penamaan antarmuka ZTE per platform", () => {
+  test("garis dan garis bawah BERTUKAR antara C600 dan C300", () => {
+    // Ini satu-satunya bedanya, dan cukup untuk membuat C300 menjawab
+    // "%Error 20202: Invalid input" pada perintah yang sah di C600.
+    assert.equal(namaAntarmukaOnu({ slot: 17, port: 3, index: 2 }, "C600"), "gpon_onu-1/17/3:2");
+    assert.equal(namaAntarmukaOnu({ slot: 2, port: 4, index: 33 }, "C300"), "gpon-onu_1/2/4:33");
+  });
+
+  test("perintah tersusun dengan nama yang benar per platform", () => {
+    assert.match(perintahRxZte({ slot: 2, port: 4, index: 33 }, "C300"), /gpon-onu_1\/2\/4:33$/);
+    assert.match(perintahJarakZte({ slot: 2, port: 4, index: 33 }, "C300"), /gpon-onu_1\/2\/4:33$/);
+    assert.match(perintahRxZte({ slot: 17, port: 3, index: 2 }, "C600"), /gpon_onu-1\/17\/3:2$/);
+  });
+
+  test("C600 tetap bawaannya — pemanggil lama tidak berubah artinya", () => {
+    assert.equal(perintahRxZte({ slot: 17, port: 3, index: 2 }), "show pon power onu-rx gpon_onu-1/17/3:2");
+  });
+
+  test("transkrip C300 sungguhan: daya dan jarak terbaca parser yang sama", () => {
+    assert.equal(bacaJawabanRxZte(JAWAB_C300).dBm, -18.89);
+    assert.equal(bacaJarakZte(JAWAB_C300), 1213);
+  });
+});

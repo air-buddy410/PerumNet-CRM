@@ -147,9 +147,25 @@ export function sahkanDbm(dBm: number): BacaanRx {
   return { dBm: Math.round(dBm * 100) / 100, alasan: null };
 }
 
-/** Perintah pembaca RX pada ZTE (C600 maupun C300 lewat CLI). */
-export function perintahRxZte(p: PosisiOnu): string {
-  return `show pon power onu-rx gpon_onu-1/${p.slot}/${p.port}:${p.index}`;
+/**
+ * Nama antarmuka ONU — **berbeda antar platform ZTE**, dan bedanya cuma
+ * bertukarnya garis dengan garis bawah:
+ *
+ *   C600 : `gpon_onu-1/17/3:2`
+ *   C300 : `gpon-onu_1/2/4:33`
+ *
+ * Ketahuan karena sintaks C600 dijawab C300 dengan `%Error 20202: Invalid
+ * input`. Perangkatnya sendiri yang memberi tahu bentuk benarnya lewat `?` —
+ * dan itu jalan yang dipakai, bukan menebak dari ingatan.
+ */
+export function namaAntarmukaOnu(p: PosisiOnu, platform: "C600" | "C300"): string {
+  const alamat = `1/${p.slot}/${p.port}:${p.index}`;
+  return platform === "C300" ? `gpon-onu_${alamat}` : `gpon_onu-${alamat}`;
+}
+
+/** Perintah pembaca RX pada ZTE. */
+export function perintahRxZte(p: PosisiOnu, platform: "C600" | "C300" = "C600"): string {
+  return `show pon power onu-rx ${namaAntarmukaOnu(p, platform)}`;
 }
 
 /**
@@ -192,8 +208,8 @@ export function bacaJawabanRxHsgq(keluaran: string): BacaanRx {
 // Peta kemampuannya, dari penjelajahan 17 Agustus 2026 malam:
 //
 //   ZTE C600 : `show gpon onu detail-info` memuat `ONU Distance: 811m` ✓
-//   ZTE C300 : perintah yang sama ada, tetapi butuh kredensial CLI sendiri
-//              (OLT_PSG_CRED) — tabel SNMP-nya TIDAK memuat jarak
+//   ZTE C300 : sama, sesudah kredensial CLI-nya ada — `ONU Distance: 1213m` ✓
+//              (tabel SNMP-nya TIDAK memuat jarak, jadi CLI satu-satunya jalan)
 //   HSGQ     : tidak menyediakan jarak sama sekali — konteks gpon-nya sudah
 //              disisir penuh (ont-info, ont-optical, optical-state)
 //
@@ -201,8 +217,8 @@ export function bacaJawabanRxHsgq(keluaran: string): BacaanRx {
 // memberi, bukan pembacaannya gagal.
 
 /** Perintah detail ONU pada ZTE — satu-satunya yang memuat jarak. */
-export function perintahJarakZte(p: PosisiOnu): string {
-  return `show gpon onu detail-info gpon_onu-1/${p.slot}/${p.port}:${p.index}`;
+export function perintahJarakZte(p: PosisiOnu, platform: "C600" | "C300" = "C600"): string {
+  return `show gpon onu detail-info ${namaAntarmukaOnu(p, platform)}`;
 }
 
 /** Batas jarak yang masuk akal: GPON kelas B+ menjangkau ±20 km; 60 km sudah mustahil. */
