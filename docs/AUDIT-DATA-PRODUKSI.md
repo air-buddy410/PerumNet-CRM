@@ -471,3 +471,47 @@ tanggalnya berarti menagih orang pada hari yang dikarang.
 **Angka ini masuk akal, belum terbukti.** Yang membuktikan adalah perbandingan
 per pelanggan dengan nominal tagihan sistem lama pada periode yang sama —
 lihat `CUTOVER.md` bagian A.
+
+## Dua tanggal mulai tagih yang rusak di sumbernya (17 Agustus 2026)
+
+Dua langganan aktif tidak punya profil tagihan, dan penyebabnya ditelusuri ke
+sistem lama:
+
+| Nomor | Nama | Tanggal di sistem lama | ALUS |
+|---|---|---|---|
+| `PN102052505` | I Gede Wiyasa · S-PaketKeluarga Rp300.000 | **`0008-11-14`** — tahun 8 | `/customer/659` |
+| `PN102062543` | Ida Bagus Pidada Ngurah · S-PaketPersonal Rp200.000 | **`2034-11-15`** — delapan tahun ke depan | `/customer/1011` |
+
+Keduanya salah ketik. `0008` hampir pasti kehilangan dua digit di depan, dan
+`2034` kemungkinan `2024` — tetapi **keduanya tidak ditebak**, sebab tanggal
+mulai tagih menentukan pada hari apa orang ditagih dan sejak bulan mana. Salah
+menebak berarti menagih orang untuk bulan yang tidak pernah ia langgani, atau
+melewatkan berbulan-bulan yang seharusnya ditagih.
+
+**Ini kekeliruan terpencil, bukan pola.** Dari 1.713 profil yang berhasil
+masuk: nol bertanggal sebelum 2015, nol bertanggal lebih dari setahun ke depan.
+Empat bertanggal Oktober–Desember 2026 dan itu wajar — pelanggan yang sudah
+terdaftar tetapi belum mulai ditagih.
+
+Penjaga impornya bekerja tepat: ia menolak keduanya alih-alih menyimpan tahun 8
+sebagai tanggal yang sah.
+
+**Yang perlu dilakukan:** betulkan tanggalnya **di sistem lama** — ia masih
+sumber kebenaran sampai cutover. Sesudah itu satu perintah menariknya:
+
+```bash
+docker compose run --rm tools npx tsx scripts/_siapkan-profil-tagihan.ts tagih.tsv --terapkan
+```
+
+Selama belum dibetulkan, keduanya **tidak akan pernah ditagih CRM** — dan
+seperti temuan sebelumnya, ketiadaan itu tidak menghasilkan galat apa pun.
+
+## Alarm uji LibreNMS dihapus (17 Agustus 2026)
+
+`ALM-202608-0001` — "Testing transport from LibreNMS", 14 Agustus, sisa
+pengujian jalur webhook. Sudah ditutup, tanpa perangkat, tanpa insiden, tanpa
+pembuat. Dihapus atas permintaan pemilik jaringan; tabel alarm kini kosong.
+
+**Tidak akan terulang sendiri.** Pesan itu berasal dari uji transport manual di
+LibreNMS, bukan dari aturan peringatan. Aturan yang hidup di LibreNMS tinggal
+satu — **"Perangkat mati"** (critical), dan itu memang seharusnya ada.
