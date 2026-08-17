@@ -58,6 +58,13 @@ services:
       # verifikasi TLS, dan galatnya bicara soal sertifikat — bukan soal
       # variabel yang hilang, jadi mudah salah dikejar.
       MIKROTIK_INSECURE_TLS: ${MIKROTIK_INSECURE_TLS:-}
+      # Fase 87–88b. Sesi portal pelanggan memakai rahasia SENDIRI — bukan
+      # SESSION_SECRET staf — dan pembacaan daya ONU meminta community SNMP
+      # dari LibreNMS. Tanpa dua baris ini keduanya gagal saat DIPAKAI, bukan
+      # saat menyala: login portal melempar galat begitu disubmit, dan tombol
+      # baca daya menjawab "token belum terisi".
+      PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET:-}
+      LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
     ports:
       - "${APP_PORT:-3300}:3300"
     volumes:
@@ -143,6 +150,13 @@ services:
       # gagal" seolah memang tidak ada yang perlu dikerjakan.
       AUTH_PROVIDER: ${AUTH_PROVIDER:-MAILSERVER}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET belum diisi}
+      # Fase 87–88b. Sesi portal pelanggan memakai rahasia SENDIRI — bukan
+      # SESSION_SECRET staf — dan pembacaan daya ONU meminta community SNMP
+      # dari LibreNMS. Tanpa dua baris ini keduanya gagal saat DIPAKAI, bukan
+      # saat menyala: login portal melempar galat begitu disubmit, dan tombol
+      # baca daya menjawab "token belum terisi".
+      PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET:-}
+      LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN:-}
       APP_URL: ${APP_URL:-http://localhost:3300}
       MAILCOW_API_KEY: ${MAILCOW_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-}
