@@ -33,6 +33,24 @@ const terapkan = process.argv.includes("--terapkan");
 /** Port MikroTik API bila `managementUrl` tidak menyebutkannya. */
 const PORT_MIKROTIK_BAWAAN = 8728;
 
+/**
+ * Alamat yang dipakai probe.
+ *
+ * `hostname` OLT kebetulan berupa IP langsung (`192.168.100.x`) dan itu yang
+ * kita inginkan. Tetapi router bernama `PRM_NAGABASUKIH_D` — sebuah NAMA, yang
+ * tidak akan pernah ter-resolve dari container. Dry-run pertama menangkap ini;
+ * tanpa pemeriksaan di bawah, target router akan dibuat dan gagal selamanya,
+ * lalu menaikkan alarm palsu tiap menit.
+ *
+ * `managementIp` TIDAK dipakai untuk OLT dengan sengaja: kelimanya bernilai
+ * 172.30.10.6, jalur milik ALUS.
+ */
+function alamatProbe(hostname: string, managementIp: string | null): string | null {
+  const mirip = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname.trim());
+  if (mirip) return hostname.trim();
+  return managementIp?.trim() || null;
+}
+
 function portDariUrl(url: string | null | undefined): number | null {
   if (!url) return null;
   try {
@@ -53,6 +71,7 @@ async function main() {
       hostname: true,
       deviceType: true,
       siteId: true,
+      managementIp: true,
       oltDevice: { select: { telnetPort: true } },
       mikrotikRouter: { select: { managementUrl: true } },
     },
@@ -68,8 +87,10 @@ async function main() {
       portDariUrl(d.mikrotikRouter?.managementUrl) ??
       (d.mikrotikRouter ? PORT_MIKROTIK_BAWAAN : null);
 
-    if (!port) {
-      console.log(`  –  ${d.hostname.padEnd(20)} dilewati: tidak diketahui port mana yang pasti terbuka`);
+    const alamat = alamatProbe(d.hostname, d.managementIp);
+    if (!port || !alamat) {
+      const sebab = !alamat ? "tidak punya alamat IP yang bisa dihubungi" : "tidak diketahui port mana yang pasti terbuka";
+      console.log(`  –  ${d.hostname.padEnd(20)} dilewati: ${sebab}`);
       dilewati++;
       continue;
     }
@@ -85,14 +106,14 @@ async function main() {
     }
 
     console.log(
-      `  ${terapkan ? "✓" : "→"}  ${d.hostname.padEnd(20)} ${d.deviceType.padEnd(8)} TCP ${d.hostname}:${port}`
+      `  ${terapkan ? "✓" : "→"}  ${d.hostname.padEnd(20)} ${d.deviceType.padEnd(8)} TCP ${alamat}:${port}`
     );
 
     if (terapkan) {
       await db.probeTarget.create({
         data: {
           name: d.hostname,
-          address: d.hostname,
+          address: alamat,
           method: "TCP",
           port,
           kind: "DEVICE",
