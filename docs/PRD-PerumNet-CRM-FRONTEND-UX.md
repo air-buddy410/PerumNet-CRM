@@ -1496,3 +1496,34 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   default tanpa filter lama.
 - Perbaikan ini hanya menyelaraskan state presentasi dengan URL. Loader,
   permission, query, dan aturan filter backend tidak berubah.
+
+## 54. Audit layout informasi dan aksi halaman
+
+- Rail informasi kanan pada peta memakai status grid 2×2 agar Online, Offline,
+  Disabled, dan Belum tersedia tetap terbaca sebagai empat keadaan terpisah.
+  Angka tetap berasal dari `data.linkCounts`; tidak ada agregasi baru di
+  browser.
+- Rail peta memisahkan ringkasan status, waktu sinkronisasi, konteks ODP yang
+  dipilih, denah port, dan catatan cakupan. Catatan koordinat perkiraan serta
+  pelanggan tanpa port ODP tetap terlihat tanpa memenuhi area status.
+- Pada tablet, layout dengan rail kanan tetap ditumpuk ke satu kolom sebelum
+  rail menjadi terlalu sempit. Desktop lebar mempertahankan map dan rail
+  berdampingan; mobile memakai satu kolom dan kontrol tetap dapat dibaca.
+- Area pemilihan berkas pada impor pelanggan dibatasi ke lebar kerja yang
+  proporsional. Tombol Pratinjau berada dekat input pada desktop dan turun
+  menjadi tombol penuh pada layar sempit, sehingga tidak terdorong ke ujung
+  viewport.
+- Semua panel informasi, action, status, dan nama berkas wajib memiliki
+  `min-width: 0`, wrapping berbasis kata, dan tidak membuat horizontal
+  overflow. Perubahan ini hanya presentasi frontend; data, permission,
+  loader, dan action backend tidak berubah.
+
+### Acceptance responsive audit layout
+
+- `/noc/map` dan `/crm/customers/import` diperiksa pada 1440×900, 1920×1080,
+  1024×768, 768×1024, 390×844, dan 360×800.
+- Kartu status peta tidak memecah label satu huruf per baris, waktu
+  sinkronisasi tidak keluar rail, detail port tetap terpotong aman, dan catatan
+  panjang tetap berada di dalam card.
+- Header impor, input berkas, badge, pesan error, tabel preview, dan tombol
+  penerapan tidak saling tumpang tindih atau keluar viewport.

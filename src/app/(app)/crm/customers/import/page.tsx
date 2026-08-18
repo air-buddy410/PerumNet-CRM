@@ -11,7 +11,7 @@ export default async function CustomerImportPage() {
   await requirePermission(PERMISSIONS.SUBSCRIPTIONS_CREATE);
 
   return (
-    <div className="crm-page max-w-7xl">
+    <div className="crm-page crm-import-page max-w-7xl">
       <BackLink href="/crm/customers" label="Kembali ke daftar customer" />
       <PageHeader
         title="Impor Pelanggan"

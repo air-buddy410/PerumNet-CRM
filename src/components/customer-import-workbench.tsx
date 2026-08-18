@@ -222,8 +222,8 @@ export function CustomerImportWorkbench() {
           <span className="crm-badge is-neutral shrink-0">Customer + Subscription</span>
         </div>
 
-        <div className="mt-5 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <div className="min-w-0">
+        <div className="crm-import-file-controls mt-5 min-w-0">
+          <div className="crm-import-file-field min-w-0">
             <label className="label" htmlFor="customer-import-file">Berkas Excel</label>
             <input
               id="customer-import-file"

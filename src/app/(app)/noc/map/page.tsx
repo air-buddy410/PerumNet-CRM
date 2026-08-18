@@ -345,8 +345,8 @@ export default async function NetworkMapPage({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="card overflow-x-auto p-3">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="card min-w-0 p-3">
           <NetworkMap
             data={data}
             topology={topology}
@@ -420,68 +420,92 @@ export default async function NetworkMapPage({
           </div>
         </div>
 
-        <div className="card p-5">
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <aside className="crm-map-side-rail card min-w-0 p-4 sm:p-5" aria-labelledby="network-map-status-title">
+          <div className="crm-map-side-rail-heading">
+            <div className="min-w-0">
+              <p className="crm-map-side-rail-kicker">Ringkasan jaringan</p>
+              <h2 id="network-map-status-title">Status koneksi</h2>
+            </div>
+            <span className="crm-map-side-rail-scope">{isGlobalOfflineMode ? "Mode padam" : "Hasil peta"}</span>
+          </div>
+
+          <div className="crm-map-status-grid" aria-label="Ringkasan status koneksi customer">
             {(Object.keys(LINK_STATUS_COLOR) as LinkStatus[]).map((status) => (
-              <div key={status} className="rounded-lg border border-slate-100 bg-slate-50/60 p-2">
-                <span className="block text-[10px] uppercase tracking-wide text-slate-400">{LINK_STATUS_LABEL[status]}</span>
-                <strong className="block text-lg text-slate-700">{data.linkCounts[status]}</strong>
+              <div key={status} className={`crm-map-status-tile is-${status.toLowerCase()}`}>
+                <span className="crm-map-status-label">
+                  <span aria-hidden="true" style={{ backgroundColor: LINK_STATUS_COLOR[status] }} />
+                  {LINK_STATUS_LABEL[status]}
+                </span>
+                <strong>{data.linkCounts[status]}</strong>
+                <span className="crm-map-status-meta">customer</span>
               </div>
             ))}
           </div>
-          <p className="mb-4 text-[11px] text-slate-500">
-            Sinkronisasi terakhir: {data.lastSyncedAt ? formatMapTimestamp(data.lastSyncedAt) : "belum tersedia"}
-          </p>
+
+          <div className="crm-map-sync-row">
+            <span>Sinkronisasi terakhir</span>
+            <strong>{data.lastSyncedAt ? formatMapTimestamp(data.lastSyncedAt) : "Belum tersedia"}</strong>
+          </div>
+
           {isGlobalOfflineMode && data.customers.length === 0 ? (
-            <EmptyState message="Tidak ada customer offline pada data peta saat ini." />
+            <div className="crm-map-side-rail-section">
+              <EmptyState message="Tidak ada customer offline pada data peta saat ini." />
+            </div>
           ) : selected ? (
-            <>
-              <h2 className="mb-1 text-sm font-medium">{selected.code}</h2>
-              <p className="mb-3 text-xs text-slate-500">
+            <section className="crm-map-side-rail-section" aria-labelledby="selected-odp-title">
+              <div className="crm-map-detail-heading">
+                <div className="min-w-0">
+                  <p className="crm-map-side-rail-kicker">ODP terpilih</p>
+                  <h3 id="selected-odp-title">{selected.code}</h3>
+                </div>
+                <span className="crm-map-occupancy-badge">{OCCUPANCY_LABEL[selected.occupancy]}</span>
+              </div>
+              <p className="crm-map-detail-location">
                 {selected.siteName ?? "tanpa site"}
-                {selected.ponLabel ? ` · PON ${selected.ponLabel}` : ""} ·{" "}
-                {selected.used}/{selected.capacity} port ·{" "}
-                {OCCUPANCY_LABEL[selected.occupancy]}
-                {selected.opticPowerDbm !== null ? ` · ${selected.opticPowerDbm} dBm` : ""}
+                {selected.ponLabel ? ` · PON ${selected.ponLabel}` : ""}
               </p>
-              <h3 className="mb-2 text-xs font-medium text-slate-500">Denah Port</h3>
-              <ul className="space-y-1 text-xs">
+              <div className="crm-map-detail-meta">
+                <span>{selected.used}/{selected.capacity} port terpakai</span>
+                {selected.opticPowerDbm !== null && <span>{selected.opticPowerDbm} dBm</span>}
+              </div>
+              <h4 className="crm-map-section-title">Denah port</h4>
+              <ul className="crm-map-port-list">
                 {selectedPorts.map((port) => (
-                  <li key={port.id} className="flex justify-between gap-2">
-                    <span className="font-mono">#{String(port.portNumber).padStart(2, "0")}</span>
-                    <span className="flex-1 truncate">
+                  <li key={port.id} className="crm-map-port-row">
+                    <span className="crm-map-port-number">#{String(port.portNumber).padStart(2, "0")}</span>
+                    <span className="crm-map-port-customer">
                       {port.subscription
                         ? `${port.subscription.customer.name} (${port.subscription.serviceNumber})`
                         : "—"}
                     </span>
-                    <span className="text-slate-400">{port.status}</span>
+                    <span className="crm-map-port-status">{port.status}</span>
                   </li>
                 ))}
               </ul>
               <Link href={`/noc/ftth/odp/${selected.id}`} className="btn-secondary mt-4 w-full justify-center">
                 Buka Detail ODP
               </Link>
-            </>
+            </section>
           ) : (
-            <p className="text-xs text-slate-500">
-              Klik salah satu kotak ODP di peta untuk melihat denah portnya — siapa
-              menempati port nomor berapa.
-            </p>
+            <section className="crm-map-side-rail-section crm-map-side-rail-instruction">
+              <p className="crm-map-side-rail-kicker">Interaksi peta</p>
+              <p>Klik salah satu titik ODP untuk melihat denah port dan pelanggan yang menempatinya.</p>
+            </section>
           )}
 
           {data.missingCoordinates.customers > 0 && (
-            <p className="mt-4 text-xs text-amber-600">
+            <div className="crm-map-side-rail-note is-warning">
               {data.missingCoordinates.customers} pelanggan tidak punya koordinat
               sendiri dan digambar di titik ODP-nya sebagai perkiraan.
-            </p>
+            </div>
           )}
-          <p className="mt-4 text-xs leading-relaxed text-slate-500">
+          <div className="crm-map-side-rail-note is-muted">
             Peta hanya menampilkan pelanggan yang terlacak melalui port ODP. Pelanggan tanpa port ODP belum ditampilkan di peta ini.
-          </p>
+          </div>
           {data.routes.length > 0 && (
-            <p className="mt-4 text-[11px] text-slate-400">Panjang jalur hanya perkiraan dari geometri survey, bukan panjang kabel aktual.</p>
+            <div className="crm-map-side-rail-note is-muted is-small">Panjang jalur hanya perkiraan dari geometri survey, bukan panjang kabel aktual.</div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

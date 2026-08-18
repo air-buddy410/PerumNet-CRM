@@ -245,6 +245,44 @@
 .crm-page-header h1 { margin: 0; color: #33484a; font-size: clamp(25px, 2.4vw, 34px); font-weight: 800; letter-spacing: -1.35px; line-height: 1.14; }
 .crm-page-header p { max-width: 780px; margin: 8px 0 0; color: #718185; font-size: 13px; line-height: 1.55; }
 .crm-page-header > :last-child { flex: 0 0 auto; }
+.crm-import-page .crm-page-header { max-width: 72rem; }
+.crm-import-file-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; width: min(100%, 56rem); }
+.crm-import-file-field { min-width: 0; }
+.crm-import-file-controls input[type="file"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
+.crm-import-file-controls > .btn-primary { min-width: 8rem; }
+.crm-map-side-rail { display: grid; align-content: start; gap: 15px; }
+.crm-map-side-rail-heading, .crm-map-detail-heading, .crm-map-sync-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
+.crm-map-side-rail-kicker { margin: 0; color: #008d85; font-size: 9px; font-weight: 850; letter-spacing: .11em; line-height: 1.3; text-transform: uppercase; }
+.crm-map-side-rail-heading h2, .crm-map-detail-heading h3 { margin: 4px 0 0; color: #33484a; font-size: 18px; font-weight: 850; letter-spacing: -.35px; overflow-wrap: anywhere; }
+.crm-map-detail-heading h3 { font-size: 15px; }
+.crm-map-side-rail-scope, .crm-map-occupancy-badge { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 24px; max-width: 48%; padding: 0 9px; color: #007e76; background: #e4f7f5; border-radius: 999px; font-size: 9px; font-weight: 850; line-height: 1.2; text-align: center; white-space: nowrap; }
+.crm-map-occupancy-badge { color: #607573; background: #edf3f1; }
+.crm-map-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.crm-map-status-tile { display: grid; min-width: 0; gap: 4px; padding: 11px; background: #f8fbfa; border: 1px solid #e3eeeb; border-radius: 10px; }
+.crm-map-status-tile.is-online { border-color: #cdebd9; background: #f4fbf7; }
+.crm-map-status-tile.is-offline { border-color: #f0ccc8; background: #fff8f7; }
+.crm-map-status-tile.is-disabled { border-color: #dfe7e5; background: #f7faf9; }
+.crm-map-status-tile.is-unknown { border-color: #f0dfb8; background: #fffaf0; }
+.crm-map-status-label { display: flex; align-items: center; gap: 6px; min-width: 0; color: #718582; font-size: 9px; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; text-transform: uppercase; }
+.crm-map-status-label > span { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.crm-map-status-tile strong { color: #33484a; font-size: 23px; font-weight: 850; line-height: 1; }
+.crm-map-status-meta { color: #95a4a1; font-size: 9px; }
+.crm-map-sync-row { align-items: baseline; padding: 11px 0 0; border-top: 1px solid #e7efed; color: #879795; font-size: 10px; line-height: 1.4; }
+.crm-map-sync-row strong { color: #526767; font-size: 10px; font-weight: 800; text-align: right; }
+.crm-map-side-rail-section { min-width: 0; padding-top: 14px; border-top: 1px solid #e7efed; }
+.crm-map-side-rail-instruction p:last-child { margin: 7px 0 0; color: #607573; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.crm-map-detail-location { margin: 6px 0 0; color: #718582; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.crm-map-detail-meta { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; margin-top: 10px; }
+.crm-map-detail-meta span { min-width: 0; padding: 4px 7px; color: #607573; background: #f3f8f6; border-radius: 6px; font-size: 9px; font-weight: 750; overflow-wrap: anywhere; }
+.crm-map-section-title { margin: 15px 0 7px; color: #607573; font-size: 10px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+.crm-map-port-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.crm-map-port-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 7px 8px; background: #f8fbfa; border: 1px solid #e7efed; border-radius: 7px; color: #607573; font-size: 10px; }
+.crm-map-port-number { color: #526767; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 800; white-space: nowrap; }
+.crm-map-port-customer { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-map-port-status { color: #95a4a1; font-size: 9px; white-space: nowrap; }
+.crm-map-side-rail-note { min-width: 0; padding: 10px 11px; border-radius: 8px; color: #718582; background: #f7faf9; border: 1px solid #e7efed; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.crm-map-side-rail-note.is-warning { color: #8a5e23; background: #fff8e9; border-color: #f0d7a5; }
+.crm-map-side-rail-note.is-small { color: #879795; font-size: 9px; }
 .crm-flash { display: flex; align-items: center; min-height: 42px; margin-bottom: 16px; padding: 10px 13px; border: 1px solid; border-radius: 9px; font-size: 12px; font-weight: 650; }
 .crm-flash.is-error { color: #b84740; background: #fff7f6; border-color: #f0ccc8; }
 .crm-flash.is-success { color: #18814c; background: #f3fcf7; border-color: #ccebd9; }
@@ -1101,6 +1139,18 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
     max-width: 100%;
   }
   .crm-page-header h1 { overflow-wrap: break-word; word-break: normal; }
+}
+
+@media (min-width: 761px) and (max-width: 1279px) {
+  /* Fixed side rails are too narrow beside the content once the sidebar or
+     tablet drawer consumes part of the viewport. Stack those layouts until
+     the wide desktop breakpoint instead of forcing labels into a thin rail. */
+  .crm-page .grid[class*="lg:grid-cols-["] { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+@media (max-width: 640px) {
+  .crm-import-file-controls { grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .crm-import-file-controls > .btn-primary { width: 100%; }
 }
 
 @media (max-width: 380px) {
