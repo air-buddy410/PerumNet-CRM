@@ -396,6 +396,24 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     }
   }
 
+  // Saat saringan tingkat-pelanggan aktif, ODP ikut menyusut ke yang PUNYA
+  // pelanggan cocok.
+  //
+  // Tanpa ini, memilih "Offline" menyisakan 40 titik pelanggan di atas 576 ODP
+  // yang semuanya sehat — dan yang terlihat justru seluruh jaringan, bukan
+  // gangguannya. Saringan yang menjanjikan "hanya yang padam" tetapi tetap
+  // menggambar semua ODP membuat orang mengira ia melihat gambaran utuh.
+  //
+  // Site (POP) SENGAJA tidak ikut menyusut: jumlahnya enam, dan tanpa POP
+  // sebagai patokan orang kehilangan orientasi di peta.
+  const saringPelanggan = !!filter.subscriptionStatus || !!filter.linkStatus;
+  if (saringPelanggan) {
+    const odpDipakai = new Set(customers.map((c) => c.odpId).filter((x): x is string => !!x));
+    for (let i = odps.length - 1; i >= 0; i--) {
+      if (!odpDipakai.has(odps[i].id)) odps.splice(i, 1);
+    }
+  }
+
   const visible = new Set(odps.map((o) => o.id));
   const cascades = odps
     .filter((o) => o.parentId && visible.has(o.parentId))
