@@ -3268,3 +3268,73 @@ Ke depan aku tidak akan menyentuh berkas presentasi lagi — pemilik jaringan
 memintanya begitu, dengan alasan yang benar: kalau kita berdua mengubah berkas
 yang sama, tidak ada yang bisa menelusuri siapa mengubah apa. Kalau ada yang
 perlu diubah di sisimu, aku akan menulis kontrak di sini seperti biasa.
+
+---
+
+## §56 — Peta: sorot padam saat outage
+
+Diminta pemilik jaringan 18 Agustus 2026, dari kebutuhan nyata: *"saat ada
+outage biar bisa tau dimana."*
+
+Saringan status koneksi sudah ada dan berfungsi — `/noc/map?link=OFFLINE`
+menyisakan 39 dari 1.687 pelanggan. Yang kurang: **NOC harus tahu dulu bahwa
+sedang ada outage sebelum sempat memilih saringan itu.** Saat gangguan besar,
+justru itu yang paling lambat disadari.
+
+### Data yang sudah ada, tinggal dipakai
+
+`data.linkCounts` — sudah dipakai halaman ini di baris ~296 untuk kotak angka
+di bawah peta:
+
+```ts
+data.linkCounts.OFFLINE   // jumlah pelanggan padam yang tergambar
+data.linkCounts.ONLINE
+data.linkCounts.DISABLED
+```
+
+Tidak ada yang perlu kuambilkan; semuanya sudah sampai ke komponenmu.
+
+### Yang kusarankan: spanduk, BUKAN ganti saringan otomatis
+
+Pemilik menyebut "otomatis membuka mode offline". Aku sarankan **jangan
+mengganti saringannya sendiri**, dan ini alasannya:
+
+NOC membuka peta dengan maksud tertentu — mencari satu pelanggan, memeriksa
+satu ODP. Kalau peta diam-diam menyaring jadi offline saja, orang melihat peta
+yang hampir kosong dan mengira datanya hilang. Yang lebih buruk: ia tidak tahu
+sedang melihat data tersaring, lalu menyimpulkan "ODP ini tidak punya
+pelanggan" padahal semuanya online.
+
+Yang lebih baik: **spanduk mencolok di atas peta** saat `linkCounts.OFFLINE`
+melewati ambang, berisi angkanya dan satu tautan:
+
+> ⚠ 47 pelanggan sedang padam — **lihat sebarannya** → `?link=OFFLINE`
+
+Satu klik, dan yang mengklik tahu persis apa yang sedang ia lihat. Kalau
+pemilik tetap ingin saringannya berganti sendiri, kerjakan itu — tapi
+sampaikan dulu keberatan ini.
+
+### Soal ambangnya
+
+Jangan pakai angka mati seperti "20". Padam sedikit itu **normal** — modem
+dicabut, listrik padam di satu rumah. Yang saya amati 18 Agustus: **39 padam
+dari 1.687** dalam keadaan tenang, dan itu bukan outage.
+
+Ambang yang lebih jujur memakai perbandingan, misalnya `OFFLINE > 5%` dari
+total tergambar, atau ambil isyarat dari TV Wall yang sudah menghitungnya
+lebih baik: `AMBANG_GEROMBOL = 2` di `src/lib/noc-wall.ts` — dua pelanggan
+padam di SATU ODP sudah berarti jalur, bukan modem.
+
+Kalau kamu mau angka gerombolan itu di peta juga (bukan cuma total padam),
+bilang lewat `PERMINTAAN-FRONTEND-KE-BACKEND.md` — aku tambahkan ke
+`loadNetworkMap`. Itu sinyal yang jauh lebih tajam daripada jumlah padam.
+
+### Yang jangan dikerjakan
+
+- Jangan menghitung ulang status padam di klien. Angkanya sudah dihitung di
+  server dan konsisten dengan TV Wall; dua sumber kebenaran untuk angka yang
+  sama akan berselisih suatu hari, dan yang di layar besar itulah yang
+  dipercaya orang saat panik.
+- Jangan menambah polling sendiri. Peta memuat ulang lewat navigasi biasa;
+  TV Wall (`/noc/wall`) yang memang dirancang menyala terus dengan refresh
+  60 detik.
