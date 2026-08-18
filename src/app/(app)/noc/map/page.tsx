@@ -429,7 +429,7 @@ function NetworkMapSvg({
     <svg
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       className="h-full w-full"
-      role="img"
+      role="group"
       aria-label="Peta sebaran ODP dan pelanggan"
     >
       {/* Jalur kabel — warna dan ketebalan mengikuti routeType. */}
@@ -566,9 +566,16 @@ function NetworkMapSvg({
           </g>
         );
         return isOdp ? (
-          <Link key={node.id} href={odpHrefs[node.refId] ?? `/noc/map?odp=${encodeURIComponent(node.refId)}`}>
+          <g
+            key={node.id}
+            role="link"
+            tabIndex={0}
+            className="crm-network-map-odp-link"
+            data-odp-href={odpHrefs[node.refId] ?? `/noc/map?odp=${encodeURIComponent(node.refId)}`}
+            aria-label={`Buka detail ${node.kind} ${node.label}`}
+          >
             {marker}
-          </Link>
+          </g>
         ) : (
           <g key={node.id}>{marker}</g>
         );

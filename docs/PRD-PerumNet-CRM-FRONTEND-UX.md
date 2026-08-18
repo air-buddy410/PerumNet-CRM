@@ -1349,3 +1349,51 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Acceptance responsive: pembacaan, status, metadata, dan pesan panjang tetap
   berada di dalam card pada 1440×900, 1920×1080, 1024×768, 768×1024,
   390×844, dan 360×800; tidak ada overflow horizontal atau teks keluar card.
+
+## 49. Handoff Opus §48–§50 — TV Wall NOC, Map, dan Kredensial Perangkat
+
+### TV Wall NOC
+
+- `/noc/wall` adalah layar informasi jaringan standalone dengan permission
+  `noc.view`, tanpa sidebar staf, navigasi, tombol, tautan, atau aksi operasional.
+- Data berasal dari `loadNocWall()`. Wall menampilkan sesi PPPoE, padam
+  menggerombol per ODP, padam tersebar, router polling, penjadwal, dan tiket.
+- `SEHAT`, `PERHATIAN`, dan `GAWAT` mengikuti vonis backend. Angka nol sehat
+  tetap netral; merah digunakan untuk padam menggerombol, router dengan tiga
+  kegagalan beruntun atau lebih, dan tugas scheduler yang macet.
+- Data dimuat ulang setiap 60 detik dan refresh dihentikan ketika tab tidak
+  aktif. Waktu pembaruan selalu ditampilkan dalam `Asia/Makassar`.
+- Panel tiket tetap terlihat meskipun jumlahnya nol dan menjelaskan bahwa
+  ticketing masih memakai sistem lama sampai cutover.
+
+### Ketahanan peta jaringan
+
+- Renderer MapLibre memasang `ResizeObserver` pada container peta dan
+  memanggil `map.resize()` ketika ukuran container berubah. Observer dilepas
+  saat komponen dibersihkan agar perubahan layout/sidebar tidak membuat canvas
+  terjepit.
+- Fallback SVG tidak memakai anchor `<a>` untuk ODP. Simpul ODP memakai
+  `role="link"`, `tabIndex`, label aksesibilitas, serta navigasi klik/keyboard
+  tanpa memicu masalah `SVGAnimatedString` pada skrip keamanan halaman.
+- Relasi, marker, popup, filter, fullscreen, dan fallback topology tetap
+  menggunakan data map yang tersedia; frontend tidak menebak koneksi.
+
+### Status UI kredensial perangkat
+
+- Daftar `/noc/devices` menyediakan link ke
+  `/noc/devices/[id]/kredensial` dan membedakan metadata “Tersimpan”, “Dari
+  server”, dan “Belum ada” untuk perangkat pada halaman aktif.
+- UI hanya menampilkan sumber, protokol, port, username, waktu uji, dan waktu
+  pembaruan. Password, hash, token, dan nilai rahasia tidak pernah dikirim ke
+  atau ditampilkan pada browser.
+- Jika `DEVICE_CRED_KEY` belum terpasang, layar memberi peringatan jelas dan
+  menonaktifkan simpan. Aksi detail tetap memakai Server Action Opus serta
+  permission yang sudah ada.
+
+### Acceptance responsive §48–§50
+
+- TV Wall, map fallback, daftar perangkat, dan layar kredensial diuji pada
+  1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800.
+- Tidak ada sidebar pada TV Wall, horizontal overflow, card atau popup keluar
+  viewport, canvas MapLibre tidak mengikuti container, anchor SVG, password
+  tampil, hydration warning, atau console error.

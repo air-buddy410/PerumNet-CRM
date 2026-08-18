@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, NET_DEVICE_TYPES, CRITICALITY, statusLabel } from "@/lib/constants";
 import { loadPortPerangkat, loadRingkasanPort } from "@/lib/network-port";
+import { loadKredensial } from "@/lib/kredensial-perangkat-service";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import { buildTableHref, parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
@@ -73,6 +74,14 @@ export default async function NetDevicesPage({
       ? loadRingkasanPort(table.query.device)
       : Promise.resolve([]),
   ]);
+  const credentialEntries = await Promise.all(devices.map(async (device) => {
+    try {
+      return [device.id, await loadKredensial(device.id)] as const;
+    } catch {
+      return [device.id, null] as const;
+    }
+  }));
+  const credentialsByDeviceId = new Map(credentialEntries);
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
   const requestedPortFilter = table.query.portKind;
   const portFilter = requestedPortFilter === "ONU" || requestedPortFilter === "OTHER"
@@ -126,6 +135,7 @@ export default async function NetDevicesPage({
                   <th className="th">Kritikalitas</th>
                   <th className="th">Port</th>
                   <th className="th"><SortableTableHeader basePath="/noc/devices" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
+                  <th className="th">Akses CLI</th>
                   {canManage && <th className="th"></th>}
                 </tr>
               </thead>
@@ -151,6 +161,24 @@ export default async function NetDevicesPage({
                       </Link>
                     </td>
                     <td className="td"><Badge value={d.status} label={statusLabel(d.status)} /></td>
+                    <td className="td">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        {(() => {
+                          const credential = credentialsByDeviceId.get(d.id);
+                          return (
+                            <>
+                              <Badge
+                                value={credential?.ada ? "ACTIVE" : "UNKNOWN"}
+                                label={credential?.ada ? (credential.sumber === "BRANKAS" ? "Tersimpan" : "Dari server") : "Belum ada"}
+                              />
+                              <Link href={`/noc/devices/${d.id}/kredensial`} className="whitespace-nowrap text-xs font-semibold text-brand-600 hover:underline">
+                                {credential?.ada ? "Lihat" : "Atur"}
+                              </Link>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </td>
                     {canManage && (
                       <td className="td text-right text-xs">
                         <Link href={`/noc/devices?edit=${d.id}`} className="text-brand-600 hover:underline">

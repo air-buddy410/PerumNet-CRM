@@ -155,6 +155,8 @@
 .crm-network-map-shell.is-ready .crm-network-map-canvas { opacity: 1; }
 .crm-network-map-fallback { position: absolute; z-index: 2; inset: 0; display: flex; align-items: center; justify-content: center; overflow: auto; background: #fff; }
 .crm-network-map-fallback > svg { display: block; width: 100%; min-height: 360px; height: 100%; }
+.crm-network-map-odp-link { cursor: pointer; outline: none; }
+.crm-network-map-odp-link:focus-visible { filter: drop-shadow(0 0 4px #04a99f); }
 .crm-network-map-toolbar { position: absolute; z-index: 5; top: 10px; left: 10px; display: inline-flex; gap: 6px; padding: 4px; background: #ffffffdf; border: 1px solid #dce8e5; border-radius: 10px; box-shadow: 0 7px 18px #25413a18; backdrop-filter: blur(8px); }
 .crm-network-map-tool { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; color: #526767; background: transparent; border: 0; border-radius: 7px; cursor: pointer; transition: color .18s ease, background .18s ease, transform .18s ease; }
 .crm-network-map-tool:hover:not(:disabled), .crm-network-map-tool:focus-visible { color: #007e76; background: #edf8f6; outline: none; }
@@ -1234,4 +1236,127 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
   .customer-dossier-upload { margin-right: 12px; margin-left: 12px; padding: 12px; }
   .customer-portal-account-actions { margin-right: 12px; margin-left: 12px; padding: 12px; }
   .customer-portal-submit, .customer-dossier-upload-submit { width: 100%; justify-content: center; }
+}
+
+/* TV Wall NOC — layar informasi jaringan tanpa shell staf atau kontrol aksi. */
+.nocwall-page {
+  --nocwall-bg: #061218;
+  --nocwall-panel: #0b2029;
+  --nocwall-panel-strong: #102d37;
+  --nocwall-border: #214653;
+  --nocwall-text: #effbf9;
+  --nocwall-muted: #95afb1;
+  --nocwall-teal: #18d2c3;
+  min-height: 100dvh;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  padding: clamp(18px, 2.2vw, 42px);
+  color: var(--nocwall-text);
+  background: radial-gradient(circle at 50% -20%, #12434e 0, transparent 42%), linear-gradient(145deg, #061218 0%, #091b23 58%, #040c11 100%);
+  font-family: "DM Sans", Arial, sans-serif;
+}
+.nocwall-page *, .nocwall-page *::before, .nocwall-page *::after { box-sizing: border-box; }
+.nocwall-header, .nocwall-meta, .nocwall-block, .nocwall-two-column, .nocwall-footer { width: min(100%, 2000px); margin-right: auto; margin-left: auto; }
+.nocwall-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; min-width: 0; }
+.nocwall-title-block { min-width: 0; }
+.nocwall-eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--nocwall-teal); font-size: clamp(9px, .75vw, 13px); font-weight: 900; letter-spacing: .16em; }
+.nocwall-eyebrow svg { flex: 0 0 auto; width: 1.25em; height: 1.25em; }
+.nocwall-title-block h1 { margin: 8px 0 0; color: #f3fffd; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(2rem, 4vw, 4.4rem); font-weight: 850; letter-spacing: -.065em; line-height: 1; }
+.nocwall-title-block p { max-width: 60rem; margin: 12px 0 0; color: var(--nocwall-muted); font-size: clamp(11px, 1vw, 16px); line-height: 1.45; }
+.nocwall-verdict { display: flex; flex: 0 0 min(31rem, 33%); align-items: center; gap: 16px; min-width: 0; padding: clamp(15px, 1.5vw, 26px); border: 1px solid; border-radius: 16px; background: #0b2029d9; box-shadow: 0 18px 45px #02080c52; }
+.nocwall-verdict-icon { display: grid; flex: 0 0 auto; place-items: center; width: clamp(45px, 4.2vw, 72px); height: clamp(45px, 4.2vw, 72px); border: 1px solid currentColor; border-radius: 18px; }
+.nocwall-verdict-icon svg { width: 52%; height: 52%; }
+.nocwall-verdict > span:last-child { display: grid; min-width: 0; gap: 4px; }
+.nocwall-verdict small, .nocwall-kicker { color: currentColor; font-size: clamp(9px, .65vw, 12px); font-weight: 900; letter-spacing: .14em; }
+.nocwall-verdict strong { color: #fff; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.35rem, 2.4vw, 2.8rem); line-height: 1; }
+.nocwall-verdict em { overflow-wrap: anywhere; color: #b7cbcc; font-size: clamp(10px, .8vw, 13px); font-style: normal; line-height: 1.35; }
+.nocwall-verdict.is-sehat { color: #4ce58b; border-color: #1b7d55; background: linear-gradient(135deg, #103329, #0b2029); }
+.nocwall-verdict.is-perhatian { color: #ffd36b; border-color: #9d7219; background: linear-gradient(135deg, #342b16, #0b2029); }
+.nocwall-verdict.is-gawat { color: #ff6e79; border-color: #a83a49; background: linear-gradient(135deg, #391b25, #0b2029); }
+.nocwall-meta { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; margin-top: 18px; margin-bottom: 12px; color: var(--nocwall-muted); font-size: clamp(9px, .7vw, 12px); }
+.nocwall-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nocwall-meta > span:first-child { display: inline-flex; align-items: center; gap: 7px; color: #8deee5; font-weight: 850; letter-spacing: .1em; }
+.nocwall-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--nocwall-teal); box-shadow: 0 0 13px #18d2c3; }
+.nocwall-block { min-width: 0; padding: clamp(16px, 1.6vw, 28px); border: 1px solid var(--nocwall-border); border-radius: 16px; background: #0b2029dc; box-shadow: 0 16px 34px #02080c38; }
+.nocwall-session-block { margin-bottom: 12px; }
+.nocwall-block-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; margin-bottom: 18px; }
+.nocwall-block-heading > div { min-width: 0; }
+.nocwall-block-heading h2 { margin: 5px 0 0; color: #f1fbfa; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.1rem, 1.5vw, 2rem); font-weight: 800; letter-spacing: -.04em; line-height: 1.1; }
+.nocwall-block-heading > svg { flex: 0 0 auto; width: clamp(22px, 2vw, 34px); height: clamp(22px, 2vw, 34px); color: var(--nocwall-teal); opacity: .9; }
+.nocwall-session-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.nocwall-session-metric { display: grid; min-width: 0; gap: 5px; padding: clamp(14px, 1.5vw, 24px); border: 1px solid; border-radius: 12px; background: #071820; }
+.nocwall-session-metric strong { color: #fff; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(2rem, 5vw, 5rem); font-weight: 850; letter-spacing: -.08em; line-height: .9; }
+.nocwall-session-metric span { color: #e1f0ef; font-size: clamp(12px, 1.1vw, 18px); font-weight: 850; }
+.nocwall-session-metric small { color: #8da7a8; font-size: clamp(9px, .7vw, 12px); }
+.nocwall-session-metric.healthy { border-color: #167c58; background: linear-gradient(135deg, #103528, #071820); }
+.nocwall-session-metric.warning { border-color: #8c691c; background: linear-gradient(135deg, #302816, #071820); }
+.nocwall-session-metric.neutral { border-color: #3b5961; background: linear-gradient(135deg, #152b32, #071820); }
+.nocwall-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; margin-bottom: 12px; }
+.nocwall-two-column > .nocwall-block { width: 100%; }
+.nocwall-alert-list, .nocwall-router-list { display: grid; min-width: 0; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.nocwall-alert-list li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 11px 12px; border: 1px solid #71343e; border-radius: 10px; background: #321b24; }
+.nocwall-alert-count { display: grid; flex: 0 0 auto; place-items: center; width: clamp(36px, 3.2vw, 54px); height: clamp(36px, 3.2vw, 54px); color: #fff; background: #c54050; border-radius: 10px; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.2rem, 2vw, 2rem); font-weight: 850; }
+.nocwall-alert-copy { display: grid; min-width: 0; gap: 3px; }
+.nocwall-alert-copy strong { overflow: hidden; color: #fff1f1; font-size: clamp(12px, 1vw, 17px); text-overflow: ellipsis; white-space: nowrap; }
+.nocwall-alert-copy span { overflow: hidden; color: #d4acad; font-size: clamp(9px, .75vw, 13px); text-overflow: ellipsis; white-space: nowrap; }
+.nocwall-alert-label { flex: 0 0 auto; margin-left: auto; color: #ff9ba3; font-size: clamp(8px, .6vw, 11px); font-weight: 900; letter-spacing: .1em; }
+.nocwall-empty { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 68px; padding: 14px; color: #9eb5b5; border: 1px dashed #31545d; border-radius: 10px; font-size: clamp(10px, .8vw, 13px); line-height: 1.4; }
+.nocwall-empty svg { flex: 0 0 auto; width: 22px; height: 22px; color: #7f9c9d; }
+.nocwall-empty.is-healthy { color: #a9dec0; border-color: #286a54; background: #102c23; }
+.nocwall-empty.is-healthy svg { color: #4ce58b; }
+.nocwall-submetric { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-top: 15px; padding-top: 13px; border-top: 1px solid #1f414b; }
+.nocwall-submetric strong { color: #ffcf68; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.35rem, 2vw, 2.3rem); }
+.nocwall-submetric span { color: #a9bfc0; font-size: clamp(10px, .75vw, 13px); }
+.nocwall-router-list li { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border: 1px solid #254852; border-radius: 9px; background: #081a22; }
+.nocwall-status-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; background: #4ce58b; box-shadow: 0 0 8px #4ce58b88; }
+.nocwall-router-copy { display: grid; min-width: 0; gap: 2px; }
+.nocwall-router-copy strong, .nocwall-router-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nocwall-router-copy strong { color: #e7f4f3; font-size: clamp(11px, .85vw, 14px); }
+.nocwall-router-copy span { color: #8da7a8; font-size: clamp(9px, .65vw, 11px); }
+.nocwall-router-fail { flex: 0 0 auto; margin-left: auto; color: #9edcbb; font-size: clamp(9px, .7vw, 12px); font-weight: 850; white-space: nowrap; }
+.nocwall-router-list li.is-warning { border-color: #806421; background: #2b2515; }
+.nocwall-router-list li.is-warning .nocwall-status-dot { background: #ffd36b; box-shadow: 0 0 8px #ffd36b88; }
+.nocwall-router-list li.is-warning .nocwall-router-fail { color: #ffd36b; }
+.nocwall-router-list li.is-danger { border-color: #793642; background: #311a22; }
+.nocwall-router-list li.is-danger .nocwall-status-dot { background: #ff6e79; box-shadow: 0 0 8px #ff6e7988; }
+.nocwall-router-list li.is-danger .nocwall-router-fail { color: #ff9ba3; }
+.nocwall-more { margin: 10px 0 0; color: #8da7a8; font-size: clamp(9px, .65vw, 11px); }
+.nocwall-ops-grid, .nocwall-ticket-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.nocwall-ops-metric, .nocwall-ticket-metric { display: grid; min-width: 0; gap: 4px; padding: 15px; border: 1px solid #2c5059; border-radius: 10px; background: #081a22; }
+.nocwall-ops-metric svg { width: 22px; height: 22px; color: #93abad; }
+.nocwall-ops-metric strong, .nocwall-ticket-metric strong { color: #fff; font-family: "Plus Jakarta Sans", Arial, sans-serif; font-size: clamp(1.7rem, 3vw, 3rem); line-height: 1; }
+.nocwall-ops-metric span, .nocwall-ticket-metric span { color: #a7bdbe; font-size: clamp(10px, .75vw, 13px); font-weight: 800; }
+.nocwall-ops-metric.danger, .nocwall-ticket-metric.danger { border-color: #793642; background: #311a22; }
+.nocwall-ops-metric.danger svg, .nocwall-ops-metric.danger strong, .nocwall-ticket-metric.danger strong { color: #ff8d98; }
+.nocwall-ops-metric.warning, .nocwall-ticket-metric.warning { border-color: #806421; background: #2b2515; }
+.nocwall-ops-metric.warning svg, .nocwall-ops-metric.warning strong, .nocwall-ticket-metric.warning strong { color: #ffd36b; }
+.nocwall-ops-metric.healthy, .nocwall-ticket-metric.healthy { border-color: #286a54; background: #102c23; }
+.nocwall-ops-metric.healthy svg, .nocwall-ops-metric.healthy strong, .nocwall-ticket-metric.healthy strong { color: #76e9a5; }
+.nocwall-ops-metric.neutral, .nocwall-ticket-metric.neutral { border-color: #31545d; }
+.nocwall-ticket-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nocwall-block-note { margin: 14px 0 0; color: #8da7a8; font-size: clamp(9px, .7vw, 12px); line-height: 1.45; }
+.nocwall-footer { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; padding-top: 17px; color: #5f7e82; font-size: clamp(8px, .6vw, 10px); font-weight: 800; letter-spacing: .08em; text-align: center; text-transform: uppercase; }
+.nocwall-footer svg { flex: 0 0 auto; width: 13px; height: 13px; color: var(--nocwall-teal); }
+
+@media (max-width: 900px) {
+  .nocwall-header { align-items: stretch; flex-direction: column; }
+  .nocwall-verdict { flex-basis: auto; width: 100%; }
+  .nocwall-two-column { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .nocwall-page { padding: 14px 12px 20px; }
+  .nocwall-meta { align-items: flex-start; flex-direction: column; gap: 5px; margin-top: 14px; }
+  .nocwall-meta > span { max-width: 100%; white-space: normal; }
+  .nocwall-session-grid, .nocwall-ticket-grid { grid-template-columns: 1fr; }
+  .nocwall-session-metric strong { font-size: 3rem; }
+  .nocwall-alert-list li { align-items: flex-start; }
+  .nocwall-alert-label { margin-top: 4px; }
+  .nocwall-router-fail { font-size: 10px; }
+  .nocwall-footer { align-items: flex-start; flex-wrap: wrap; line-height: 1.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nocwall-page * { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }

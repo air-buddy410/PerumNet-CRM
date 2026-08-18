@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Expand, LocateFixed, Minimize2 } from "lucide-react";
 import type {
@@ -642,10 +642,32 @@ export function NetworkMap({
     }
   }, []);
 
+  const handleFallbackClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest<SVGGElement>("[data-odp-href]");
+    if (!link || !event.currentTarget.contains(link)) return;
+    const href = link.getAttribute("data-odp-href");
+    if (href) router.push(href);
+  }, [router]);
+
+  const handleFallbackKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest<SVGGElement>("[data-odp-href]");
+    if (!link || !event.currentTarget.contains(link)) return;
+    const href = link.getAttribute("data-odp-href");
+    if (!href) return;
+    event.preventDefault();
+    router.push(href);
+  }, [router]);
+
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
     let activeMap: MapLibreMap | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     const initialBounds = topology.bounds ?? data.bounds;
     if (!initialBounds || !containerRef.current) {
@@ -663,6 +685,8 @@ export function NetworkMap({
       mapReadyRef.current = false;
       setStatus("error");
       setErrorMessage(message);
+      resizeObserver?.disconnect();
+      resizeObserver = null;
       activeMap?.remove();
       activeMap = null;
       mapRef.current = null;
@@ -700,6 +724,18 @@ export function NetworkMap({
         });
         activeMap = map;
         mapRef.current = map;
+        if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+          resizeObserver = new ResizeObserver(() => {
+            if (cancelled) return;
+            window.requestAnimationFrame(() => {
+              if (!cancelled && mapRef.current === map) map.resize();
+            });
+          });
+          resizeObserver.observe(containerRef.current);
+          window.requestAnimationFrame(() => {
+            if (!cancelled && mapRef.current === map) map.resize();
+          });
+        }
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(new maplibre.AttributionControl({ compact: true }), "bottom-right");
 
@@ -827,6 +863,8 @@ export function NetworkMap({
       cancelled = true;
       controller.abort();
       mapReadyRef.current = false;
+      resizeObserver?.disconnect();
+      resizeObserver = null;
       activeMap?.remove();
       if (mapRef.current === activeMap) mapRef.current = null;
     };
@@ -881,7 +919,15 @@ export function NetworkMap({
           {isFullscreen ? <Minimize2 aria-hidden="true" /> : <Expand aria-hidden="true" />}
         </button>
       </div>
-      {status !== "ready" && <div className="crm-network-map-fallback">{fallback}</div>}
+      {status !== "ready" && (
+        <div
+          className="crm-network-map-fallback"
+          onClick={handleFallbackClick}
+          onKeyDown={handleFallbackKeyDown}
+        >
+          {fallback}
+        </div>
+      )}
       {statusLabel && (
         <div className="crm-network-map-status" role="status">
           {statusLabel}

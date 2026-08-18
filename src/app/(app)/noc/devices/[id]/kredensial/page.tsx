@@ -44,7 +44,7 @@ export default async function KredensialPerangkatPage({
   const adaKunci = kunciSiap();
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl min-w-0">
       <BackLink href="/noc/devices" label="Kembali ke daftar perangkat" />
       <PageHeader
         title={`Kredensial ${perangkat.hostname}`}
@@ -110,7 +110,7 @@ export default async function KredensialPerangkatPage({
         </dl>
 
         {canManage && kred.sumber === "BRANKAS" && (
-          <div className="mt-4 flex gap-2 border-t border-slate-100 pt-4">
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
             <form action={ujiKredensialPerangkatAction}>
               <input type="hidden" name="networkDeviceId" value={perangkat.id} />
               <button type="submit" className="btn-secondary">Uji login</button>
