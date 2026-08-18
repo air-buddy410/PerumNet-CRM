@@ -118,6 +118,18 @@ export interface NetworkMapData {
   /** Garis ODP anak → ODP induk (kaskade). */
   cascades: { fromId: string; toId: string }[];
   bounds: MapBounds | null;
+  /**
+   * Batas pandang HASIL SARINGAN pelanggan — hanya terisi bila saringan
+   * tingkat-pelanggan sedang aktif (status langganan atau status koneksi).
+   *
+   * `bounds` di atas mencakup SEMUA ODP, pelanggan, dan site, jadi ia tetap
+   * selebar kabupaten meski yang tersisa cuma 39 titik padam. Saat outage,
+   * yang dibutuhkan justru sebaliknya: mendekat ke tempat kejadian.
+   *
+   * `null` saat tidak ada saringan pelanggan — supaya pandangan normal tetap
+   * memperlihatkan seluruh jaringan.
+   */
+  focusBounds: MapBounds | null;
   /** Titik yang tidak bisa dipetakan karena koordinatnya kosong. */
   missingCoordinates: { odps: number; customers: number };
   // ── Fase 37b ──────────────────────────────────────────────────
@@ -398,6 +410,21 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     ...customers.map((c) => c.longitude),
     ...sites.map((s) => s.longitude),
   ];
+  // Batas hasil saringan: dari PELANGGAN saja, dan hanya bila saringan
+  // tingkat-pelanggan aktif. ODP tidak ikut — ODP tidak tersaring oleh status
+  // koneksi, jadi menyertakannya akan menarik pandangan kembali melebar dan
+  // menghapus gunanya.
+  const adaSaringanPelanggan = !!filter.subscriptionStatus || !!filter.linkStatus;
+  const focusBounds: MapBounds | null =
+    adaSaringanPelanggan && customers.length
+      ? {
+          minLat: Math.min(...customers.map((c) => c.latitude)),
+          maxLat: Math.max(...customers.map((c) => c.latitude)),
+          minLng: Math.min(...customers.map((c) => c.longitude)),
+          maxLng: Math.max(...customers.map((c) => c.longitude)),
+        }
+      : null;
+
   const bounds: MapBounds | null = lats.length
     ? {
         minLat: Math.min(...lats),
@@ -430,6 +457,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     customers,
     cascades,
     bounds,
+    focusBounds,
     missingCoordinates: { odps: missingOdp, customers: missingCustomer },
     linkCounts,
     routers,
