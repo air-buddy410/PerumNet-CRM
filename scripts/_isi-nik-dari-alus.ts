@@ -1,11 +1,15 @@
 /**
  * Mengisi NIK pelanggan yang masih kosong, dari data yang dipanen dari ALUS.
  *
- *   npx tsx scripts/_isi-nik-dari-alus.ts data/nik-alus.json
- *   npx tsx scripts/_isi-nik-dari-alus.ts data/nik-alus.json --terapkan
+ *   npx tsx scripts/_isi-nik-dari-alus.ts data/nik-alus.tsv
+ *   npx tsx scripts/_isi-nik-dari-alus.ts data/nik-alus.tsv --terapkan
  *
- * Berkas JSON-nya berbentuk `[{ cid, nama, idCard, lahir }]`, hasil panen dari
- * layar ALUS. `cid` dicocokkan ke `Subscription.serviceNumber`.
+ * Berkas TSV dua kolom — `cid` dan `id_card` — dengan baris judul di atas,
+ * hasil panen dari layar ALUS. TSV, bukan JSON, supaya isinya bisa diperiksa
+ * mata sebelum dijalankan: ini data identitas orang, dan berkas yang tidak
+ * bisa dibaca manusia adalah berkas yang tidak pernah diperiksa siapa pun.
+ *
+ * `cid` dicocokkan ke `Subscription.serviceNumber`.
  *
  * ══ YANG TIDAK DILAKUKAN SKRIP INI ══
  *
@@ -60,8 +64,15 @@ function nikSah(nilai: string | undefined): string | null {
 }
 
 async function main() {
-  if (!berkas) throw new Error("Pakai: _isi-nik-dari-alus.ts <berkas.json> [--terapkan]");
-  const data = JSON.parse(readFileSync(berkas, "utf8")) as BarisAlus[];
+  if (!berkas) throw new Error("Pakai: _isi-nik-dari-alus.ts <berkas.tsv> [--terapkan]");
+  const baris = readFileSync(berkas, "utf8").split(/\r?\n/).filter((l) => l.trim());
+  // Baris judul dibuang hanya kalau memang judul — supaya berkas tanpa judul
+  // tidak diam-diam kehilangan pelanggan pertamanya.
+  const mulai = /^\s*cid\b/i.test(baris[0] ?? "") ? 1 : 0;
+  const data: BarisAlus[] = baris.slice(mulai).map((l) => {
+    const [cid, idCard] = l.split("\t");
+    return { cid: cid ?? "", idCard: idCard ?? "" };
+  });
 
   console.log(terapkan ? "═══ DITERAPKAN ═══\n" : "═══ RENCANA SAJA (tambahkan --terapkan) ═══\n");
   console.log(`Baris dari ALUS: ${data.length}`);
