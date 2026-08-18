@@ -564,8 +564,12 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
   });
 }
 
+function mapViewportBounds(data: NetworkMapData, topology: NetworkTopology) {
+  return data.focusBounds ?? topology.bounds ?? data.bounds;
+}
+
 function fitMapToData(map: MapLibreMap, data: NetworkMapData, topology: NetworkTopology) {
-  const mapBounds = topology.bounds ?? data.bounds;
+  const mapBounds = mapViewportBounds(data, topology);
   if (!mapBounds) return;
 
   const latSpan = Math.max(mapBounds.maxLat - mapBounds.minLat, 0.004);
@@ -600,7 +604,7 @@ export function NetworkMap({
   const paletteRef = useRef(palette);
   const occupancyLabelsRef = useRef(occupancyLabels);
   const mapReadyRef = useRef(false);
-  const [status, setStatus] = useState<MapStatus>(data.bounds || topology.bounds ? "loading" : "unavailable");
+  const [status, setStatus] = useState<MapStatus>(mapViewportBounds(data, topology) ? "loading" : "unavailable");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
@@ -671,7 +675,7 @@ export function NetworkMap({
     let activeMap: MapLibreMap | null = null;
     let resizeObserver: ResizeObserver | null = null;
 
-    const initialBounds = topology.bounds ?? data.bounds;
+    const initialBounds = mapViewportBounds(data, topology);
     if (!initialBounds || !containerRef.current) {
       setStatus("unavailable");
       setErrorMessage(null);

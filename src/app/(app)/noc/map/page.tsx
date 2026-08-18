@@ -39,6 +39,11 @@ const OCCUPANCY_FILTERS: { value: OccupancyLevel | ""; label: string }[] = [
 ];
 
 const STATUS_FILTERS = ["", "ACTIVE", "ISOLATED", "SUSPENDED"] as const;
+const STATUS_FILTER_LABEL: Record<string, string> = {
+  ACTIVE: "Aktif",
+  ISOLATED: "Terisolir",
+  SUSPENDED: "Ditangguhkan",
+};
 const LINK_STATUS_FILTERS: { value: LinkStatus | ""; label: string }[] = [
   { value: "", label: "Semua status koneksi" },
   { value: "ONLINE", label: "Online" },
@@ -87,29 +92,38 @@ export default async function NetworkMapPage({
     router?: string;
     link?: string;
     odp?: string;
+    mode?: string;
   }>;
 }) {
   await requirePermission(PERMISSIONS.NOC_MAP_VIEW);
   const sp = await searchParams;
+  const isGlobalOfflineMode = sp.mode === "offline" && sp.link === "OFFLINE";
 
   const [data, sites, olts] = await Promise.all([
-    loadNetworkMap({
-      siteId: sp.site || null,
-      oltId: sp.olt || null,
-      minOccupancy: (sp.occ as OccupancyLevel) || null,
-      subscriptionStatus: sp.status || null,
-      routerId: sp.router || null,
-      linkStatus: isLinkStatus(sp.link) ? sp.link : null,
-    }),
+    loadNetworkMap(
+      isGlobalOfflineMode
+        ? { linkStatus: "OFFLINE" }
+        : {
+            siteId: sp.site || null,
+            oltId: sp.olt || null,
+            minOccupancy: (sp.occ as OccupancyLevel) || null,
+            subscriptionStatus: sp.status || null,
+            routerId: sp.router || null,
+            linkStatus: isLinkStatus(sp.link) ? sp.link : null,
+          },
+    ),
     db.networkSite.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.oltDevice.findMany({
       select: { id: true, name: true, networkDevice: { select: { hostname: true } } },
     }),
   ]);
 
-  const selected = sp.odp ? data.odps.find((o) => o.id === sp.odp) ?? null : null;
+  const selected = !isGlobalOfflineMode && sp.odp ? data.odps.find((o) => o.id === sp.odp) ?? null : null;
   const [topology, selectedPorts] = await Promise.all([
-    loadNetworkTopology(data, { siteId: sp.site || null, oltId: sp.olt || null }),
+    loadNetworkTopology(
+      data,
+      isGlobalOfflineMode ? { siteId: null, oltId: null } : { siteId: sp.site || null, oltId: sp.olt || null },
+    ),
     selected
       ? db.odpPort.findMany({
           where: { odpId: selected.id },
@@ -125,6 +139,11 @@ export default async function NetworkMapPage({
 
   const totalPorts = data.odps.reduce((s, o) => s + o.capacity, 0);
   const usedPorts = data.odps.reduce((s, o) => s + o.used, 0);
+  const renderedLinkCount = data.customers.length;
+  const renderedStatusTotal = Object.values(data.linkCounts).reduce((total, count) => total + count, 0);
+  const offlineRatio = renderedStatusTotal > 0 ? data.linkCounts.OFFLINE / renderedStatusTotal : 0;
+  const showOfflineBanner = !isGlobalOfflineMode && offlineRatio > 0.05;
+  const globalOfflineHref = "/noc/map?mode=offline&link=OFFLINE";
 
   const keep = (extra: Record<string, string>) => {
     const params = new URLSearchParams();
@@ -146,6 +165,27 @@ export default async function NetworkMapPage({
     data.odps.map((odp) => [odp.id, keep({ odp: selected?.id === odp.id ? "" : odp.id })]),
   );
 
+  const activeFilterChips = [
+    sp.site
+      ? { label: `Site: ${sites.find((site) => site.id === sp.site)?.name ?? sp.site}`, href: keep({ site: "" }) }
+      : null,
+    sp.router
+      ? { label: `Router: ${data.routers.find((router) => router.id === sp.router)?.name ?? sp.router}`, href: keep({ router: "" }) }
+      : null,
+    sp.olt
+      ? { label: `OLT: ${olts.find((olt) => olt.id === sp.olt)?.name ?? olts.find((olt) => olt.id === sp.olt)?.networkDevice.hostname ?? sp.olt}`, href: keep({ olt: "" }) }
+      : null,
+    sp.occ
+      ? { label: `Okupansi: ${OCCUPANCY_FILTERS.find((filter) => filter.value === sp.occ)?.label ?? sp.occ}`, href: keep({ occ: "" }) }
+      : null,
+    sp.status
+      ? { label: `Status: ${STATUS_FILTER_LABEL[sp.status] ?? sp.status}`, href: keep({ status: "" }) }
+      : null,
+    isLinkStatus(sp.link)
+      ? { label: `Koneksi: ${LINK_STATUS_LABEL[sp.link]}`, href: keep({ link: "" }) }
+      : null,
+  ].filter((chip): chip is { label: string; href: string } => chip !== null);
+
   return (
     <div>
       <PageHeader
@@ -157,61 +197,115 @@ export default async function NetworkMapPage({
         }`}
       />
 
-      <form method="get" className="card mb-4 flex flex-wrap items-end gap-3 p-4">
-        <div>
-          <label className="label" htmlFor="site">Site</label>
-          <select id="site" name="site" defaultValue={sp.site ?? ""} className="input">
-            <option value="">Semua site</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+      {isGlobalOfflineMode ? (
+        <div className="card mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border border-[#f0ccc8] bg-[#fff7f6] p-4">
+          <div className="min-w-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#d8524a] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                Mode Padam Global
+              </span>
+              <strong className="text-sm text-[#913f3b]">Menampilkan seluruh customer offline</strong>
+            </div>
+            <p className="text-xs leading-relaxed text-[#9f443e]">
+              Filter lokasi dan status lain tidak diterapkan agar sebaran customer yang padam terlihat utuh.
+            </p>
+          </div>
+          <Link href="/noc/map" className="btn-secondary shrink-0">Kembali ke semua jaringan</Link>
         </div>
-        <div>
-          <label className="label" htmlFor="router">Router</label>
-          <select id="router" name="router" defaultValue={sp.router ?? ""} className="input">
-            <option value="">Semua router</option>
-            {data.routers.map((router) => (
-              <option key={router.id} value={router.id}>{router.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="olt">OLT</label>
-          <select id="olt" name="olt" defaultValue={sp.olt ?? ""} className="input">
-            <option value="">Semua OLT</option>
-            {olts.map((o) => (
-              <option key={o.id} value={o.id}>{o.name ?? o.networkDevice.hostname}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="occ">Okupansi ODP</label>
-          <select id="occ" name="occ" defaultValue={sp.occ ?? ""} className="input">
-            {OCCUPANCY_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="status">Status pelanggan</label>
-          <select id="status" name="status" defaultValue={sp.status ?? ""} className="input">
-            {STATUS_FILTERS.map((s) => (
-              <option key={s} value={s}>{s || "Semua status"}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="link">Status koneksi</label>
-          <select id="link" name="link" defaultValue={sp.link ?? ""} className="input">
-            {LINK_STATUS_FILTERS.map((filter) => (
-              <option key={filter.value} value={filter.value}>{filter.label}</option>
-            ))}
-          </select>
-        </div>
-        <button type="submit" className="btn-primary">Terapkan</button>
-        <Link href="/noc/map" className="btn-secondary">Reset</Link>
-      </form>
+      ) : (
+        <>
+          <form method="get" className="card mb-3 min-w-0 p-4">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+              <fieldset className="min-w-0 rounded-xl border border-slate-100 p-3">
+                <legend className="px-1 text-xs font-bold uppercase tracking-wide text-slate-500">Lokasi jaringan</legend>
+                <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="site">Site</label>
+                    <select id="site" name="site" defaultValue={sp.site ?? ""} className="input w-full min-w-0">
+                      <option value="">Semua site</option>
+                      {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="router">Router</label>
+                    <select id="router" name="router" defaultValue={sp.router ?? ""} className="input w-full min-w-0">
+                      <option value="">Semua router</option>
+                      {data.routers.map((router) => <option key={router.id} value={router.id}>{router.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="olt">OLT</label>
+                    <select id="olt" name="olt" defaultValue={sp.olt ?? ""} className="input w-full min-w-0">
+                      <option value="">Semua OLT</option>
+                      {olts.map((o) => <option key={o.id} value={o.id}>{o.name ?? o.networkDevice.hostname}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </fieldset>
+              <fieldset className="min-w-0 rounded-xl border border-slate-100 p-3">
+                <legend className="px-1 text-xs font-bold uppercase tracking-wide text-slate-500">Kondisi jaringan</legend>
+                <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="occ">Okupansi ODP</label>
+                    <select id="occ" name="occ" defaultValue={sp.occ ?? ""} className="input w-full min-w-0">
+                      {OCCUPANCY_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="status">Status pelanggan</label>
+                    <select id="status" name="status" defaultValue={sp.status ?? ""} className="input w-full min-w-0">
+                      {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s ? STATUS_FILTER_LABEL[s] : "Semua status"}</option>)}
+                    </select>
+                  </div>
+                  <div className="min-w-0">
+                    <label className="label" htmlFor="link">Status koneksi dalam cakupan</label>
+                    <select id="link" name="link" defaultValue={sp.link ?? ""} className="input w-full min-w-0">
+                      {LINK_STATUS_FILTERS.map((filter) => <option key={filter.value} value={filter.value}>{filter.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </fieldset>
+            </div>
+            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2">
+              <button type="submit" className="btn-primary">Terapkan filter</button>
+              <Link href="/noc/map" className="btn-secondary">Reset</Link>
+              <Link href={globalOfflineHref} className="btn-danger">Lihat semua yang offline</Link>
+              <span className="ml-auto min-w-0 text-xs text-slate-500">Menampilkan <strong className="text-slate-700">{renderedLinkCount}</strong> customer terpetakan</span>
+            </div>
+          </form>
+
+          {activeFilterChips.length > 0 && (
+            <div className="card mb-4 flex min-w-0 flex-wrap items-center gap-2 p-3">
+              <span className="mr-1 text-xs font-semibold text-slate-500">Filter aktif:</span>
+              {activeFilterChips.map((chip) => (
+                <Link
+                  key={chip.label}
+                  href={chip.href}
+                  className="max-w-full rounded-full border border-[#cfe4df] bg-[#f3fbf9] px-2.5 py-1 text-xs font-semibold text-[#28736d] hover:bg-[#e4f6f2] focus:outline-none focus:ring-4 focus:ring-[#04a99f]/15"
+                  title={`Hapus ${chip.label}`}
+                >
+                  <span className="break-words">{chip.label}</span> <span aria-hidden="true">×</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {showOfflineBanner && (
+            <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0ccc8] bg-[#fff7f6] p-4 text-[#913f3b]" role="status">
+              <p className="min-w-0 text-sm leading-relaxed">
+                <strong>{data.linkCounts.OFFLINE} customer sedang padam</strong> dari {renderedStatusTotal} customer yang tergambar pada hasil ini.
+              </p>
+              <Link href={globalOfflineHref} className="btn-danger shrink-0">Lihat semua yang offline</Link>
+            </div>
+          )}
+        </>
+      )}
+
+      {isGlobalOfflineMode && (
+        <p className="mb-4 text-xs text-slate-500">
+          Menampilkan <strong className="text-slate-700">{renderedLinkCount}</strong> customer offline dari data map yang tersedia.
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="card overflow-x-auto p-3">
@@ -300,7 +394,9 @@ export default async function NetworkMapPage({
           <p className="mb-4 text-[11px] text-slate-500">
             Sinkronisasi terakhir: {data.lastSyncedAt ? formatMapTimestamp(data.lastSyncedAt) : "belum tersedia"}
           </p>
-          {selected ? (
+          {isGlobalOfflineMode && data.customers.length === 0 ? (
+            <EmptyState message="Tidak ada customer offline pada data peta saat ini." />
+          ) : selected ? (
             <>
               <h2 className="mb-1 text-sm font-medium">{selected.code}</h2>
               <p className="mb-3 text-xs text-slate-500">

@@ -1439,3 +1439,38 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Filter, sorting, pagination, permission, dan batas tabel tidak berubah.
 - Kolom tanggal isolir memakai horizontal scroll tabel terkontrol dan tidak
   memecah teks menjadi satu karakter per baris.
+
+## 52. Filter Peta dan Mode Padam Global (§56–§57)
+
+- `/noc/map` menyediakan Mode Padam Global melalui query frontend
+  `mode=offline&link=OFFLINE`. Mode ini hanya mengirim filter status koneksi
+  `OFFLINE` ke loader, sehingga Site, Router, OLT, okupansi, status pelanggan,
+  dan ODP yang sedang dipilih tidak mengganggu daftar seluruh customer padam.
+- Tombol `Lihat semua yang offline` dan banner outage membuka mode tersebut.
+  Tombol `Kembali ke semua jaringan` mengembalikan tampilan normal tanpa
+  mengubah data atau aturan backend.
+- Filter lanjutan tetap dapat digabungkan pada mode normal untuk analisis per
+  Site, Router, OLT, okupansi, status pelanggan, dan status koneksi dalam
+  cakupan aktif. Ringkasan jumlah customer, chip filter aktif, dan Reset harus
+  mempertahankan query lain saat satu filter dihapus.
+- Angka status tetap berasal dari `data.linkCounts`; frontend tidak mengambil
+  dataset tambahan atau menghitung ulang status customer. `UNKNOWN` tetap
+  berbeda dari `OFFLINE`.
+- Viewport peta memakai `data.focusBounds ?? topology.bounds ?? data.bounds`.
+  Saat filter status pelanggan atau koneksi aktif, peta mendekat ke hasil
+  customer yang sedang terlihat; tanpa filter customer, seluruh jaringan tetap
+  menjadi batas pandang.
+- Banner outage memakai rasio `OFFLINE` lebih dari 5% dari status link yang
+  tergambar, bukan jumlah hard-code, dan tidak ditampilkan ulang ketika Mode
+  Padam Global sudah aktif.
+
+### Acceptance responsive filter peta
+
+- Mode Padam Global dari halaman dengan filter lain menampilkan semua customer
+  offline, tidak menampilkan Online, Disabled, atau Unknown, dan URL hanya
+  membawa state mode offline.
+- Filter normal, chip hapus, Reset, focus map, cluster, popup, fullscreen,
+  fallback SVG, dan filter URL tetap berfungsi pada 1440×900, 1920×1080,
+  1024×768, 768×1024, 390×844, dan 360×800.
+- Filter, banner, chip, dan ringkasan tidak keluar card atau menyebabkan
+  horizontal overflow pada mobile.
