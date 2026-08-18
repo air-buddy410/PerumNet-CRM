@@ -1483,3 +1483,16 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Filter, banner, daftar cluster, chip, dan ringkasan tidak keluar card atau
   menyebabkan horizontal overflow pada mobile. Nilai PON atau site yang
   kosong ditampilkan sebagai keterangan netral, bukan nilai tebakan.
+
+## 53. Sinkronisasi Kontrol Filter Peta (§58)
+
+- Form filter `/noc/map` memakai kunci remount deterministik dari nilai query
+  `site`, `router`, `olt`, `occ`, `status`, dan `link`.
+- Saat Reset, chip filter, browser back/forward, atau perpindahan dari Mode
+  Padam Global mengubah URL, setiap dropdown harus dipasang ulang dari
+  `searchParams` terbaru. Tidak boleh ada pilihan lama yang tertinggal di DOM.
+- Mode Padam Global tetap memakai `mode=offline&link=OFFLINE` dan panel badge
+  global; saat kembali ke `/noc/map`, form normal harus tampil dalam keadaan
+  default tanpa filter lama.
+- Perbaikan ini hanya menyelaraskan state presentasi dengan URL. Loader,
+  permission, query, dan aturan filter backend tidak berubah.

@@ -145,6 +145,14 @@ export default async function NetworkMapPage({
   const outageCustomerCount = data.padamMenggerombol.reduce((total, cluster) => total + cluster.jumlah, 0);
   const showOfflineBanner = !isGlobalOfflineMode && data.padamMenggerombol.length > 0;
   const globalOfflineHref = "/noc/map?mode=offline&link=OFFLINE";
+  const filterFormKey = JSON.stringify([
+    sp.site ?? "",
+    sp.router ?? "",
+    sp.olt ?? "",
+    sp.occ ?? "",
+    sp.status ?? "",
+    sp.link ?? "",
+  ]);
 
   const keep = (extra: Record<string, string>) => {
     const params = new URLSearchParams();
@@ -215,7 +223,7 @@ export default async function NetworkMapPage({
         </div>
       ) : (
         <>
-          <form method="get" className="card mb-3 min-w-0 p-4">
+          <form method="get" key={filterFormKey} className="card mb-3 min-w-0 p-4">
             <div className="grid min-w-0 gap-4 lg:grid-cols-2">
               <fieldset className="min-w-0 rounded-xl border border-slate-100 p-3">
                 <legend className="px-1 text-xs font-bold uppercase tracking-wide text-slate-500">Lokasi jaringan</legend>
