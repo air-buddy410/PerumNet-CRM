@@ -564,3 +564,53 @@ mengirim teknisi ke jalur yang bukan sumbernya.
 3. **Pastikan PON tujuannya ada.** `1/16/12` harus punya `PonPort` di C600
    Kecicang. Kalau belum ada, memindahkan ODP ke sana akan gagal atau
    menciptakan tautan menggantung.
+
+### Hasil pemeriksaan silang ke ALUS, 18 Agustus 2026
+
+Kesepuluh ODP dipilah, dan ternyata **bukan satu masalah melainkan dua**.
+
+#### A. Delapan ODP — tautan kita yang keliru, ALUS benar (49 langganan)
+
+`GMG 001` (16) · `BBD 06` (9) · `BBD 10` (6) · `GMG 004` (6) · `BBD 05` (5) ·
+`GMG 002` (4) · `BBD 08` (2) · `BBD 11` (1)
+
+Semuanya tertaut ke HSGQ `192.168.100.10` (PON5/PON7), **seragam** — nol posisi
+bergaya HSGQ di dalamnya, dan **nol** yang cocok dengan PON tempatnya tertaut.
+ALUS mencatat mereka di `ZTE-C600-100-Kecicang`, dan PON tujuannya ada di
+`192.168.100.60` dengan kecocokan sempurna.
+
+**Ini bisa diperbaiki**: pindahkan `Odp.ponPortId` kedelapan ODP itu ke PON yang
+benar di 192.168.100.60. Satu perubahan per ODP, 49 pelanggan ikut.
+
+#### B. Dua kasus — data ALUS-nya sendiri yang tidak koheren (7 langganan)
+
+**`PSG 240102` memuat pelanggan dari EMPAT OLT berbeda menurut ALUS:**
+
+| CID | OLT menurut ALUS |
+|---|---|
+| PN100220155, PN100072514, PN100220141, PN100220138 | HSGQ-100-Kecicang |
+| PN102052536 | HSGQ-102-SerayaBarat |
+| PN100042660 | ZTE-C600-100-Kecicang |
+| PN260128408 | ZTE-C600-104-Abang |
+
+Sebuah ODP duduk di SATU port PON pada SATU OLT. Empat OLT dalam satu ODP tidak
+mungkin secara fisik. Namanya "PSG" (Pesagi), isinya pelanggan Kecicang, Seraya
+Barat, dan Abang. **`PSG 240102` tampaknya bukan ODP sungguhan** melainkan
+tempat penampungan bagi pelanggan yang ODP-nya tidak diketahui.
+
+**`PN100080015`** menurut ALUS ada di ODP `SSN 03DC01` dengan ONU `5:26` pada
+HSGQ-100-Kecicang — sementara 15 pelanggan lain di ODP yang sama berposisi
+`1/16/11:x` pada ZTE C600. ALUS pun menyimpan ketidakcocokan ini.
+
+**Keduanya TIDAK bisa diperbaiki dengan menyalin ALUS**, karena ALUS-lah
+sumbernya. Perlu pemeriksaan lapangan: ODP mana yang sebenarnya menaungi ketujuh
+pelanggan itu. Sampai itu terjawab, biarkan apa adanya — menebak tautan ODP
+berarti mengelompokkan gangguan ke jalur yang salah, dan itu lebih buruk
+daripada tidak mengelompokkan sama sekali.
+
+#### Yang berubah dari rencana semula
+
+Satuan perbaikannya **tidak selalu ODP**. `SSN 03DC01` tertaut BENAR — 15 dari
+16 langganannya cocok persis dengan PON-nya. Memindahkan ODP itu karena satu
+pencilan akan merusak 15 tautan yang sehat. Pengelompokan per-ODP saya di
+langkah sebelumnya terlalu kasar, dan nyaris menyembunyikan itu.
