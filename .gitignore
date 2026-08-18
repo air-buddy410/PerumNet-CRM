@@ -46,3 +46,11 @@ prisma/*.db-journal
 # tanggal lahir, golongan darah. Berkas kosongnya memang di-commit; yang terisi
 # tidak pernah. Sekali masuk riwayat git, ia tidak bisa benar-benar dihapus.
 docs/template/*-TERISI.xlsx
+
+# Panenan data pribadi dari sistem lama — NIK, KTP, tanggal lahir.
+# JANGAN pernah masuk git: riwayat git itu permanen dan terdorong ke GitHub,
+# jadi satu commit yang salah tidak bisa ditarik kembali dengan sungguhan.
+# Berkas seperti ini dipindahkan ke server lewat scp, bukan lewat repo.
+data/nik-*.tsv
+data/*-pii-*.tsv
+data/panen-*.tsv
