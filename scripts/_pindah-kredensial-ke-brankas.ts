@@ -22,6 +22,10 @@
  */
 import { db } from "@/lib/db";
 import { segel, kunciSiap, PORT_BAWAAN } from "@/lib/rahasia-perangkat";
+// Jenjang diambil dari daftar resminya, bukan ditulis tangan. Persis itu yang
+// membuat versi pertama skrip ini diam-diam gagal: "ADMIN" mengetik dengan
+// benar, lolos TypeScript, dan tidak cocok dengan apa pun di basis data.
+import { USER_LEVELS } from "@/lib/constants";
 
 const TULIS = process.argv.includes("--tulis");
 
@@ -45,14 +49,24 @@ async function main() {
   });
 
   // Siapa yang tercatat sebagai pengubah. Skrip bukan orang, jadi dipakai akun
-  // admin — dan kalau tidak ada, berhenti daripada menebak.
-  const admin = await db.user.findFirst({
-    where: { level: "ADMIN" },
-    select: { id: true, username: true },
-    orderBy: { createdAt: "asc" },
-  });
+  // dengan jenjang tertinggi.
+  //
+  // `User.level` di proyek ini bernilai STAFF | SUPERVISOR | OWNER — TIDAK ada
+  // "ADMIN". Versi pertama skrip ini mencari "ADMIN", tidak menemukan siapa
+  // pun, dan berhenti tanpa memindahkan apa-apa. Kegagalannya sopan sekali
+  // sampai tidak ada yang sadar: keluarannya rapi, exit code-nya saja yang 1.
+  const admin =
+    (await db.user.findFirst({
+      where: { level: USER_LEVELS.OWNER },
+      select: { id: true, username: true },
+      orderBy: { createdAt: "asc" },
+    })) ??
+    (await db.user.findFirst({
+      select: { id: true, username: true },
+      orderBy: { createdAt: "asc" },
+    }));
   if (!admin) {
-    console.error("Tidak ada akun ADMIN untuk dicatat sebagai pengubah. Berhenti.");
+    console.error("Tidak ada satu pun akun pengguna untuk dicatat sebagai pengubah. Berhenti.");
     process.exit(1);
   }
 
