@@ -771,11 +771,24 @@ export function NetworkMap({
           router.push(query ? `/noc/map?${query}` : "/noc/map");
         };
 
+        // SATU popup, dipakai ulang. Sebelumnya tiap klik membuat popup BARU
+        // tanpa menutup yang lama — dan karena lima lapisan mendaftarkan
+        // penangan yang sama, satu klik yang mengenai titik ODP sekaligus garis
+        // topologi di bawahnya memunculkan DUA popup bertumpuk. Yang di atas
+        // menutupi tombol yang di bawah.
+        let popupAktif: import("maplibre-gl").Popup | null = null;
+
         const showPopup = (event: MapLayerMouseEvent) => {
           const feature = event.features?.[0];
           if (!feature) return;
           const properties = feature.properties ?? {};
-          new maplibre.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" })
+          if (!popupAktif) {
+            popupAktif = new maplibre.Popup({ closeButton: true, closeOnClick: true, maxWidth: "280px" });
+            popupAktif.on("close", () => {
+              popupAktif = null;
+            });
+          }
+          popupAktif
             .setLngLat(event.lngLat)
             .setDOMContent(
               createPopupContent(
@@ -806,11 +819,16 @@ export function NetworkMap({
 
         map.on("click", INFRASTRUCTURE_CLUSTER_LAYER_ID, expandCluster(INFRASTRUCTURE_SOURCE_ID));
         map.on("click", CUSTOMER_CLUSTER_LAYER_ID, expandCluster(CUSTOMER_SOURCE_ID));
-        map.on("click", INFRASTRUCTURE_LAYER_ID, showPopup);
+        // URUTAN INI MENENTUKAN SIAPA YANG MENANG. Penangan dijalankan sesuai
+        // urutan pendaftaran, dan yang terakhir mengganti isi popup. Jadi garis
+        // didaftarkan DULU, titik BELAKANGAN — supaya klik pada ODP menampilkan
+        // ODP-nya, bukan garis topologi yang kebetulan berakhir di titik yang
+        // sama. Sebelumnya TOPOLOGY_LINE terdaftar terakhir dan selalu menang.
         map.on("click", ROUTE_LAYER_ID, showPopup);
-        map.on("click", CUSTOMER_LAYER_ID, showPopup);
-        map.on("click", CUSTOMER_INHERITED_LAYER_ID, showPopup);
         map.on("click", TOPOLOGY_LINE_LAYER_ID, showPopup);
+        map.on("click", CUSTOMER_INHERITED_LAYER_ID, showPopup);
+        map.on("click", CUSTOMER_LAYER_ID, showPopup);
+        map.on("click", INFRASTRUCTURE_LAYER_ID, showPopup);
         map.on("mouseenter", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
