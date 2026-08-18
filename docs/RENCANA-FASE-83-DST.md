@@ -278,6 +278,7 @@ membaca SOP ini, dan tiap kalimatnya menunjuk layar yang benar-benar ada.
 | 89 Gladi penagihan (MATI) | ✅ selesai · dibandingkan 18 Agu |
 | 90 SOP versi CRM | ✅ selesai |
 | 91 Brankas kredensial perangkat | ✅ selesai & terverifikasi 18 Agu |
+| 92 Tautan ODP → OLT | ✅ 8 dari 10 selesai 18 Agu · 2 menunggu lapangan |
 
 **Yang menahan cutover** — diperbarui 18 Agustus 2026:
 
@@ -290,8 +291,10 @@ membaca SOP ini, dan tiap kalimatnya menunjuk layar yang benar-benar ada.
 2. Layar-layar Luna (§45, §46, §49, §50, §51).
 3. ~~Lima langganan tanpa tanggal mulai tagih.~~ ✅ **Selesai.** Diperiksa 18
    Agustus: 1.715 dari 1.715 langganan punya profil tagihan, nol nonaktif.
-4. **55 posisi ONU salah format** — lihat Fase 92 di bawah. Menahan telemetri,
-   bukan menahan penagihan.
+4. ~~55 posisi ONU salah format.~~ ✅ **Sebagian besar selesai 18 Agustus.**
+   Ternyata bukan posisinya melainkan tautan ODP→OLT; 8 ODP (49 pelanggan)
+   dipindahkan dan terbukti terbaca. Sisa 6 pelanggan di 2 ODP menunggu
+   pemeriksaan lapangan — data ALUS-nya sendiri tidak koheren.
 5. Koordinat 6 POP — menahan lapisan site di peta, bukan menahan cutover.
 
 **Yang masih di luar rencana ini:** SUPERPOP/rak, fiber core & OTDR, Legal &
@@ -456,7 +459,7 @@ yang meleset kalau ada yang meleset.
 
 ---
 
-## Fase 92 — ODP tertaut ke OLT yang keliru  ◑ SEBAB DITEMUKAN 18 Agu
+## Fase 92 — ODP tertaut ke OLT yang keliru  ✅ SELESAI 18 Agustus 2026 — 8 dari 10
 
 Ditemukan 18 Agustus 2026 saat membuktikan Fase 88b. Pembacaan daya optik
 berhasil di lima dari enam OLT; yang gagal ternyata bukan salah perangkat.
@@ -614,3 +617,22 @@ Satuan perbaikannya **tidak selalu ODP**. `SSN 03DC01` tertaut BENAR — 15 dari
 16 langganannya cocok persis dengan PON-nya. Memindahkan ODP itu karena satu
 pencilan akan merusak 15 tautan yang sehat. Pengelompokan per-ODP saya di
 langkah sebelumnya terlalu kasar, dan nyaris menyembunyikan itu.
+
+### Diterapkan 18 Agustus 2026 — dan dibuktikan
+
+Delapan ODP dipindahkan. Polanya ternyata **dua port yang tertukar**, bukan
+delapan kesalahan terpisah:
+
+- `PON5` di HSGQ Kecicang → `gpon_olt-1/16/12` di ZTE C600 Kecicang (BBD 05, 06, 08, 10, 11)
+- `PON7` di HSGQ Kecicang → `gpon_olt-1/16/13` di ZTE C600 Kecicang (GMG 001, 002, 004)
+
+**Buktinya bukan hitungan baris, melainkan pembacaan perangkat.** Pelanggan
+`PN100110009` — yang pagi itu menjawab *"ONU mungkin tidak dikenal atau sedang
+mati"* — sesudah perpindahan terbaca **−24,68 dBm, jarak 4.209 m**. ONU-nya
+hidup sepanjang waktu; alamatnya yang salah. Begitu pula `PN100112522`
+(−17,85 dBm) dan `PN100102514` (−19,78 dBm).
+
+Tersisa **2 ODP · 6 pelanggan**, sengaja tidak disentuh: `PSG 240102` dan
+`SSN 03DC01`. Keduanya tersaring oleh syarat "seragam" — isinya bercampur dari
+beberapa OLT, dan ALUS pun menyimpan ketidakkoherenan yang sama. Menebak tautan
+mereka berarti mengelompokkan gangguan ke jalur yang salah.
