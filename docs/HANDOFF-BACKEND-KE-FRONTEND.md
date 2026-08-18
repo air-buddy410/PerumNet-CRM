@@ -3462,3 +3462,62 @@ terlalu rumit, daftar per ODP saja sudah jauh lebih baik daripada angka total.
 
 `focusBounds` (57.2) dan perbaikan kolom filter (57.3) tidak berubah. Yang
 diganti hanya dasar spanduknya.
+
+---
+
+## §58 — BUG: tombol Reset filter peta tidak mengosongkan dropdown
+
+Dilaporkan pemilik jaringan 18 Agustus 2026. Sudah kutelusuri sampai sebabnya.
+
+### Gejalanya
+
+Tekan **Reset** di `/noc/map`. URL berubah jadi `/noc/map`, peta benar-benar
+menampilkan semua data lagi — tetapi **kotak filternya masih memperlihatkan
+pilihan yang lama**. Filter yang tampil tidak lagi menggambarkan apa yang
+sedang berlaku.
+
+### Sebabnya
+
+Form filter memakai `<select defaultValue={sp.site ?? ""}>` (baris 225, 232,
+239, 251, 257, 263). `defaultValue` di React berlaku **hanya saat komponen
+dipasang pertama kali** — sesudah itu nilai `<select>` sepenuhnya milik DOM.
+
+Tombol Reset adalah `<Link href="/noc/map">`. Next.js menanganinya sebagai
+navigasi sisi klien: `searchParams` berubah dan halaman dirender ulang, tetapi
+pohon komponennya **sama persis** — posisi form dan tiap `<select>` tidak
+berubah. React karena itu tidak memasang ulang apa pun, dan nilai lama di DOM
+bertahan.
+
+Aku periksa: form itu tidak punya `key`, dan tidak ada satu pun `<select>`
+yang controlled (`value=`). Jadi tidak ada yang memaksanya menyegarkan.
+
+### Yang membuatnya lebih berbahaya daripada terlihat
+
+Ini bukan sekadar kotak yang salah tampil. Orang membaca dropdown untuk tahu
+apa yang sedang disaring. Kalau tertulis "Offline" padahal peta menampilkan
+semua, ia menyimpulkan **1.687 pelanggan sedang padam**. Saat mencari
+gangguan, salah baca itu mahal.
+
+Gejala yang sama muncul pada tombol **"Lihat semua yang offline"** — dropdown
+tidak ikut berubah jadi "Offline".
+
+### Perbaikannya
+
+Paling sederhana: beri `key` pada form yang berubah mengikuti searchParams,
+supaya React memasang ulang isinya saat filter berpindah.
+
+```tsx
+<form method="get" key={new URLSearchParams(sp as Record<string, string>).toString()}>
+```
+
+Alternatif yang lebih rapi tapi lebih banyak berubah: jadikan `<select>`
+controlled dengan state klien yang disinkronkan ke `searchParams`. Pilih yang
+menurutmu paling pas — yang penting **kotak filter selalu menggambarkan URL
+yang sedang berlaku**.
+
+### Cara mengujinya
+
+Pilih OLT mana saja + status koneksi Offline → Terapkan → Reset. Setelah
+Reset, keenam dropdown harus kembali ke "Semua …". Ulangi dengan tombol
+"Lihat semua yang offline": dropdown status koneksi harus berubah jadi
+"Offline" sendiri.
