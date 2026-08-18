@@ -3404,3 +3404,61 @@ Jangan menghitung ulang angka status di klien. Semuanya sudah dihitung server
 dan konsisten dengan TV Wall. Dua sumber kebenaran untuk angka yang sama akan
 berselisih suatu hari — dan itu terjadi tepat saat orang sedang panik mencari
 gangguan.
+
+---
+
+## §57b — PERBARUAN: pakai gerombolan padam, bukan total padam
+
+Menggantikan bagian ambang di §57.1. Aku sudah menambahkan datanya, jadi jangan
+membuat spanduk berdasarkan `linkCounts.OFFLINE` — ada sinyal yang jauh lebih
+tajam sekarang.
+
+### Datanya
+
+```ts
+data.padamMenggerombol   // GerombolPadamPeta[], terbanyak lebih dulu
+```
+
+Tiap elemen:
+
+```ts
+{ odpId, kode, jumlah, latitude, longitude, ponLabel, siteName }
+```
+
+Isinya ODP dengan **dua atau lebih** pelanggan padam bersamaan. Ambangnya sama
+dengan TV Wall, supaya dua layar tidak pernah menyebut angka berbeda untuk
+gangguan yang sama.
+
+### Kenapa ini menggantikan ambang persentase
+
+Angka "40 pelanggan padam" tidak memberi tahu apa-apa. Diuji di produksi
+18 Agustus 2026, dari 40 padam:
+
+- **23 menggerombol** di 4 ODP
+- **17 tersebar** sendirian — modem dicabut, listrik padam di satu rumah
+
+Yang 17 itu bukan gangguan dan tidak boleh memicu spanduk. Yang 23 itu jalur.
+
+Dan pola yang muncul hari itu menunjukkan kenapa ini penting: `GMG 001` (14),
+`GMG 004` (5), dan `GMG 002` (2) semuanya berada pada PON yang **sama** —
+`gpon_olt-1/16/13`. Dua puluh satu pelanggan padam di satu port PON. Itu satu
+titik untuk diperiksa, bukan 21 rumah untuk didatangi.
+
+### Bentuk spanduk yang kusarankan
+
+Nyalakan bila `data.padamMenggerombol.length > 0`. Tidak perlu ambang
+persentase — gerombolan itu sendiri sudah ambangnya.
+
+> ⚠ **4 ODP padam serentak** — 23 pelanggan
+> GMG 001 (14) · GMG 004 (5) · GMG 002 (2) · UJM 01 S (2)
+> **lihat sebarannya** → `?link=OFFLINE`
+
+Kalau kamu mau lebih jauh: `ponLabel` ada di tiap elemen. ODP yang berbagi
+`ponLabel` sama patut disebut sebagai satu gangguan, bukan beberapa — itu yang
+paling menolong orang yang harus memutuskan ke mana pergi. Tidak wajib; kalau
+terlalu rumit, daftar per ODP saja sudah jauh lebih baik daripada angka total.
+
+### Yang tetap berlaku dari §57
+
+`focusBounds` (57.2) dan perbaikan kolom filter (57.3) tidak berubah. Yang
+diganti hanya dasar spanduknya.
