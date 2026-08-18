@@ -42,7 +42,11 @@ export type LinkStatus = "ONLINE" | "OFFLINE" | "DISABLED" | "UNKNOWN";
  *
  * Titik-titik ini berasal dari GPS ponsel teknisi, yang ketelitiannya beberapa
  * METER. Digit ke-7 dan seterusnya bukan informasi, hanya sampah dari aritmetika
- * floating point — dan sampah itu dikirim 1.687 kali tiap halaman peta dibuka.
+ * floating point — dan sampah itu dikirim untuk SETIAP pelanggan, ODP, site,
+ * dan titik jalur, tiap kali halaman peta dibuka.
+ *
+ * Dipakai hanya pada nilai yang DIKIRIM. Perhitungan (mis. panjang jalur) tetap
+ * memakai angka asli, supaya galat pembulatan tidak menumpuk.
  */
 function bulatkanKoordinat(n: number): number {
   return Math.round(n * 1e6) / 1e6;
@@ -297,8 +301,8 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
       odps.push({
         id: odp.id,
         code: odp.code,
-        latitude: odp.latitude,
-        longitude: odp.longitude,
+        latitude: bulatkanKoordinat(odp.latitude),
+        longitude: bulatkanKoordinat(odp.longitude),
         capacity: odp.portCapacity,
         used,
         occupancy,
@@ -360,7 +364,14 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
       id: r.id,
       name: r.name,
       routeType: r.routeType,
-      coordinates,
+      // Panjang dihitung dari koordinat ASLI; yang dibulatkan hanya yang
+      // dikirim. Pembulatan ±11 cm tidak akan menggeser panjang jalur secara
+      // berarti, tetapi menghitung dari angka yang sudah dipangkas berarti
+      // membiarkan galat pembulatan menumpuk sepanjang ratusan titik.
+      coordinates: coordinates.map(([lng, lat]) => [
+        bulatkanKoordinat(lng),
+        bulatkanKoordinat(lat),
+      ]) as [number, number][],
       lengthMeters: routeLengthMeters(coordinates),
     };
   });
@@ -370,8 +381,8 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     code: st.siteCode,
     name: st.name,
     type: st.type,
-    latitude: st.latitude!,
-    longitude: st.longitude!,
+    latitude: bulatkanKoordinat(st.latitude!),
+    longitude: bulatkanKoordinat(st.longitude!),
     status: st.status,
   }));
 
