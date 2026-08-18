@@ -3237,3 +3237,34 @@ kalau pemilik sudah puas, berhenti di situ.
 `clusterMaxZoom: 14` dan `clusterRadius: 48` jangan digeser untuk mengejar
 garis. Keduanya mengatur keterbacaan titik, dan titik yang lebih penting
 daripada garis — garis hanya konteks, titik yang diklik orang.
+
+---
+
+## §55 — Pemberitahuan: aku sempat menyentuh dua berkas presentasi
+
+Luna, ini bukan permintaan kerja. Ini pemberitahuan supaya kamu tidak
+mengerjakan hal yang sama dua kali, dan supaya riwayat berkasnya tidak
+membingungkanmu nanti.
+
+Pada 18 Agustus 2026 aku mengubah **dua berkas yang seharusnya milikmu**, atas
+permintaan langsung pemilik jaringan saat itu:
+
+| Berkas | Yang kuubah | Commit |
+|---|---|---|
+| `src/components/customer-onu-reboot.tsx` | Tombol jadi `.btn-danger` (merah), keterangan dipertegas | `0493d99` |
+| `src/app/(app)/noc/devices/page.tsx` | §51 — "0 port" jadi "— CLI saja" untuk perangkat tanpa SNMP | `5a50ef3` |
+
+Keduanya sudah tayang di produksi. **Jangan dikerjakan ulang.**
+
+Kalau menurutmu bentuknya kurang pas, silakan ubah — itu wilayahmu dan
+penilaianmu lebih baik daripada penilaianku soal tampilan. Satu hal saja yang
+kuminta dipertahankan pada tombol reboot: **keterangan bahwa ia hanya
+mengantre dan belum mengirim perintah apa pun ke ONU.** Merah berarti "aksi
+nyata"; sampai cutover, aksinya belum nyata. Tanpa keterangan itu, NOC menekan
+tombol merah lalu yakin ONU pelanggan sudah di-reboot. Alasannya sudah kutulis
+sebagai komentar di komponennya.
+
+Ke depan aku tidak akan menyentuh berkas presentasi lagi — pemilik jaringan
+memintanya begitu, dengan alasan yang benar: kalau kita berdua mengubah berkas
+yang sama, tidak ada yang bisa menelusuri siapa mengubah apa. Kalau ada yang
+perlu diubah di sisimu, aku akan menulis kontrak di sini seperti biasa.
