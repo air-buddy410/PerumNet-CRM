@@ -1460,9 +1460,17 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   Saat filter status pelanggan atau koneksi aktif, peta mendekat ke hasil
   customer yang sedang terlihat; tanpa filter customer, seluruh jaringan tetap
   menjadi batas pandang.
-- Banner outage memakai rasio `OFFLINE` lebih dari 5% dari status link yang
-  tergambar, bukan jumlah hard-code, dan tidak ditampilkan ulang ketika Mode
-  Padam Global sudah aktif.
+- Banner outage memakai `data.padamMenggerombol` sebagai sumber kebenaran.
+  Banner hanya muncul jika ada ODP dengan minimal dua customer offline;
+  customer offline yang tersebar sendiri tidak memicu banner. Daftar banner
+  menampilkan maksimal delapan ODP terbesar, jumlah customer padam, PON, dan
+  site bila tersedia, lalu menyebut jumlah ODP tambahan bila ada. `ponLabel`
+  tidak menggabungkan beberapa ODP menjadi satu item; ia hanya memberi konteks
+  jalur yang mungkin sama.
+- Total customer pada banner dijumlahkan dari `jumlah` yang sudah dihitung
+  server pada setiap gerombol. `data.linkCounts` tetap hanya digunakan untuk
+  kartu ringkasan status, bukan untuk menentukan apakah outage berkelompok
+  terjadi. Banner tidak ditampilkan ulang ketika Mode Padam Global sudah aktif.
 
 ### Acceptance responsive filter peta
 
@@ -1472,5 +1480,6 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Filter normal, chip hapus, Reset, focus map, cluster, popup, fullscreen,
   fallback SVG, dan filter URL tetap berfungsi pada 1440×900, 1920×1080,
   1024×768, 768×1024, 390×844, dan 360×800.
-- Filter, banner, chip, dan ringkasan tidak keluar card atau menyebabkan
-  horizontal overflow pada mobile.
+- Filter, banner, daftar cluster, chip, dan ringkasan tidak keluar card atau
+  menyebabkan horizontal overflow pada mobile. Nilai PON atau site yang
+  kosong ditampilkan sebagai keterangan netral, bukan nilai tebakan.

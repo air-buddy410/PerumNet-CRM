@@ -140,9 +140,10 @@ export default async function NetworkMapPage({
   const totalPorts = data.odps.reduce((s, o) => s + o.capacity, 0);
   const usedPorts = data.odps.reduce((s, o) => s + o.used, 0);
   const renderedLinkCount = data.customers.length;
-  const renderedStatusTotal = Object.values(data.linkCounts).reduce((total, count) => total + count, 0);
-  const offlineRatio = renderedStatusTotal > 0 ? data.linkCounts.OFFLINE / renderedStatusTotal : 0;
-  const showOfflineBanner = !isGlobalOfflineMode && offlineRatio > 0.05;
+  const visibleOutageClusters = data.padamMenggerombol.slice(0, 8);
+  const hiddenOutageClusterCount = Math.max(0, data.padamMenggerombol.length - visibleOutageClusters.length);
+  const outageCustomerCount = data.padamMenggerombol.reduce((total, cluster) => total + cluster.jumlah, 0);
+  const showOfflineBanner = !isGlobalOfflineMode && data.padamMenggerombol.length > 0;
   const globalOfflineHref = "/noc/map?mode=offline&link=OFFLINE";
 
   const keep = (extra: Record<string, string>) => {
@@ -291,11 +292,40 @@ export default async function NetworkMapPage({
           )}
 
           {showOfflineBanner && (
-            <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-[#f0ccc8] bg-[#fff7f6] p-4 text-[#913f3b]" role="status">
-              <p className="min-w-0 text-sm leading-relaxed">
-                <strong>{data.linkCounts.OFFLINE} customer sedang padam</strong> dari {renderedStatusTotal} customer yang tergambar pada hasil ini.
-              </p>
-              <Link href={globalOfflineHref} className="btn-danger shrink-0">Lihat semua yang offline</Link>
+            <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-4 rounded-xl border border-[#f0ccc8] bg-[#fff7f6] p-4 text-[#913f3b]" role="status" aria-live="polite">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#d8524a] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                    Gangguan berkelompok
+                  </span>
+                  <strong className="min-w-0 break-words text-sm">
+                    {data.padamMenggerombol.length} ODP padam serentak · {outageCustomerCount} customer
+                  </strong>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed">
+                  Gerombolan dihitung server dari minimal dua customer offline pada ODP yang sama. Periksa sebarannya sebelum mengirim teknisi ke rumah satu per satu.
+                </p>
+                <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {visibleOutageClusters.map((cluster) => (
+                    <div key={cluster.odpId} className="min-w-0 rounded-lg border border-[#efc9c5] bg-white/70 p-2.5">
+                      <strong className="block min-w-0 break-words text-xs text-[#7c3430]">{cluster.kode}</strong>
+                      <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-1 text-[11px] leading-relaxed text-[#9f443e]">
+                        <span>{cluster.jumlah} customer padam</span>
+                        <span className="min-w-0 break-words">{cluster.ponLabel || "PON belum tersedia"}</span>
+                        <span className="min-w-0 break-words">{cluster.siteName || "Site belum tersedia"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {hiddenOutageClusterCount > 0 && (
+                  <p className="mt-2 text-[11px] text-[#9f443e]">
+                    + {hiddenOutageClusterCount} ODP lainnya mengalami padam berkelompok.
+                  </p>
+                )}
+              </div>
+              <Link href={globalOfflineHref} className="btn-danger w-full shrink-0 sm:w-auto">
+                Lihat semua yang offline
+              </Link>
             </div>
           )}
         </>
