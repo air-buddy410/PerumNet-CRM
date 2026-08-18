@@ -3048,3 +3048,29 @@ Selebihnya bebas kamu rombak: tata letak, urutan, ikon, kalimat, semuanya.
 
 `src/lib/rahasia-perangkat.ts` dan `src/lib/kredensial-perangkat-service.ts`.
 Di situ aturan kriptonya, dan tesnya akan menangkapmu kalau tergeser.
+
+---
+
+## §51 — "0 port" di daftar perangkat terbaca seperti kerusakan
+
+Kecil, tapi sudah memakan waktu orang dua kali.
+
+Di `/noc/devices`, kolom **PORT** menghitung `NetworkDevice.ports` — antarmuka
+hasil sinkronisasi LibreNMS lewat SNMP. OLT `192.168.100.10` (HSGQ Kecicang)
+menampilkan **0 port**, sendirian di antara enam OLT yang lain.
+
+**Itu benar, bukan bug.** Perangkat itu tidak mendukung SNMP, jadi `snmpPort`-nya
+sengaja kosong dan LibreNMS tidak pernah menariknya. Ia dibaca lewat CLI telnet,
+dan delapan PON port-nya ada dan sehat — hanya saja PON port tersimpan di tabel
+lain (`PonPort` di bawah `OltDevice`), bukan di kolom ini.
+
+Masalahnya angka nol itu terbaca sebagai "rusak". Pemilik jaringan menanyakannya,
+dan saya sendiri sempat menyelidikinya sebagai dugaan kerusakan.
+
+**Yang dibutuhkan:** bedakan "nol antarmuka" dari "tidak dipantau SNMP". Perangkat
+yang `snmpPort`-nya kosong sebaiknya tidak menampilkan angka sama sekali —
+misalnya "—" dengan tooltip "tidak dipantau SNMP", atau label "CLI saja". Bentuknya
+terserah kamu.
+
+Kalau kamu butuh `snmpPort` ikut dikirim ke layar dan sekarang belum ada, tulis di
+`PERMINTAAN-FRONTEND-KE-BACKEND.md`, nanti aku tambahkan.
