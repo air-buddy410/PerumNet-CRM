@@ -53,9 +53,59 @@ CRM benar, ada pendapatan yang selama ini tidak tertagih. Kalau ALUS benar, CRM
 akan menagih orang yang tidak seharusnya ditagih — dan itu kesalahan yang
 sampai ke pelanggan.
 
-## Langkah berikutnya
+## Siapa 63 pelanggan itu
 
-`_gladi-tagih.ts` menerima `--banding <berkas.tsv>` berisi
-`nomorLayanan<TAB>jumlah` dari sistem lama. Menjalankannya dengan 1.603 baris
-bulanan Agustus murni akan menyebut **tepat pelanggan mana** yang berselisih,
-bukan hanya totalnya.
+Dibandingkan langganan demi langganan, 18 Agustus 2026. Dari 1.715 langganan
+CRM, **116 tidak ditagih ALUS pada Agustus**:
+
+| Kelompok | Jumlah | CRM juga melewati? |
+|---|---|---|
+| ACTIVE, berharga, profil tagihan aktif | **63** | **TIDAK — CRM akan menagih** |
+| INACTIVE | 27 | ya |
+| ACTIVE tapi harga bulanan nol | 25 | ya |
+| PROSPECT harga nol | 1 | ya |
+
+Jadi selisih yang perlu diputuskan adalah **63 langganan senilai
+Rp12.679.000**. Menurut kapan mereka mulai ditagih:
+
+- **43 baru (Juni–Agustus 2026), Rp7.725.000.** Kemungkinan besar wajar: ALUS
+  belum menagih pelanggan yang baru pasang. Perlu dipastikan kapan siklus
+  pertama mereka jatuh, bukan diasumsikan.
+- **20 lama (2023–2025), Rp4.954.000.** Ini yang perlu dijawab satu per satu.
+  Pelanggan yang aktif sejak 2023 tetapi tidak ditagih Agustus bukan hal yang
+  bisa dijelaskan oleh waktu.
+
+### Dua yang jelas keliru kalau CRM menagih
+
+| CID | Nilai di CRM | Nama |
+|---|---|---|
+| `Free102Jay` | Rp800.000 | Nyoman Bagus Jaya Lasmana |
+| `PN260721631` | Rp225.000 | Free Ni Komang Ayu Tri Sentosa |
+
+Keduanya bertanda **Free** pada namanya, tetapi punya harga bulanan di CRM.
+ALUS tidak menagih mereka. Kalau CRM terbit apa adanya, dua orang yang
+dijanjikan layanan gratis akan menerima tagihan.
+
+### Satu yang sengaja dibatalkan ALUS
+
+`PN102202339` (Trisna Jaya, aktif sejak Maret 2023) punya **dua** tagihan
+Agustus di ALUS dan **keduanya berstatus CANCEL**. Itu keputusan sadar
+seseorang, bukan kelalaian. CRM tidak tahu keputusan itu dan akan menagih
+Rp277.000.
+
+## Arah sebaliknya: 4 pelanggan ALUS belum ada di CRM
+
+`PN260817256` · `PN260817329` · `PN260817785` · `PN260817870`
+
+Keempatnya CID Agustus 2026 — pelanggan yang dipasang belakangan dan belum
+ikut terimpor. Perlu dimasukkan lewat `_impor-pelanggan.ts`, **dan ingat
+langkah keduanya**: skrip itu tidak membuat `BillingProfile`, sehingga
+pelanggan yang baru masuk tidak akan pernah ditagih tanpa
+`_siapkan-profil-tagihan.ts`.
+
+## Yang TIDAK boleh dilakukan
+
+Menyamakan angka supaya cocok. Dari 63 itu, sebagian CRM yang benar (pendapatan
+yang selama ini tidak tertagih) dan sebagian ALUS yang benar (orang yang memang
+tidak boleh ditagih). Keduanya menuntut jawaban per pelanggan sebelum tagihan
+pertama terbit — sesudahnya, kesalahan sudah sampai ke tangan orang.
