@@ -921,7 +921,19 @@ export function NetworkMap({
           {isFullscreen ? <Minimize2 aria-hidden="true" /> : <Expand aria-hidden="true" />}
         </button>
       </div>
-      {status !== "ready" && (
+      {/*
+        Peta cadangan hanya digambar ketika basemap benar-benar GAGAL —
+        bukan selagi ia masih memuat.
+
+        Bedanya besar dan tidak kentara. `status !== "ready"` juga benar pada
+        keadaan awal "loading", dan komponen klien tetap dirender di server
+        pada render pertama. Akibatnya seluruh SVG — ribuan elemen dengan
+        koordinat piksel presisi penuh — ikut terkirim sebagai HTML kepada
+        semua orang, termasuk yang basemap-nya baik-baik saja.
+
+        Selagi memuat, yang tampil cukup tulisan "Memuat basemap…" di bawah.
+      */}
+      {(status === "error" || status === "unavailable") && (
         <div
           className="crm-network-map-fallback"
           onClick={handleFallbackClick}
