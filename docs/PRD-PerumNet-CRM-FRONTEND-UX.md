@@ -1398,14 +1398,13 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
   viewport, canvas MapLibre tidak mengikuti container, anchor SVG, password
   tampil, hydration warning, atau console error.
 
-## 50. Optimasi Garis Peta saat Zoom-Out (§52)
+## 50. Optimasi Garis Peta saat Zoom-Out (§52–§54)
 
-- Layer garis topology solid dan fiber route memakai `minzoom: 10` agar garis
-  se-kabupaten tidak dirender ketika peta masih menampilkan konteks luas.
-- Layer garis putus-putus ODP–customer memakai `minzoom: 12`; garis baru
-  muncul ketika titik customer sudah cukup terurai untuk dibaca.
+- Layer garis topology solid dan fiber route memakai `minzoom: 15`. Layer
+  garis putus-putus ODP–customer juga memakai `minzoom: 15`, sehingga garis
+  baru dirender setelah cluster titik selesai pada `clusterMaxZoom: 14`.
 - Opacity garis tidak lagi memakai nilai `0` sebagai pengganti `minzoom`.
-  Interpolasi opacity dimulai dari zoom minimum masing-masing layer.
+  Nilai opacity saat garis mulai terlihat tetap positif.
 - Marker dan cluster infrastructure/customer tetap tersedia saat zoom-out.
   Popup, filter, fullscreen, ResizeObserver, relasi topology, dan fallback SVG
   tidak berubah.
@@ -1417,7 +1416,19 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 - Pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800,
   zoom-out tidak dipenuhi garis dan marker/cluster tetap terlihat.
-- Topology dan fiber route mulai terlihat pada zoom 10; garis ODP–customer
-  mulai terlihat pada zoom 12.
+- Sampai zoom 14, marker/cluster tetap terlihat tanpa garis; topology, fiber
+  route, dan garis ODP–customer mulai terlihat pada zoom 15.
 - Tidak ada horizontal overflow, popup/legenda keluar card, console error,
   atau regressi pada fallback SVG dan navigasi ODP.
+
+## 51. Daftar Customer: Tanggal Isolir dan Ringkasan Paket (§53)
+
+- Daftar customer mengambil `BillingProfile.isolirDay` dari satu subscription
+  secara server-side. Nilai tersedia ditampilkan sebagai “Tanggal N tiap bulan”;
+  nilai kosong ditampilkan sebagai “—”.
+- Ringkasan paket menghitung customer unik per paket dan mengikuti filter aktif.
+  Enam paket terbesar ditampilkan sebagai kartu, sedangkan paket lainnya
+  digabung menjadi satu kartu agregat agar ringkasan tetap ringkas pada mobile.
+- Filter, sorting, pagination, permission, dan batas tabel tidak berubah.
+- Kolom tanggal isolir memakai horizontal scroll tabel terkontrol dan tidak
+  memecah teks menjadi satu karakter per baris.

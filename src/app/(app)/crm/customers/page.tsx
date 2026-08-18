@@ -82,7 +82,15 @@ export default async function CustomersPage({
   const [rawCustomers, total, packages, odps, packageSummaryRows] = await Promise.all([
     db.customer.findMany({
       where,
-      include: { area: true, salesOwner: true, _count: { select: { subscriptions: true } } },
+      include: {
+        area: true,
+        salesOwner: true,
+        subscriptions: {
+          select: { billingProfile: { select: { isolirDay: true } } },
+          take: 1,
+        },
+        _count: { select: { subscriptions: true } },
+      },
       orderBy,
       skip: (table.page - 1) * table.pageSize,
       take: table.pageSize,
@@ -119,6 +127,18 @@ export default async function CustomersPage({
     count,
   }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "id"));
+  const featuredPackageSummary = packageSummary.slice(0, 6);
+  const remainingPackageSummary = packageSummary.slice(6);
+  const packageCards = [
+    ...featuredPackageSummary,
+    ...(remainingPackageSummary.length > 0
+      ? [{
+          packageId: "__other__",
+          name: `Paket lainnya (${remainingPackageSummary.length} paket)`,
+          count: remainingPackageSummary.reduce((sum, item) => sum + item.count, 0),
+        }]
+      : []),
+  ];
 
   return (
     <div>
@@ -193,10 +213,12 @@ export default async function CustomersPage({
               <h2 id="customer-package-summary-title" className="font-medium text-slate-800">Ringkasan paket</h2>
               <p className="mt-1 text-sm text-slate-500">Jumlah customer per paket sesuai filter yang sedang dipakai.</p>
             </div>
-            <span className="text-xs text-slate-500">{packageSummary.reduce((sum, item) => sum + item.count, 0)} customer</span>
+            <span className="text-xs text-slate-500">
+              {packageSummary.length} paket · {packageSummary.reduce((sum, item) => sum + item.count, 0)} customer
+            </span>
           </div>
           <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {packageSummary.map((item) => (
+            {packageCards.map((item) => (
               <div key={item.packageId} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                 <p className="break-words text-sm text-slate-600">{item.name}</p>
                 <p className="mt-1 text-2xl font-semibold text-slate-800">{item.count}</p>
@@ -211,7 +233,7 @@ export default async function CustomersPage({
         {customers.length === 0 ? (
           <EmptyState message="Belum ada customer. Konversi lead dengan quotation Accepted untuk membuat customer." />
         ) : (
-          <table className="w-full min-w-[880px]">
+          <table className="w-full min-w-[1020px]">
             <thead className="border-b border-slate-100 bg-slate-50/60">
               <tr>
                 <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Nomor" query={table.query} sortKey="customerNumber" /></th>
@@ -221,6 +243,7 @@ export default async function CustomersPage({
                 <th className="th">Area</th>
                 <th className="th">Sales Owner</th>
                 <th className="th">Subscription</th>
+                <th className="th">Tanggal isolir</th>
                 <th className="th"><SortableTableHeader basePath="/crm/customers" currentDirection={table.direction} currentSort={table.sort} label="Status" query={table.query} sortKey="status" /></th>
               </tr>
             </thead>
@@ -244,6 +267,16 @@ export default async function CustomersPage({
                   <td className="td text-xs">{c.area?.name ?? "-"}</td>
                   <td className="td text-xs">{c.salesOwner?.name ?? "-"}</td>
                   <td className="td">{c._count.subscriptions}</td>
+                  <td
+                    className="td whitespace-nowrap"
+                    title={c.subscriptions[0]?.billingProfile?.isolirDay == null
+                      ? "Tanggal isolir belum tersedia"
+                      : `Tanggal isolir: ${c.subscriptions[0].billingProfile.isolirDay} tiap bulan`}
+                  >
+                    {c.subscriptions[0]?.billingProfile?.isolirDay == null
+                      ? "—"
+                      : `Tanggal ${c.subscriptions[0].billingProfile.isolirDay} tiap bulan`}
+                  </td>
                   <td className="td">
                     <Badge value={c.status} label={statusLabel(c.status)} />
                   </td>

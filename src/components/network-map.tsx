@@ -401,7 +401,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "topology-link"],
-    minzoom: 10,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.42, 12, 0.68, 14, 0.92],
@@ -414,7 +414,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "route"],
-    minzoom: 10,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.34, 12, 0.64, 15, 0.88],
@@ -434,7 +434,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "customer-link"],
-    minzoom: 12,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-dasharray": [1.5, 1.5],
