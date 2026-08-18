@@ -139,3 +139,39 @@ Brankas dibaca **lebih dulu**, env var jadi cadangan. Jadi lima OLT yang sudah
 berjalan tidak perlu disentuh sama sekali. Kalau nanti dipindah ke brankas,
 barulah barisnya boleh dihapus dari `.env` — satu per satu, setelah tombol uji
 di layar perangkat itu menjawab hijau.
+
+---
+
+## 172.30.10.6 — jalur milik ALUS, JANGAN DISENTUH
+
+Lima dari enam OLT memakai `managementIp` **172.30.10.6** dengan port berbeda
+per perangkat:
+
+| OLT | Telnet | SNMP |
+|---|---|---|
+| 192.168.100.11 (HSGQ SerayaBarat) | 1024 | 1615 |
+| 192.168.100.12 (HSGQ SerayaTengah) | 1025 | 1616 |
+| 192.168.100.30 (ZTE C300 Pesagi) | 23 | 1610 |
+| 192.168.100.60 (ZTE C600 Kecicang) | 231 | 1612 |
+| 192.168.100.61 (ZTE C600 Abang) | 232 | 1613 |
+
+**172.30.10.6 bukan host milik kita. Itu port forwarding milik aplikasi ALUS
+ke IP publik.** Ditegaskan pemilik jaringan 18 Agustus 2026: jangan disentuh.
+
+Ini perlu ditulis karena tidak ada apa pun di kode yang menunjukkannya — di
+basis data ia hanya tampak seperti `managementIp` biasa, dan port yang
+tidak seragam itu terlihat seperti sesuatu yang "perlu dirapikan". Bukan.
+Merapikannya berarti mengubah infrastruktur pihak lain.
+
+Jadi aturan **ALUS read-only** berlaku di sini juga, bukan hanya di aplikasi
+webnya: jangan ubah `managementIp`, `telnetPort`, atau `snmpPort` kelima OLT
+itu, dan jangan usulkan memindahkannya ke IP internal sebelum pemilik jaringan
+memutuskan.
+
+Pengecualian: **192.168.100.10** (HSGQ Kecicang) dijangkau LANGSUNG di
+`192.168.100.10:1023`, tidak lewat jalur ini, dan memang tidak punya SNMP
+sama sekali.
+
+Rencana memindahkan worker ke VPS di dalam jaringan MikroTik distribusi akan
+mengubah ketergantungan ini. Sampai itu diputuskan dan dikerjakan, jalur ALUS
+adalah satu-satunya cara CRM menjangkau kelima OLT tersebut.
