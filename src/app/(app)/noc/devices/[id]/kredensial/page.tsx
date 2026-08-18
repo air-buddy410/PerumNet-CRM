@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { AlertTriangle, KeyRound, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/constants";
@@ -59,15 +60,31 @@ export default async function KredensialPerangkatPage({
       <Flash ok={sp.ok} error={sp.error} />
 
       {!adaKunci && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <strong>Kunci brankas belum terpasang.</strong> Kredensial baru belum bisa
-          disimpan sampai <code>DEVICE_CRED_KEY</code> diisi di server. Perangkat yang
-          sudah berjalan lewat berkas <code>.env</code> tidak terpengaruh.
+        <div
+          className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800"
+          role="alert"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>
+            <strong>Kunci brankas belum terpasang.</strong> Kredensial baru belum bisa
+            disimpan sampai <code>DEVICE_CRED_KEY</code> diisi di server. Perangkat yang
+            sudah berjalan lewat berkas <code>.env</code> tidak terpengaruh.
+          </p>
         </div>
       )}
 
-      <div className="card mb-6 p-5">
-        <h2 className="mb-3 font-medium">Yang tersimpan sekarang</h2>
+      <section className="card mb-6 p-5" aria-labelledby="credential-status-title">
+        <div className="mb-3 flex items-start gap-3">
+          <span className="mt-0.5 rounded-md bg-brand-50 p-2 text-brand-600">
+            {kred.ada ? <ShieldCheck className="size-4" aria-hidden="true" /> : <KeyRound className="size-4" aria-hidden="true" />}
+          </span>
+          <div>
+            <h2 id="credential-status-title" className="font-medium">Yang tersimpan sekarang</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Metadata aman untuk ditindaklanjuti NOC. Sandi tidak pernah ditampilkan.
+            </p>
+          </div>
+        </div>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs text-slate-500">Sumber</dt>
@@ -121,14 +138,14 @@ export default async function KredensialPerangkatPage({
             </form>
           </div>
         )}
-      </div>
+      </section>
 
       {canManage ? (
         <div className="card p-5">
           <h2 className="mb-1 font-medium">
             {kred.sumber === "BRANKAS" ? "Ganti kredensial" : "Isi kredensial"}
           </h2>
-          <p className="mb-4 text-xs text-slate-500">
+          <p className="mb-4 text-xs leading-5 text-slate-500">
             Sandi disegel sebelum disimpan dan tidak pernah dapat dibaca kembali dari
             layar ini. Mengganti sandi membatalkan hasil uji sebelumnya.
           </p>
@@ -166,7 +183,10 @@ export default async function KredensialPerangkatPage({
               />
             </div>
             <div>
-              <label className="label" htmlFor="sandi">Sandi</label>
+              <label className="label" htmlFor="sandi">Sandi baru</label>
+              <p id="sandi-help" className="mb-1 text-[11px] text-slate-500">
+                Kosong saat halaman dibuka; isi hanya jika ingin menyimpan atau mengganti.
+              </p>
               {/* Sengaja tanpa defaultValue: sandi tidak pernah dikirim ke browser. */}
               <input
                 id="sandi"
@@ -175,6 +195,7 @@ export default async function KredensialPerangkatPage({
                 className="input"
                 required
                 autoComplete="new-password"
+                aria-describedby="sandi-help"
               />
             </div>
             <button type="submit" className="btn-primary" disabled={!adaKunci}>

@@ -140,8 +140,10 @@ export default async function NetDevicesPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {devices.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50">
+                {devices.map((d) => {
+                  const credential = credentialsByDeviceId.get(d.id);
+                  return (
+                  <tr key={d.id} className={`hover:bg-slate-50 ${credential?.ada ? "" : "bg-amber-50/30"}`}>
                     <td className="td font-mono text-xs font-semibold">{d.hostname}</td>
                     <td className="td text-xs">{typeLabel(d.deviceType)}</td>
                     <td className="td text-xs">{d.site.siteCode}</td>
@@ -163,20 +165,17 @@ export default async function NetDevicesPage({
                     <td className="td"><Badge value={d.status} label={statusLabel(d.status)} /></td>
                     <td className="td">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        {(() => {
-                          const credential = credentialsByDeviceId.get(d.id);
-                          return (
-                            <>
-                              <Badge
-                                value={credential?.ada ? "ACTIVE" : "UNKNOWN"}
-                                label={credential?.ada ? (credential.sumber === "BRANKAS" ? "Tersimpan" : "Dari server") : "Belum ada"}
-                              />
-                              <Link href={`/noc/devices/${d.id}/kredensial`} className="whitespace-nowrap text-xs font-semibold text-brand-600 hover:underline">
-                                {credential?.ada ? "Lihat" : "Atur"}
-                              </Link>
-                            </>
-                          );
-                        })()}
+                        <Badge
+                          value={credential?.ada ? "ACTIVE" : "UNKNOWN"}
+                          label={credential?.ada ? (credential.sumber === "BRANKAS" ? "Tersimpan" : "Dari server") : "Belum ada"}
+                        />
+                        <Link
+                          href={`/noc/devices/${d.id}/kredensial`}
+                          className="whitespace-nowrap text-xs font-semibold text-brand-600 hover:underline"
+                          aria-label={`${credential?.ada ? "Kelola" : "Atur"} kredensial CLI ${d.hostname}`}
+                        >
+                          {credential?.ada ? "Kelola" : "Atur"}
+                        </Link>
                       </div>
                     </td>
                     {canManage && (
@@ -187,7 +186,8 @@ export default async function NetDevicesPage({
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

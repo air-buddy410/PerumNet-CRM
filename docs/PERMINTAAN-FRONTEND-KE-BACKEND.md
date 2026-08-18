@@ -193,3 +193,26 @@ dan tidak menjalankan pembacaan otomatis, polling, atau penyimpanan hasil.
   resmi tetap menjadi dependency backend/infrastruktur; frontend tidak membuat
   nilai daya atau status pengganti.
 - Tidak ada kontrak penyimpanan historis yang dibutuhkan untuk UI ini.
+
+## Fase 91 — Kontrak daftar perangkat NOC
+
+### Bedakan perangkat tanpa SNMP dari nol port
+- **Layar:** `/noc/devices`
+- **Butuh:** `NetworkDevice` yang dikirim ke halaman daftar menyertakan
+  `snmpPort` (atau boolean turunan yang disepakati) untuk membedakan perangkat
+  yang memang tidak dipantau SNMP dari perangkat yang benar-benar memiliki nol
+  interface hasil sinkronisasi. Nilai ini hanya dibaca frontend; jangan ubah
+  arti `NetworkDevice.ports`.
+- **Kenapa tidak bisa di sisi frontend:** query halaman saat ini hanya
+  mengembalikan hitungan `ports`, sementara `snmpPort` berada pada relasi OLT
+  yang belum dimuat. Tanpa kontrak tersebut, label "CLI saja" atau "tidak
+  dipantau SNMP" akan menjadi tebakan.
+
+### Kurangi query credential per halaman
+- **Layar:** `/noc/devices`
+- **Butuh:** loader metadata kredensial batch untuk daftar perangkat, atau
+  perluasan kontrak `loadKredensial` yang menghindari satu query brankas dan satu
+  query fallback per perangkat.
+- **Kenapa tidak bisa di sisi frontend:** halaman server saat ini memanggil
+  `loadKredensial` sekali per baris. Mengubah presentasi tidak menghilangkan
+  N+1 query; perbaikannya berada di service/loader backend.
