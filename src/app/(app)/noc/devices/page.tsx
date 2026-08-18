@@ -52,7 +52,16 @@ export default async function NetDevicesPage({
 
   const [devices, total, sites, users, editRow, selectedDevice, selectedPorts, portSummaries] = await Promise.all([
     db.networkDevice.findMany({
-      include: { site: true, owner: true, _count: { select: { ports: true } } },
+      include: {
+        site: true,
+        owner: true,
+        _count: { select: { ports: true } },
+        // §51 — perangkat tanpa jalur SNMP tidak akan pernah punya NetworkPort,
+        // dan "0 port" pada baris seperti itu terbaca sebagai kerusakan. Yang
+        // dibutuhkan kolomnya bukan angka, melainkan tahu bahwa angka itu tidak
+        // berlaku. HSGQ Kecicang sudah dua kali membuat orang menyelidikinya.
+        oltDevice: { select: { snmpPort: true } },
+      },
       orderBy,
       skip: (table.page - 1) * table.pageSize,
       take: table.pageSize,
@@ -155,12 +164,18 @@ export default async function NetDevicesPage({
                       />
                     </td>
                     <td className="td whitespace-nowrap text-xs">
-                      <Link
-                        href={buildTableHref("/noc/devices", table.query, { device: d.id, portKind: null, edit: null })}
-                        className="text-brand-600 hover:underline"
-                      >
-                        {d._count.ports} port
-                      </Link>
+                      {d.oltDevice && d.oltDevice.snmpPort === null ? (
+                        <span className="text-slate-400" title="Perangkat ini tidak dipantau SNMP, jadi tidak punya data antarmuka. Dibaca lewat CLI.">
+                          — <span className="text-[10px] uppercase tracking-wide">CLI saja</span>
+                        </span>
+                      ) : (
+                        <Link
+                          href={buildTableHref("/noc/devices", table.query, { device: d.id, portKind: null, edit: null })}
+                          className="text-brand-600 hover:underline"
+                        >
+                          {d._count.ports} port
+                        </Link>
+                      )}
                     </td>
                     <td className="td"><Badge value={d.status} label={statusLabel(d.status)} /></td>
                     <td className="td">

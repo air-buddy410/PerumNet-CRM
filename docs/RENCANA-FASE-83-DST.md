@@ -456,7 +456,7 @@ yang meleset kalau ada yang meleset.
 
 ---
 
-## Fase 92 — Posisi ONU yang salah format  ◇ DIUSULKAN, belum dikerjakan
+## Fase 92 — Posisi ONU yang salah format  ◑ JALAN PEMBACAAN DITEMUKAN 18 Agu
 
 Ditemukan 18 Agustus 2026 saat membuktikan Fase 88b. Pembacaan daya optik
 berhasil di lima dari enam OLT; yang gagal ternyata bukan salah perangkat.
@@ -493,3 +493,35 @@ dan sebaiknya lapor-saja dulu seperti skrip lain.
 Menghapus posisi yang salah supaya "bersih". Posisi keliru masih menyimpan
 petunjuk PON mana pelanggan itu berada; menghapusnya membuang informasi dan
 menukar satu kesalahan dengan kekosongan.
+
+### Jalan pembacaannya sudah ketemu (18 Agustus 2026)
+
+Perintah daftar ONU di HSGQ — **perangkatnya sendiri yang memberitahu**, lewat
+`show ont-info ?`:
+
+```
+enable → configure → interface gpon <N> → show ont-info all
+```
+
+Keluarannya satu baris per ONU: `<pon>/<onuId>  <serial>  Active  Online  …`,
+ditutup `Total: 92   Online:85  Offline:7`.
+
+**Dua jebakan yang sudah menggigit saya, dicatat supaya tidak menggigit lagi:**
+
+1. **PON yang berisi TIDAK mengeluarkan baris ringkasan `In port N, the total
+   of ONTs are: …`.** Baris itu hanya muncul untuk PON kosong. Parser pertama
+   saya hanya mencari baris itu, sehingga melaporkan "0 ONU menurut perangkat"
+   untuk OLT yang sebenarnya punya 92 — dan nyaris menyimpulkan basis datanya
+   yang salah, terbalik dari kenyataan.
+2. **Pesan galat HSGQ menggabungkan token.** `show ont info` dijawab
+   `Unknown command: show ontinfo`. Itu cara perangkat menyusun pesannya, bukan
+   spasi yang hilang di klien telnet kita. Sempat saya kira bug sendiri.
+
+**Yang sudah terbukti cocok:** PON 6 di HSGQ Kecicang punya 92 ONU (85 online);
+basis data mencatat tepat **85** langganan di PON 6. Jadi 89 posisi berformat
+benar di OLT itu memang benar. Yang perlu diperbaiki tetap 49 yang bergaya ZTE.
+
+**Yang masih perlu diputuskan:** pencocokan memakai **serial ONU**, bukan
+`pppoeUsername` — daftar dari perangkat menyebut serial, bukan nama pengguna.
+Perlu dipastikan dulu apakah serial itu tersimpan di basis data kita; kalau
+tidak, pencocokannya lewat jalur lain dan itu mengubah rencananya.
