@@ -3338,3 +3338,69 @@ bilang lewat `PERMINTAAN-FRONTEND-KE-BACKEND.md` — aku tambahkan ke
 - Jangan menambah polling sendiri. Peta memuat ulang lewat navigasi biasa;
   TV Wall (`/noc/wall`) yang memang dirancang menyala terus dengan refresh
   60 detik.
+
+---
+
+## §57 — Peta: spanduk padam, fokus ke hasil saringan, dan filter yang lebih informatif
+
+Melanjutkan §56 setelah pemilik jaringan memutuskan, 18 Agustus 2026. Tiga hal,
+dan **backend-nya sudah siap semua** — tidak ada yang perlu kamu tunggu.
+
+### 57.1 — Spanduk, bukan ganti saringan otomatis
+
+Pemilik memilih spanduk. Saat `data.linkCounts.OFFLINE` melewati ambang,
+tampilkan spanduk mencolok di atas peta berisi angkanya dan satu tautan ke
+`?link=OFFLINE`.
+
+Ambangnya jangan angka mati: **39 padam dari 1.687 itu keadaan tenang**, bukan
+outage. Pakai perbandingan (mis. >5% dari tergambar) atau angka yang kamu nilai
+pas — yang penting spanduknya tidak menyala setiap hari, karena spanduk yang
+selalu ada akan berhenti dibaca tepat pada hari ia dibutuhkan.
+
+### 57.2 — Fokus ke pelanggan padam saat saringan aktif
+
+**Sudah kusiapkan datanya.** `NetworkMapData` sekarang punya:
+
+```ts
+data.focusBounds  // MapBounds | null
+```
+
+Terisi **hanya** saat saringan tingkat-pelanggan aktif (status langganan atau
+status koneksi), dihitung dari **pelanggan hasil saringan saja**. `null` saat
+tidak ada saringan.
+
+Di `fitMapToData`, pakai `data.focusBounds ?? topology.bounds ?? data.bounds`.
+
+Kenapa ini perlu: `bounds` yang lama mencakup semua ODP dan site, jadi peta
+tetap selebar kabupaten meski hanya 39 titik padam yang tersisa. ODP sengaja
+TIDAK ikut dalam `focusBounds` — ODP tidak tersaring oleh status koneksi, dan
+menyertakannya akan menarik pandangan melebar lagi.
+
+### 57.3 — Kolom filter dibuat lebih informatif
+
+Pemilik menilai baris filter sekarang kurang informatif. Enam dropdown
+berjajar yang semuanya berbunyi "Semua …", tanpa memberi tahu apa pun tentang
+keadaan jaringan atau apa yang sedang aktif.
+
+Yang membuatnya informatif — pilih yang menurutmu paling membantu:
+
+- **Jumlah di dalam pilihannya.** "Offline (39)" jauh lebih berguna daripada
+  "Offline". Angkanya sudah ada di `data.linkCounts`; untuk okupansi ada di
+  `data.odps`, untuk status langganan bisa dihitung dari `data.customers`.
+- **Tanda saringan aktif.** Saat ada saringan berjalan, terlihat jelas — chip
+  yang bisa dibuang satu-satu, bukan hanya tombol Reset yang menghapus semua.
+- **Berapa yang tersisa.** "Menampilkan 39 dari 1.687 pelanggan" persis di
+  bawah baris filter. Ini yang paling mencegah salah paham: orang tahu ia
+  sedang melihat sebagian.
+- **Kelompokkan.** Site/Router/OLT itu "di mana", Okupansi/Status/Koneksi itu
+  "yang mana". Enam kotak sejajar tidak menunjukkan bedanya.
+
+Bentuk akhirnya terserah kamu — ini penilaian tampilan, dan penilaianmu lebih
+baik dari penilaianku di situ.
+
+### Yang jangan dikerjakan
+
+Jangan menghitung ulang angka status di klien. Semuanya sudah dihitung server
+dan konsisten dengan TV Wall. Dua sumber kebenaran untuk angka yang sama akan
+berselisih suatu hari — dan itu terjadi tepat saat orang sedang panik mencari
+gangguan.
