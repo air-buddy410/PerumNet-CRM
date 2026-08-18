@@ -9,6 +9,7 @@ import type {
   MapLayerMouseEvent,
   StyleSpecification,
 } from "maplibre-gl";
+import { NetworkMapSvg } from "@/components/network-map-svg";
 import type { LinkStatus, MapBounds, NetworkMapData, OccupancyLevel } from "@/lib/noc-map";
 import {
   CUSTOMER_COORDINATE_SOURCE_LABEL,
@@ -114,7 +115,6 @@ type NetworkMapProps = {
   selectedOdpId: string | null;
   palette: NetworkMapPalette;
   occupancyLabels: Record<OccupancyLevel, string>;
-  fallback: ReactNode;
   styleUrl?: string;
 };
 
@@ -588,7 +588,6 @@ export function NetworkMap({
   selectedOdpId,
   palette,
   occupancyLabels,
-  fallback,
   styleUrl,
 }: NetworkMapProps) {
   const router = useRouter();
@@ -928,7 +927,14 @@ export function NetworkMap({
           onClick={handleFallbackClick}
           onKeyDown={handleFallbackKeyDown}
         >
-          {fallback}
+          <NetworkMapSvg
+            data={data}
+            topology={topology}
+            selectedOdpId={selectedOdpId}
+            linkPalette={palette.linkStatus}
+            sitePalette={palette.site}
+            routePalette={palette.route}
+          />
         </div>
       )}
       {statusLabel && (
