@@ -456,7 +456,7 @@ yang meleset kalau ada yang meleset.
 
 ---
 
-## Fase 92 — Posisi ONU yang salah format  ◑ JALAN PEMBACAAN DITEMUKAN 18 Agu
+## Fase 92 — ODP tertaut ke OLT yang keliru  ◑ SEBAB DITEMUKAN 18 Agu
 
 Ditemukan 18 Agustus 2026 saat membuktikan Fase 88b. Pembacaan daya optik
 berhasil di lima dari enam OLT; yang gagal ternyata bukan salah perangkat.
@@ -525,3 +525,42 @@ benar di OLT itu memang benar. Yang perlu diperbaiki tetap 49 yang bergaya ZTE.
 `pppoeUsername` — daftar dari perangkat menyebut serial, bukan nama pengguna.
 Perlu dipastikan dulu apakah serial itu tersimpan di basis data kita; kalau
 tidak, pencocokannya lewat jalur lain dan itu mengubah rencananya.
+
+### Koreksi: bukan posisinya yang salah, tautan OLT-nya
+
+Diperiksa silang ke ALUS, 18 Agustus 2026. Empat sampel dari 49 yang bergaya
+ZTE di HSGQ Kecicang:
+
+| CID | OLT menurut ALUS | `id_onu` menurut ALUS | OLT menurut CRM |
+|---|---|---|---|
+| PN100112522 | ZTE-C600-100-Kecicang | `1/16/12:8` | HSGQ 192.168.100.10 |
+| PN100102514 | ZTE-C600-100-Kecicang | `1/16/12:3` | HSGQ 192.168.100.10 |
+| PN100220123 | ZTE-C600-100-Kecicang | `1/16/12:13` | HSGQ 192.168.100.10 |
+| PN100220108 | ZTE-C600-100-Kecicang | `1/16/12:6` | HSGQ 192.168.100.10 |
+
+Posisinya **benar** — `1/16/12:x` adalah alamat ZTE yang sah, dan C600 memang
+memampatkan slot 16–17 menjadi slot 1 port 1–32. Yang keliru adalah **OLT tempat
+ODP mereka tertaut**: CRM menghubungkan mereka ke HSGQ, ALUS ke ZTE C600.
+
+Keduanya bernama "Kecicang" dan berada di site yang sama (KCC) — dan sejak
+18 Agustus, berkoordinat sama pula. Itu penjelasan yang paling mungkin: dua OLT
+di satu lokasi, dan penautan ODP→PON→OLT memilih yang salah.
+
+**Ini lebih besar daripada telemetri.** Rantai ODP → PonPort → OltDevice
+dipakai juga oleh peta, oleh pengelompokan gangguan se-PON, dan oleh
+"padam menggerombol" di TV Wall. ODP yang tertaut ke OLT keliru membuat semua
+itu menunjuk ke perangkat yang salah — dan gangguan se-PON yang salah kelompok
+mengirim teknisi ke jalur yang bukan sumbernya.
+
+### Yang harus dilakukan sebelum memperbaiki
+
+1. **Hitung sebarannya.** 49 di HSGQ Kecicang, 5 di C300 Pesagi, 1 di C600
+   Kecicang. Periksa apakah polanya sama (ALUS menyebut OLT lain) atau ada
+   sebab berbeda per kelompok.
+2. **Jangan perbaiki `onuPosition`.** Ia benar. Yang perlu diperbaiki adalah
+   `Odp.ponPortId` — dan itu menyentuh ODP, bukan langganan, sehingga satu
+   perbaikan bisa memindahkan banyak pelanggan sekaligus. Justru karena itu
+   harus lapor-saja dulu.
+3. **Pastikan PON tujuannya ada.** `1/16/12` harus punya `PonPort` di C600
+   Kecicang. Kalau belum ada, memindahkan ODP ke sana akan gagal atau
+   menciptakan tautan menggantung.
