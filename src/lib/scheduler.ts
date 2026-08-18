@@ -8,6 +8,7 @@ import { applyDueTerminations } from "@/lib/termination";
 import { sweepEmploymentLifecycle } from "@/lib/employment-lifecycle";
 import { sweepGroupDrift } from "@/lib/identity-groups";
 import { syncLibrenmsDevices } from "@/lib/librenms-sync";
+import { tarikAlarmLibrenms } from "@/lib/librenms-alerts";
 
 // ── Penjadwal Pekerjaan Berkala (Fase 27) ───────────────────────
 //
@@ -205,6 +206,33 @@ export const TASKS: TaskDefinition[] = [
       // dilihat manusia — bukan efek samping cron jam tiga pagi.
       const detail = await sweepGroupDrift();
       return { detail };
+    },
+  },
+  {
+    // Lima menit. Ini JARING PENGAMAN, bukan jalur utama — alarm datang lewat
+    // webhook (Fase 67) dalam hitungan detik. Yang ditutupnya adalah lubang
+    // yang tidak bisa ditutup webhook: kalau aplikasi sedang restart atau
+    // jaringan berkedip saat LibreNMS mengirim, alarm itu hilang SELAMANYA
+    // karena LibreNMS tidak mengirim ulang.
+    //
+    // Kalau webhook sehat, hampir tiap putaran tidak menghasilkan apa-apa —
+    // dan itu memang tandanya bekerja, bukan tanda mubazir.
+    code: "librenms.alerts",
+    name: "Tarik alarm LibreNMS",
+    description: "Menyamakan alarm terbuka dengan keadaan LibreNMS; menutup yang sudah pulih.",
+    defaultIntervalSec: 300,
+    enabledByDefault: true,
+    run: async () => {
+      const r = await tarikAlarmLibrenms();
+      if (!r.ok) throw new Error(r.error);
+      const d = r.data;
+      return {
+        detail:
+          `${d.aktifDiLibre} aktif di LibreNMS` +
+          (d.dimasukkan ? ` · ${d.dimasukkan} dimasukkan` : "") +
+          (d.ditutup ? ` · ${d.ditutup} ditutup (pulih tanpa pemberitahuan)` : "") +
+          (d.gagal ? ` · ${d.gagal} GAGAL` : ""),
+      };
     },
   },
   {
