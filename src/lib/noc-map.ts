@@ -13,6 +13,31 @@ import { routeLengthMeters } from "@/lib/ftth-point-type";
 
 export type OccupancyLevel = "FREE" | "MODERATE" | "TIGHT" | "FULL";
 
+/**
+ * ODP dengan LEBIH DARI SATU pelanggan padam bersamaan.
+ *
+ * Ini sinyal yang berbeda jenis dari "berapa pelanggan padam". Tiga puluh
+ * sembilan pelanggan padam yang tersebar di 39 ODP adalah 39 modem dicabut —
+ * tidak ada yang perlu didatangi. Tiga puluh sembilan padam dengan 20 di antaranya
+ * pada SATU ODP adalah jalur putus, dan satu teknisi ke satu titik
+ * menyelesaikan 20 keluhan sekaligus.
+ *
+ * Angka totalnya sama; tindakannya sama sekali berbeda. Karena itu ini dihitung
+ * terpisah, bukan disimpulkan dari `linkCounts`.
+ *
+ * Ambangnya SAMA dengan TV Wall (`AMBANG_GEROMBOL` di `noc-wall.ts`) supaya
+ * dua layar tidak pernah menyebut angka berbeda untuk gangguan yang sama.
+ */
+export interface GerombolPadamPeta {
+  odpId: string;
+  kode: string;
+  jumlah: number;
+  latitude: number;
+  longitude: number;
+  ponLabel: string | null;
+  siteName: string | null;
+}
+
 export interface MapOdp {
   id: string;
   code: string;
@@ -130,6 +155,12 @@ export interface NetworkMapData {
    * memperlihatkan seluruh jaringan.
    */
   focusBounds: MapBounds | null;
+  /**
+   * ODP yang pelanggannya padam menggerombol, terbanyak lebih dulu.
+   * Dihitung dari pelanggan yang TERGAMBAR — jadi ia menghormati saringan yang
+   * sedang aktif, sama seperti angka lain di layar ini.
+   */
+  padamMenggerombol: GerombolPadamPeta[];
   /** Titik yang tidak bisa dipetakan karena koordinatnya kosong. */
   missingCoordinates: { odps: number; customers: number };
   // ── Fase 37b ──────────────────────────────────────────────────
@@ -410,6 +441,33 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     ...customers.map((c) => c.longitude),
     ...sites.map((s) => s.longitude),
   ];
+  // Gerombolan padam: ODP dengan >= AMBANG pelanggan OFFLINE.
+  const AMBANG_GEROMBOL_PETA = 2;
+  const padamPerOdp = new Map<string, number>();
+  for (const c of customers) {
+    if (c.linkStatus !== "OFFLINE" || !c.odpId) continue;
+    padamPerOdp.set(c.odpId, (padamPerOdp.get(c.odpId) ?? 0) + 1);
+  }
+  const odpById = new Map(odps.map((o) => [o.id, o]));
+  const padamMenggerombol: GerombolPadamPeta[] = [...padamPerOdp.entries()]
+    .filter(([, n]) => n >= AMBANG_GEROMBOL_PETA)
+    .map(([odpId, jumlah]) => {
+      const o = odpById.get(odpId);
+      return o
+        ? {
+            odpId,
+            kode: o.code,
+            jumlah,
+            latitude: o.latitude,
+            longitude: o.longitude,
+            ponLabel: o.ponLabel,
+            siteName: o.siteName,
+          }
+        : null;
+    })
+    .filter((x): x is GerombolPadamPeta => x !== null)
+    .sort((a, b) => b.jumlah - a.jumlah);
+
   // Batas hasil saringan: dari PELANGGAN saja, dan hanya bila saringan
   // tingkat-pelanggan aktif. ODP tidak ikut — ODP tidak tersaring oleh status
   // koneksi, jadi menyertakannya akan menarik pandangan kembali melebar dan
@@ -458,6 +516,7 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
     cascades,
     bounds,
     focusBounds,
+    padamMenggerombol,
     missingCoordinates: { odps: missingOdp, customers: missingCustomer },
     linkCounts,
     routers,
