@@ -1400,26 +1400,33 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 
 ## 50. Optimasi Garis Peta saat Zoom-Out (§52–§54)
 
-- Layer garis topology solid dan fiber route memakai `minzoom: 15`. Layer
-  garis putus-putus ODP–customer juga memakai `minzoom: 15`, sehingga garis
-  baru dirender setelah cluster titik selesai pada `clusterMaxZoom: 14`.
-- Opacity garis tidak lagi memakai nilai `0` sebagai pengganti `minzoom`.
-  Nilai opacity saat garis mulai terlihat tetap positif.
+- Peta tidak menggambar edge OLT → ODP. Satu OLT dapat menaungi ratusan ODP,
+  sehingga garis tersebut menghasilkan berkas radial yang tidak membantu
+  operator saat melihat area luas. Relasi OLT/PON → ODP tetap tersedia pada
+  popup ODP dan halaman FTTH.
+- Layer topology solid dan fiber route yang tersisa memakai `minzoom: 10`.
+  Garis putus-putus ODP–customer memakai `minzoom: 12`.
+- Opacity garis tidak memakai nilai `0` sebagai pengganti `minzoom`; nilai
+  opacity saat layer mulai terlihat tetap positif.
 - Marker dan cluster infrastructure/customer tetap tersedia saat zoom-out.
-  Popup, filter, fullscreen, ResizeObserver, relasi topology, dan fallback SVG
-  tidak berubah.
-- Garis solid tetap membedakan topology/fiber route, sedangkan garis putus-
-  putus tetap khusus koneksi ODP ke customer. Tidak ada koneksi yang ditebak
-  dari jarak atau posisi.
+  `clusterMaxZoom` tetap `14` dan `clusterRadius` tetap `48`.
+- Popup, filter, fullscreen, ResizeObserver, prioritas titik di atas garis,
+  serta fallback SVG tetap berfungsi. Tidak ada koneksi yang ditebak dari
+  jarak atau posisi.
+- Garis solid hanya menunjukkan topology/fiber route yang memang tersedia,
+  sedangkan garis putus-putus khusus koneksi ODP ke customer.
 
-### Acceptance responsive §52
+### Acceptance responsive §52–§54
 
 - Pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800,
-  zoom-out tidak dipenuhi garis dan marker/cluster tetap terlihat.
-- Sampai zoom 14, marker/cluster tetap terlihat tanpa garis; topology, fiber
-  route, dan garis ODP–customer mulai terlihat pada zoom 15.
+  zoom-out tidak dipenuhi garis OLT → ODP dan marker/cluster tetap terlihat.
+- Di bawah zoom 10 tidak ada garis; zoom 10–11 menampilkan topology/fiber
+  yang tersisa; zoom 12–14 dapat menampilkan garis customer; zoom lebih dekat
+  tetap menampilkan detail tanpa berkas radial OLT → ODP.
+- Klik cluster, klik ODP, popup relasi OLT/PON, filter, fullscreen, navigasi
+  ODP, dan fallback SVG tetap berfungsi.
 - Tidak ada horizontal overflow, popup/legenda keluar card, console error,
-  atau regressi pada fallback SVG dan navigasi ODP.
+  hydration warning, atau regresi layout.
 
 ## 51. Daftar Customer: Tanggal Isolir dan Ringkasan Paket (§53)
 
