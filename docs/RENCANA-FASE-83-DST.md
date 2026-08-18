@@ -274,17 +274,25 @@ membaca SOP ini, dan tiap kalimatnya menunjuk layar yang benar-benar ada.
 | 86 Berkas & log per pelanggan | ✅ backend · layar Luna (§46) |
 | 87 Portal pelanggan | ✅ backend · layar Luna (§46) |
 | 88a Telemetri ONU dari data sinkron | ✅ selesai · layar Luna (§46) |
-| 88b Pembacaan OLT langsung | ⏸ belum diputuskan |
-| 89 Gladi penagihan (MATI) | ✅ alat siap · menunggu ekspor nominal ALUS |
+| 88b Pembacaan OLT langsung | ✅ selesai 18 Agu — semua vendor |
+| 89 Gladi penagihan (MATI) | ✅ selesai · dibandingkan 18 Agu |
 | 90 SOP versi CRM | ✅ selesai |
+| 91 Brankas kredensial perangkat | ✅ selesai & terverifikasi 18 Agu |
 
-**Yang menahan cutover**, berurutan menurut kepentingan:
+**Yang menahan cutover** — diperbarui 18 Agustus 2026:
 
-1. Ekspor nominal tagihan ALUS satu periode, lalu `--banding`. Tanpa itu angka
-   kita baru masuk akal, belum terbukti.
-2. Layar-layar Luna (§45, §46).
-3. Lima langganan tanpa tanggal mulai tagih.
-4. Koordinat 6 POP — menahan lapisan site di peta, bukan menahan cutover.
+1. ~~Ekspor nominal tagihan ALUS lalu `--banding`.~~ ✅ **Selesai 18 Agustus.**
+   Hasilnya di [REKONSILIASI-TAGIHAN-AGUSTUS.md](REKONSILIASI-TAGIHAN-AGUSTUS.md):
+   tidak ada tagihan ganda, tetapi ada **63 langganan senilai Rp12.679.000**
+   yang CRM akan tagih dan ALUS tidak. Termasuk dua akun bertanda "Free" yang
+   akan menerima tagihan. **Ini sekarang penahan cutover nomor satu**, dan
+   jawabannya per pelanggan, bukan per angka.
+2. Layar-layar Luna (§45, §46, §49, §50, §51).
+3. ~~Lima langganan tanpa tanggal mulai tagih.~~ ✅ **Selesai.** Diperiksa 18
+   Agustus: 1.715 dari 1.715 langganan punya profil tagihan, nol nonaktif.
+4. **55 posisi ONU salah format** — lihat Fase 92 di bawah. Menahan telemetri,
+   bukan menahan penagihan.
+5. Koordinat 6 POP — menahan lapisan site di peta, bukan menahan cutover.
 
 **Yang masih di luar rencana ini:** SUPERPOP/rak, fiber core & OTDR, Legal &
 Compliance, checkpoint ODP berevidence, dokumen IRF/DO/STO terpisah, lokasi
@@ -292,7 +300,7 @@ absen ber-geofence, lembur, arus kas, perubahan modal, rasio keuangan.
 
 ---
 
-## Fase 88b — daya optik ONU  ◑ C300 SELESAI 17 Agustus 2026 — C600/HSGQ menunggu kredensial CLI
+## Fase 88b — daya optik ONU  ✅ SELESAI 18 Agustus 2026 — C300, C600, dan HSGQ semuanya terbaca
 
 Pemilik jaringan menanyakan kenapa daya ONU belum kelihatan di halaman
 pelanggan. Panel Fase 88a memang **sengaja mengatakannya** lewat daftar
@@ -444,3 +452,44 @@ dengan sopan — tidak ada galat, hanya hasil yang salah:
 Baris `OLT_*_CRED` boleh dihapus dari `.env` — satu per satu, dan uji ulang
 perangkat itu sesudah tiap penghapusan. Sekaligus berarti tidak tahu yang mana
 yang meleset kalau ada yang meleset.
+
+
+---
+
+## Fase 92 — Posisi ONU yang salah format  ◇ DIUSULKAN, belum dikerjakan
+
+Ditemukan 18 Agustus 2026 saat membuktikan Fase 88b. Pembacaan daya optik
+berhasil di lima dari enam OLT; yang gagal ternyata bukan salah perangkat.
+
+**55 langganan menyimpan `onuPosition` dengan format vendor yang keliru.**
+ZTE memakai `slot/pon/onu:idx` (mis. `1/2/14:11`), HSGQ memakai `pon:idx`
+(mis. `1:10`). Yang tersimpan tertukar:
+
+| OLT | Vendor | Langganan | Salah format |
+|---|---|---|---|
+| 192.168.100.10 | HSGQ | 138 | **49** bergaya ZTE |
+| 192.168.100.30 | ZTE c300 | 347 | **5** bergaya HSGQ |
+| 192.168.100.60 | ZTE c600 | 306 | **1** bergaya HSGQ |
+
+Akibatnya bukan galat yang kelihatan: pembacaan mereka menjawab
+`TAK_TERBACA — ONU mungkin tidak dikenal atau sedang mati`. Kalimat itu **benar
+secara harfiah dan menyesatkan secara praktis** — ONU-nya hidup, alamatnya yang
+salah. Seorang NOC yang membacanya akan mengirim teknisi ke lokasi pelanggan
+untuk memeriksa perangkat yang sebenarnya sehat.
+
+### Yang perlu diputuskan sebelum dikerjakan
+
+Posisi yang benar tidak bisa ditebak dari yang salah — `1/16/13:2` tidak bisa
+diterjemahkan menjadi `pon:idx` tanpa tahu ONU itu sebenarnya di mana. Jalannya
+membaca daftar ONU dari tiap OLT lewat CLI, lalu mencocokkan dengan
+`pppoeUsername` di basis data.
+
+Itu **menulis ke basis data kita berdasarkan pembacaan perangkat** — dinding
+baca-saja tetap utuh, tetapi 55 baris berubah. Perlu persetujuan pemilik dulu,
+dan sebaiknya lapor-saja dulu seperti skrip lain.
+
+### Yang TIDAK boleh dilakukan
+
+Menghapus posisi yang salah supaya "bersih". Posisi keliru masih menyimpan
+petunjuk PON mana pelanggan itu berada; menghapusnya membuang informasi dan
+menukar satu kesalahan dengan kekosongan.
