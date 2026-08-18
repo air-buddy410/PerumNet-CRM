@@ -366,7 +366,7 @@ melayani permintaan pembacaan adalah OLT yang tidak sedang melayani pelanggan.
 
 ---
 
-## Fase 91 — Brankas kredensial perangkat  ✅ BACKEND SELESAI 17 Agustus 2026
+## Fase 91 — Brankas kredensial perangkat  ✅ SELESAI & TERVERIFIKASI DI PRODUKSI 18 Agustus 2026
 
 Diminta pemilik jaringan: *"fitur untuk login telnet / ssh untuk device juga
 dong, biar bisa auto add lewat crm, ga nambah file env supaya NOC ku gampang
@@ -405,8 +405,42 @@ cukup memasang satu kunci sekali seumur sistem.
 - **`DEVICE_CRED_KEY` opsional, bukan wajib.** Tanpa kunci aplikasi tetap
   menyala dan OLT lama tetap jalan; hanya penambahan baru yang tertahan.
 
+### Terbukti di produksi, 18 Agustus 2026
+
+Keenam OLT pindah ke brankas dan **keenamnya lolos uji login** — bukan
+diasumsikan, ditekan satu per satu dan `lastVerifiedAt` tercatat:
+
+| OLT | Port | Terbukti |
+|---|---|---|
+| 192.168.100.10 HSGQ Kecicang | 1023 | 09.20 |
+| 192.168.100.11 HSGQ SerayaBarat | 1024 | 09.21 |
+| 192.168.100.12 HSGQ SerayaTengah | 1025 | 09.21 |
+| 192.168.100.30 ZTE C300 Pesagi | 23 | 08.48 |
+| 192.168.100.60 ZTE C600 Kecicang | 231 | 09.15 |
+| 192.168.100.61 ZTE C600 Abang | 232 | 09.21 |
+
+Lolosnya ketiga HSGQ sekaligus menjawab pertanyaan yang sempat menggantung:
+apakah klien telnet benar-benar memakai port tersimpan, atau diam-diam jatuh
+ke 23. Kalau yang kedua, ketiga HSGQ pasti gagal — 23 bukan port telnet HSGQ.
+Port tersimpan dipakai apa adanya.
+
+### Pelajaran yang mahal
+
+Deploy pertama gagal senyap **dua kali berturut-turut**, dan keduanya gagal
+dengan sopan — tidak ada galat, hanya hasil yang salah:
+
+1. **Citra `tools` tidak ikut terbangun.** `docker compose up -d --build` hanya
+   membangun layanan yang tidak berprofil, jadi `tools` tetap memakai
+   `schema.prisma` lama dan `prisma db push` menjawab *"already in sync"*
+   padahal tabelnya belum pernah ada. Obatnya `docker compose build tools`
+   secara eksplisit.
+2. **Skrip pindah mencari `level: "ADMIN"`** yang tidak ada di proyek ini
+   (`STAFF | SUPERVISOR | OWNER`), lalu berhenti tanpa memindahkan apa pun.
+   Keluarannya rapi, hanya exit code-nya 1. Sekarang memakai `USER_LEVELS`
+   supaya kesalahan yang sama gagal saat kompilasi.
+
 ### Yang tersisa
 
-Menunggu produksi: `prisma db push`, lalu skrip pindah dijalankan. Sesudah itu
-baris `OLT_*_CRED` boleh dihapus dari `.env` satu per satu — hanya setelah
-tombol uji perangkat itu menjawab hijau.
+Baris `OLT_*_CRED` boleh dihapus dari `.env` — satu per satu, dan uji ulang
+perangkat itu sesudah tiap penghapusan. Sekaligus berarti tidak tahu yang mana
+yang meleset kalau ada yang meleset.
