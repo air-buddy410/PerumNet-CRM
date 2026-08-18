@@ -3074,3 +3074,50 @@ terserah kamu.
 
 Kalau kamu butuh `snmpPort` ikut dikirim ke layar dan sekarang belum ada, tulis di
 `PERMINTAAN-FRONTEND-KE-BACKEND.md`, nanti aku tambahkan.
+
+---
+
+## §52 — Peta: garis berantakan saat zoom out, dan berat
+
+Dilaporkan pemilik jaringan 18 Agustus 2026. Diukur di produksi, bukan dikira.
+
+### 52.1 — Tiga lapisan garis tidak punya `minzoom`
+
+`TOPOLOGY_LINE_LAYER_ID`, `ROUTE_LAYER_ID`, dan `CUSTOMER_LINK_LAYER_ID` semua
+ditambahkan **tanpa `minzoom`**. Pada zoom rendah, seluruh garis se-kabupaten
+digambar bertumpuk — itu yang terlihat sebagai berantakan.
+
+Idenya sudah ada di kode ini: lapisan titik (`CUSTOMER_LAYER_ID`,
+`CUSTOMER_INHERITED_LAYER_ID`) memakai `minzoom: 8`. Yang kurang cuma
+menerapkannya ke garis.
+
+**Yang dibutuhkan:** `minzoom` pada ketiganya. Angkanya terserah kamu, tapi
+pertimbangkan bahwa data kita mencakup satu kabupaten — pada zoom < 10 garis
+antar-ODP sudah tidak bisa dibedakan mata.
+
+### 52.2 — Opasitas nol tetap digambar
+
+`CUSTOMER_LINK_LAYER_ID` menurunkan `line-opacity` ke **0** pada zoom 7:
+
+```js
+"line-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 10, 0.08, 13, 0.38, 16, 0.7],
+```
+
+Niatnya benar, caranya yang mahal: **opasitas 0 bukan berarti tidak dirender.**
+MapLibre tetap menghitung dan menggambar 1.687 garis putus-putus tiap frame,
+dan tidak ada satu piksel pun yang terlihat. `minzoom` menghentikan
+pekerjaannya; opasitas hanya menyembunyikan hasilnya.
+
+Perhatikan juga opasitasnya masih 0.08 pada zoom 10 — hampir tak terlihat,
+tetapi ongkos penuh. Pertimbangkan `minzoom` di sekitar 12 untuk lapisan ini.
+
+### 52.3 — Yang BUKAN bagianmu
+
+Muatan halaman `/noc/map` **4,3 MB** dan waktu server **4,8 detik**. Itu sisi
+backend — 1.687 pelanggan dikirim lengkap dengan `pppoeUsername`, `lastSeenAt`,
+`routerName`, dan sebagainya, padahal sebagian besar tidak dipakai sampai
+seseorang mengklik satu titik. Opus yang mengerjakan; jangan menunggu itu untuk
+mulai 52.1 dan 52.2.
+
+Kedua perbaikanmu berdiri sendiri dan sudah akan sangat terasa: yang paling
+mahal saat ini adalah menggambar, bukan mengunduh.
