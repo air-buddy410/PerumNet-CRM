@@ -8,9 +8,11 @@
  * dimasukkan lewat layar, karena enam titik yang menahan lapisan site di peta
  * lebih baik punya jejak di repo daripada hanya ada di kepala orang.
  *
- * Nagabasukih (NGB) SENGAJA tidak ada di daftar — koordinatnya belum diberikan.
- * Ia akan dilaporkan sebagai tertinggal setiap kali skrip ini jalan, dan itu
- * memang tujuannya: kekosongan yang diam adalah kekosongan yang terlupakan.
+ * NGB dan KCC punya koordinat yang SAMA PERSIS, dan itu benar: Nagabasukih
+ * berada di lokasi Kecicang — dikonfirmasi pemilik jaringan 18 Agustus 2026.
+ * Ditulis di sini supaya orang berikutnya tidak "memperbaiki" salah satunya
+ * mengira ada salah salin. Dua site di satu lokasi akan bertumpuk di peta;
+ * itu gambaran yang jujur, bukan cacat penggambaran.
  */
 import { db } from "@/lib/db";
 
@@ -25,6 +27,8 @@ const KOORDINAT: Record<string, { lat: number; lng: number }> = {
   SRYB: { lat: -8.443443629233366, lng: 115.6478021594986 },
   SRYT: { lat: -8.43606396448279, lng: 115.67370526716802 },
   ABG: { lat: -8.39515512765402, lng: 115.59607928930654 },
+  // Sama dengan KCC — Nagabasukih memang berada di lokasi Kecicang.
+  NGB: { lat: -8.449851221181337, lng: 115.58962397471178 },
 };
 
 function diLuarBali(lat: number, lng: number): boolean {
