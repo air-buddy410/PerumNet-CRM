@@ -149,11 +149,22 @@ async function main() {
       for (const o of calon) {
         // Untuk ZTE, posisi `slot/pon/onu:idx` → PON yang dicari adalah
         // slot/pon-nya. Dicocokkan ke label PonPort apa adanya.
+        // Pencocokan HARUS mengenali kedua gaya. Versi pertama skrip ini hanya
+        // mengenali ZTE, sehingga dua ODP bergaya HSGQ dilaporkan "0 kecocokan
+        // di semua calon" — angka yang terlihat seperti temuan padahal hanya
+        // pencocoknya yang buta.
         const cocok = k.contohPosisi.map((p) => {
-          const m = /^(\d+)\/(\d+)\/(\d+):/.exec(p);
-          if (!m) return null;
-          const cari = `${m[1]}/${m[2]}/${m[3]}`;
-          return o.ponPorts.find((pp) => pp.label.includes(cari)) ?? null;
+          const zte = /^(\d+)\/(\d+)\/(\d+):/.exec(p);
+          if (zte) {
+            const cari = `${zte[1]}/${zte[2]}/${zte[3]}`;
+            return o.ponPorts.find((pp) => pp.label.includes(cari)) ?? null;
+          }
+          const hsgq = /^(\d+):(\d+)$/.exec(p);
+          if (hsgq) {
+            const pon = Number(hsgq[1]);
+            return o.ponPorts.find((pp) => pp.port === pon) ?? null;
+          }
+          return null;
         });
         const ada = cocok.filter(Boolean).length;
         console.log(
