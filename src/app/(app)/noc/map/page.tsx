@@ -537,11 +537,17 @@ async function loadNetworkTopology(
       "SITE_OLT",
       `${olt.networkDevice.site.name} → ${oltLabel}`,
     );
-    for (const pon of olt.ponPorts) {
-      for (const odp of pon.odps) {
-        addEdge(nodeId, odpNodeId.get(odp.id), "OLT_ODP", `${oltLabel} · PON ${pon.label}`);
-      }
-    }
+    // Garis OLT → ODP SENGAJA tidak dibuat lagi.
+    //
+    // Satu OLT menaungi ratusan ODP, jadi setiap OLT memancarkan berkas garis
+    // ke segala arah — 576 garis yang semuanya bertemu di satu titik. Pada zoom
+    // mana pun itu bukan informasi, hanya kabut; dan ODP-nya sendiri masih
+    // tampil sebagai cluster sehingga garisnya menunjuk ke tempat yang bahkan
+    // belum terpisah. Dihapus atas permintaan pemilik jaringan, 18 Agustus 2026.
+    //
+    // Relasi OLT → ODP TIDAK hilang dari sistem — ia tetap tersimpan, tetap
+    // tampil di popup ODP dan di halaman FTTH. Yang dihentikan hanya
+    // penggambarannya di peta.
   }
 
   for (const odp of odpRows) {
