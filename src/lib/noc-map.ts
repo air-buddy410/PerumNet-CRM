@@ -37,6 +37,17 @@ export interface MapOdp {
 /// pelanggan yang sebenarnya belum pernah tertarik datanya.
 export type LinkStatus = "ONLINE" | "OFFLINE" | "DISABLED" | "UNKNOWN";
 
+/**
+ * Membulatkan koordinat ke 6 desimal — ketelitian ±11 cm di khatulistiwa.
+ *
+ * Titik-titik ini berasal dari GPS ponsel teknisi, yang ketelitiannya beberapa
+ * METER. Digit ke-7 dan seterusnya bukan informasi, hanya sampah dari aritmetika
+ * floating point — dan sampah itu dikirim 1.687 kali tiap halaman peta dibuka.
+ */
+function bulatkanKoordinat(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 export interface MapCustomer {
   id: string;
   subscriptionId: string;
@@ -52,8 +63,16 @@ export interface MapCustomer {
   linkStatus: LinkStatus;
   /// Kapan terakhir terlihat online — dasar "offline sejak" di UI.
   lastSeenAt: string | null;
-  routerId: string | null;
   routerName: string | null;
+  //
+  // `routerId` SENGAJA tidak ada di sini. Ia pernah dikirim untuk 1.687
+  // pelanggan dan tidak pernah dibaca satu baris pun — `routerId` yang dipakai
+  // halaman peta itu parameter PENYARING, bukan field per pelanggan.
+  //
+  // `pppoeUsername` TETAP ada meski peta belum menampilkannya, karena ada tes
+  // yang menjaga perilakunya (jatuh ke data langganan bila sesi router belum
+  // ada). Menghapusnya berarti menghapus tes itu juga, dan menukar pengaman
+  // dengan 25 KB bukan pertukaran yang baik.
 }
 
 /// Lokasi fisik: POP dan mini-POP (Fase 38). Bukan simpul distribusi — tidak
@@ -317,15 +336,14 @@ export async function loadNetworkMap(filter: MapFilter = {}): Promise<NetworkMap
         subscriptionId: sub.id,
         serviceNumber: sub.serviceNumber,
         customerName: sub.customer.name,
-        latitude: lat,
-        longitude: lng,
+        latitude: bulatkanKoordinat(lat),
+        longitude: bulatkanKoordinat(lng),
         status: sub.status,
         odpId: odp.id,
         portNumber: port.portNumber,
         pppoeUsername: session?.username ?? sub.pppoeUsername ?? null,
         linkStatus,
         lastSeenAt: session?.lastSeenAt?.toISOString() ?? null,
-        routerId: session?.routerId ?? null,
         routerName: session?.router.networkDevice.hostname ?? null,
       });
     }
