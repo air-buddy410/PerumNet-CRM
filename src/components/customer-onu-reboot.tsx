@@ -32,7 +32,7 @@ export function CustomerOnuReboot({
     <div className="customer-onu-reboot">
       <form action={formAction} aria-busy={pending}>
         <input type="hidden" name="subscriptionId" value={subscriptionId} />
-        <button type="submit" className="btn-secondary" disabled={pending || state?.ok}>
+        <button type="submit" className="btn-danger" disabled={pending || state?.ok}>
           <Power aria-hidden="true" />
           {pending ? "Mengantre…" : state?.ok ? "Sudah diantrekan" : "Antre reboot ONU"}
         </button>
@@ -43,8 +43,19 @@ export function CustomerOnuReboot({
       {state && !state.ok && (
         <p className="customer-onu-reboot-error" role="alert">{state.error}</p>
       )}
+      {/*
+        Tombolnya merah karena reboot MEMUTUS sambungan pelanggan — warnanya
+        harus mengatakan itu sebelum ditekan.
+        Tetapi merah juga berarti "aksi nyata", dan sampai cutover aksinya
+        BELUM nyata: yang terjadi hanya masuk antrean. Keterangan di bawah
+        karena itu tidak boleh dihapus atau diperhalus — tanpa ia, NOC menekan
+        tombol merah lalu yakin ONU pelanggan sudah di-reboot, padahal tidak
+        ada apa pun yang terjadi di perangkat.
+      */}
       <p className="customer-onu-reboot-hint">
-        Reboot belum aktif selama mode baca-saja. Tombol ini mencatat permintaan; eksekusi ke perangkat menyusul saat cutover.
+        <strong>Belum dijalankan.</strong> Selama mode baca-saja, tombol ini hanya
+        mencatat permintaan ke antrean — tidak ada perintah yang dikirim ke ONU.
+        Eksekusi ke perangkat menyusul saat cutover.
       </p>
     </div>
   );
