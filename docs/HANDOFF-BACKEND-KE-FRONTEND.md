@@ -3121,3 +3121,70 @@ mulai 52.1 dan 52.2.
 
 Kedua perbaikanmu berdiri sendiri dan sudah akan sangat terasa: yang paling
 mahal saat ini adalah menggambar, bukan mengunduh.
+
+---
+
+## §53 — Sisa terakhir Fase 85: dua kolom di daftar pelanggan
+
+Ini yang tersisa untuk menutup Fase 85. Selain dua ini, tidak ada lagi —
+saya sudah bandingkan langsung dengan ALUS dan sisanya sudah kamu kerjakan.
+
+Berkasnya `src/app/(app)/crm/customers/page.tsx`.
+
+### 53.1 — Kolom tanggal isolir
+
+ALUS menampilkannya di daftar; kita belum. Datanya `BillingProfile.isolirDay`
+(angka 1–28, tanggal dalam bulan).
+
+**Query halaman ini belum mengambilnya.** Yang ada sekarang hanya
+`_count: { select: { subscriptions: true } }`. Perlu ditambah:
+
+```ts
+subscriptions: {
+  select: { billingProfile: { select: { isolirDay: true } } },
+  take: 1,
+},
+```
+
+**30 dari 1.715 langganan `isolirDay`-nya kosong** (1.685 terisi). Itu bukan
+kesalahan yang perlu kamu tutupi — tampilkan "—" dan biarkan terlihat.
+Pelanggan tanpa tanggal isolir adalah pelanggan yang tidak akan pernah
+terisolir otomatis, dan yang mengurus penagihan perlu melihatnya.
+
+### 53.2 — Ringkasan jumlah pelanggan per paket
+
+Padanan "Plan Group" ALUS: berapa pelanggan di tiap paket, ditaruh di atas
+tabel. **27 paket** sedang terpakai, jumlahnya sangat timpang — ada paket
+dengan 1 langganan dan ada yang ratusan.
+
+Karena 27 baris terlalu banyak untuk ditumpuk di atas tabel, pertimbangkan
+menampilkan beberapa terbesar saja lalu "lainnya", atau bentuk yang ringkas.
+Bentuknya terserah kamu.
+
+Angkanya:
+
+```ts
+const perPaket = await db.subscription.groupBy({
+  by: ["packageId"],
+  _count: true,
+});
+```
+
+Nama paketnya sudah diambil halaman ini (`packages`, baris ~93), jadi tinggal
+dipasangkan.
+
+### Yang JANGAN kamu kerjakan
+
+Empat field kesetaraan ALUS yang mungkin masih tercatat di daftarmu — **IP
+PPPoE, uptime, merchant, tag pelanggan** — jangan disentuh. Saya periksa
+datanya di produksi 18 Agustus 2026:
+
+| Field | Keadaan |
+|---|---|
+| `Subscription.ipAddress` | 0 dari 1.715 terisi |
+| `PppoeSession.uptimeSeconds` | 1.732 baris, 0 terisi |
+| `Merchant` | 0 terdaftar, dan `Customer` tidak punya kolomnya |
+| Tag pelanggan | tidak ada modelnya sama sekali |
+
+Membangun layar untuk keempatnya berarti membuat kolom yang selalu bergaris
+strip. Itu pekerjaan backend dulu, dan sebagian menunggu keputusan pemilik.
