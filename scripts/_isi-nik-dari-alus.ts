@@ -40,9 +40,22 @@ interface BarisAlus {
 const berkas = process.argv[2];
 const terapkan = process.argv.includes("--terapkan");
 
+/**
+ * Membuang karakter tak terlihat.
+ *
+ * Data ALUS memuat tanda arah teks (U+200E dan kerabatnya) yang menempel di
+ * depan sebagian CID. `trim()` TIDAK membuangnya — ia hanya mengenal spasi —
+ * sehingga CID-nya tidak akan pernah cocok dan pelanggannya dilaporkan "tak
+ * dikenal" padahal ada. Ini pernah terjadi: satu pelanggan muncul sekaligus di
+ * daftar "hanya di ALUS" dan "hanya di CRM".
+ */
+function bersihkan(s: string | undefined): string {
+  return (s ?? "").replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, "").trim();
+}
+
 /** NIK sah: tepat 16 digit. Selain itu ditolak, apa pun bentuknya. */
 function nikSah(nilai: string | undefined): string | null {
-  const bersih = (nilai ?? "").replace(/\s|-/g, "");
+  const bersih = bersihkan(nilai).replace(/\s|-/g, "");
   return /^\d{16}$/.test(bersih) ? bersih : null;
 }
 
@@ -80,7 +93,7 @@ async function main() {
   const dipesan = new Map<string, string>();
 
   for (const r of data) {
-    const cid = (r.cid ?? "").trim().toUpperCase();
+    const cid = bersihkan(r.cid).toUpperCase();
     if (!cid) continue;
     const pelanggan = perCid.get(cid);
     if (!pelanggan) {
