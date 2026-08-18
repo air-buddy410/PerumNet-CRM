@@ -3188,3 +3188,52 @@ datanya di produksi 18 Agustus 2026:
 
 Membangun layar untuk keempatnya berarti membuat kolom yang selalu bergaris
 strip. Itu pekerjaan backend dulu, dan sebagian menunggu keputusan pemilik.
+
+---
+
+## §54 — Garis harus ikut pengelompokan titik
+
+Lanjutan §52, dilaporkan pemilik jaringan 18 Agustus 2026 setelah `minzoom`
+kamu terpasang. Sudah jauh lebih baik, tapi masih ada berkas garis memancar
+dari OLT ke tiap ODP padahal ODP-nya sendiri masih tampil sebagai cluster.
+
+**Sebabnya selisih ambang, dan angkanya begini:**
+
+| | Ambang |
+|---|---|
+| Titik menggerombol sampai (`clusterMaxZoom`) | **14** |
+| Garis topologi & jalur muncul (`minzoom`) | **10** |
+| Garis pelanggan muncul (`minzoom`) | **12** |
+
+Jadi pada zoom 10–14, titik masih menyatu jadi satu lingkaran bernomor
+sementara garisnya sudah ditarik ke setiap ODP satu per satu. Satu cluster
+berisi 28 ODP menghasilkan 28 garis yang semuanya berakhir di titik yang sama —
+itu yang terlihat sebagai berkas memancar.
+
+**Yang diinginkan pemilik:** garis mengikuti pengelompokan. Zoom out sedikit
+garis, zoom in makin banyak — seiring cluster pecah.
+
+### Cara paling sederhana
+
+Naikkan `minzoom` ketiga lapisan garis ke **15** — tingkat pertama saat cluster
+sudah benar-benar pecah. Di bawah itu tidak ada garis sama sekali, dan yang
+terlihat murni lingkaran bernomor.
+
+Itu menyelesaikan keluhannya dengan tiga angka, tanpa struktur baru.
+
+### Kalau mau lebih jauh (tidak wajib)
+
+Garis yang benar-benar mengikuti cluster — satu garis tebal OLT→cluster,
+pecah jadi banyak saat di-zoom — perlu agregasi garis per cluster. MapLibre
+tidak menyediakannya: `cluster: true` hanya bekerja pada sumber titik, tidak
+pada garis. Perlu menghitung sendiri titik pusat tiap cluster lalu menyusun
+GeoJSON garis baru tiap kali zoom berubah.
+
+Itu jauh lebih mahal dan bisa jadi tidak sepadan. Coba yang sederhana dulu;
+kalau pemilik sudah puas, berhenti di situ.
+
+### Yang jangan diubah
+
+`clusterMaxZoom: 14` dan `clusterRadius: 48` jangan digeser untuk mengejar
+garis. Keduanya mengatur keterbacaan titik, dan titik yang lebih penting
+daripada garis — garis hanya konteks, titik yang diklik orang.
