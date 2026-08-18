@@ -1397,3 +1397,27 @@ lima field sudah terhubung. Service HRD tetap menjadi sumber validasi dan audit.
 - Tidak ada sidebar pada TV Wall, horizontal overflow, card atau popup keluar
   viewport, canvas MapLibre tidak mengikuti container, anchor SVG, password
   tampil, hydration warning, atau console error.
+
+## 50. Optimasi Garis Peta saat Zoom-Out (§52)
+
+- Layer garis topology solid dan fiber route memakai `minzoom: 10` agar garis
+  se-kabupaten tidak dirender ketika peta masih menampilkan konteks luas.
+- Layer garis putus-putus ODP–customer memakai `minzoom: 12`; garis baru
+  muncul ketika titik customer sudah cukup terurai untuk dibaca.
+- Opacity garis tidak lagi memakai nilai `0` sebagai pengganti `minzoom`.
+  Interpolasi opacity dimulai dari zoom minimum masing-masing layer.
+- Marker dan cluster infrastructure/customer tetap tersedia saat zoom-out.
+  Popup, filter, fullscreen, ResizeObserver, relasi topology, dan fallback SVG
+  tidak berubah.
+- Garis solid tetap membedakan topology/fiber route, sedangkan garis putus-
+  putus tetap khusus koneksi ODP ke customer. Tidak ada koneksi yang ditebak
+  dari jarak atau posisi.
+
+### Acceptance responsive §52
+
+- Pada 1440×900, 1920×1080, 1024×768, 768×1024, 390×844, dan 360×800,
+  zoom-out tidak dipenuhi garis dan marker/cluster tetap terlihat.
+- Topology dan fiber route mulai terlihat pada zoom 10; garis ODP–customer
+  mulai terlihat pada zoom 12.
+- Tidak ada horizontal overflow, popup/legenda keluar card, console error,
+  atau regressi pada fallback SVG dan navigasi ODP.
