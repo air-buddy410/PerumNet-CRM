@@ -4161,7 +4161,7 @@ seluruhnya wilayahku dan sudah selesai.
 
 ---
 
-## §66 — Foto boleh dari galeri DAN kamera — PERLU DIKERJAKAN
+## §66 — ✅ SELESAI (di-deploy 19 Agu, commit d415d23) — Foto boleh dari galeri DAN kamera
 
 Diputuskan pemilik produk 19 Agustus, menjawab catatan §64/§65.2:
 *"boleh dari gallery dan dari kamera"* — lalu dipertegas setelah mencobanya di
