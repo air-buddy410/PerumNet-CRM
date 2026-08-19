@@ -91,7 +91,9 @@
 .crm-nav-link:hover { color: #fff; background: #ffffff0c; transform: translateX(2px); }
 .crm-nav-link.is-active { color: #fff; background: linear-gradient(135deg, #06b1a7, #008d85); box-shadow: 0 10px 24px #003f3a38; }
 .crm-sidebar-footer { display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: 15px; padding: 16px 9px 0; border-top: 1px solid #ffffff1e; }
-.crm-avatar { display: grid; flex: 0 0 auto; place-items: center; width: 34px; height: 34px; color: #fff; background: #04a99f; border-radius: 50%; font-size: 11px; font-weight: 800; text-decoration: none; }
+.crm-avatar { display: grid; flex: 0 0 auto; place-items: center; width: 34px; height: 34px; overflow: hidden; color: #fff; background: #04a99f; border-radius: 50%; font-size: 11px; font-weight: 800; text-decoration: none; }
+.crm-avatar-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.crm-avatar-fallback { display: grid; width: 100%; height: 100%; place-items: center; color: #fff !important; font-size: 11px !important; font-weight: 800 !important; line-height: 1; }
 .crm-sidebar-user-copy { display: grid; min-width: 0; gap: 2px; }
 .crm-sidebar-footer strong { overflow: hidden; color: #fff; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .crm-sidebar-footer span { overflow: hidden; color: #aabfbc; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }

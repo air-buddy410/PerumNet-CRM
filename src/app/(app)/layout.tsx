@@ -3,6 +3,7 @@ import { SidebarNav, type NavGroup } from "@/components/nav";
 import CrmAppShell from "@/components/app-shell";
 import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/rbac";
+import { profileView } from "@/lib/profile";
 import { logout } from "@/lib/auth";
 import { notificationMenuData } from "@/lib/notification-menu";
 import { PERMISSIONS } from "@/lib/constants";
@@ -13,6 +14,9 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
+  const avatarUrlPromise = profileView(user.id)
+    .then((profile) => profile?.user.avatarUrl ?? null)
+    .catch(() => null);
   const can = (p: string) => user.permissions.has(p);
   let notificationError: string | undefined;
   let notificationData: NotificationMenuData = {
@@ -28,6 +32,7 @@ export default async function AppLayout({
   }
 
   const unread = notificationData.unreadCount;
+  const avatarUrl = await avatarUrlPromise;
 
   const groups: NavGroup[] = [];
 
@@ -314,7 +319,7 @@ export default async function AppLayout({
     <CrmAppShell
       groups={groups}
       navigation={<SidebarNav groups={groups} />}
-      user={{ name: user.name, email: user.email }}
+      user={{ name: user.name, email: user.email, avatarUrl }}
       mustChangePassword={user.mustChangePassword}
       notificationData={notificationData}
       notificationError={notificationError}

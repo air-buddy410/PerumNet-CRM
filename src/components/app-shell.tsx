@@ -17,7 +17,7 @@ type CrmAppShellProps = {
   groups: NavGroup[];
   navigation: ReactNode;
   profileMenuAction: ReactNode;
-  user: { name: string; email?: string | null };
+  user: { name: string; email?: string | null; avatarUrl: string | null };
   mustChangePassword?: boolean;
   notificationData: NotificationMenuData;
   notificationError?: string;
@@ -58,6 +58,33 @@ function initials(name: string) {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+}
+
+function SidebarAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl: string | null;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarUrl]);
+
+  if (avatarUrl && !imageFailed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        className="crm-avatar-image"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return <span className="crm-avatar-fallback" aria-hidden="true">{initials(name)}</span>;
 }
 
 export default function CrmAppShell({
@@ -171,7 +198,7 @@ export default function CrmAppShell({
         </CrmMenuContext.Provider>
         <div className="crm-sidebar-footer">
           <Link href="/profile" className="crm-avatar" aria-label="Buka profil" title="Buka profil" onClick={() => setMenuOpen(false)}>
-            {initials(user.name)}
+            <SidebarAvatar name={user.name} avatarUrl={user.avatarUrl} />
           </Link>
           <div className="crm-sidebar-user-copy">
             <strong>{user.name}</strong>
