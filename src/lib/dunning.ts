@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { isOutwardBlocked, outwardBlocked } from "@/lib/outward-guard";
 import { notifyPermission } from "@/lib/notify";
 import { PERMISSIONS, SUSPENSION_REASONS } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
@@ -132,6 +133,9 @@ export async function runQueuedJobs(
   executor: JobExecutor = defaultExecutor,
   limit = 20
 ): Promise<Result<{ success: number; failed: number }>> {
+  // Mode baca-saja — sebelum job diambil, supaya tidak ada job yang berpindah
+  // ke RUNNING lalu FAILED cuma karena antriannya sempat dijalankan.
+  if (isOutwardBlocked()) return outwardBlocked("network.access");
   const jobs = await db.networkAccessJob.findMany({
     where: { status: "QUEUED" },
     orderBy: { createdAt: "asc" },

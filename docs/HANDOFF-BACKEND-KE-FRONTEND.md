@@ -3522,7 +3522,7 @@ Reset, keenam dropdown harus kembali ke "Semua …". Ulangi dengan tombol
 "Lihat semua yang offline": dropdown status koneksi harus berubah jadi
 "Offline" sendiri.
 
-## §59 — Dashboard baru: informatif per divisi, NOC disorot — PERLU HALAMAN
+## §59 — ✅ SELESAI (di-deploy 19 Agu, commit 94e6bb9) — Dashboard baru: informatif per divisi, NOC disorot
 
 Diminta pemilik produk 19 Agustus. Backend-nya **sudah selesai**; yang belum
 ada layarnya.
@@ -3886,3 +3886,86 @@ Rapikan kalau sempat; bukan pekerjaan mendesak.
 ### Yang tersisa untukmu
 
 Tinggal **T-1: dashboard baru (§59)**. Loader-nya sudah siap dipakai.
+
+---
+
+## §63 — Review §59: sudah di-deploy, dua catatan untukku dan dua untukmu
+
+`94e6bb9` sudah hidup di produksi (citra dibangun ulang 19 Agustus, `/api/health`
+`ok`, `dashboard/page.js` dan CSS-nya ada di dalam citra). `npx tsc --noEmit`
+bersih, 942 tes lolos.
+
+Yang diminta §59, dan semuanya terpenuhi:
+
+- Angka datang lewat `loadRingkasanDashboard()`; tidak ada Prisma di komponen.
+- `catatan` tampil sebagai **teks**, bukan tooltip, di tiap kartu divisi.
+- **`SENGAJA-KOSONG` diberi teal tenang** (`#187f79` di atas `#e5f6f3`), bukan
+  merah. Ini yang paling penting dari seluruh §59 dan kamu mengerjakannya
+  persis: merah disimpan untuk nada `bahaya` yang sungguhan.
+- `BELUM-DIPAKAI` diredupkan abu-abu; hadir tapi tidak menuntut perhatian.
+- Kedua belas divisi tampil, termasuk yang tanpa metrik dan tanpa pegawai.
+- `dari` jadi pecahan + persentase — "1.687 / 8.632 · 20%".
+- Panel approval turun ke bawah, tidak dibuang.
+- Tidak ada nama pelanggan, tidak ada tombol yang melakukan apa pun.
+
+Dan satu yang tidak kuminta tapi benar: `formatUiDateTime` mengunci
+**Asia/Makassar**. VPS berjalan UTC — tanpa itu "terakhir ditarik 12:19" akan
+terbaca delapan jam meleset oleh orang yang membacanya di kantor.
+
+### 63.1 — Pencarian metrik lewat teks label itu rapuh. Ini bagianku.
+
+```ts
+const sessionMetric = metricFor(summary, "NOC", "Sesi PPPoE online");
+```
+
+Keempat pencarian ini cocok hari ini — sudah kuperiksa satu per satu ke
+`dashboard-service.ts`. Masalahnya bukan sekarang, melainkan nanti: kalau **aku**
+mengganti label di loader (mis. "Alarm terbuka" → "Alarm aktif"), `metricFor`
+mengembalikan `undefined`, `toneClass` jatuh ke `"netral"`, dan pewarnaan alarm
+berhenti bekerja **tanpa galat, tanpa peringatan, tanpa tes yang merah**.
+
+Kalimat prosa yang dipakai sebagai kunci antar-modul akan selalu begitu.
+
+**Perbaikannya di sisiku, bukan sisimu:** aku tambahkan `kode` yang stabil pada
+`MetrikDivisi` (mis. `noc.sesi-online`, `noc.alarm-terbuka`) supaya kamu mencari
+dengan kode, bukan dengan kalimat. Belum kukerjakan karena akan mengubah kontrak
+yang baru saja kamu pakai — bilang kalau mau, aku kirim versinya.
+
+### 63.2 — Ambang 5 menit ada di layar, padahal §59 bilang jangan. Salahku.
+
+```ts
+const isStale = ageMs === null || ageMs > 5 * 60 * 1000;
+```
+
+§59 menulis "jangan hitung ulang ambangnya di layar — kalau ambangnya berubah,
+ia berubah di satu tempat". Lalu di paragraf lain §59 sendiri menulis "kalau ia
+lebih tua dari ±5 menit, itu sendiri sebuah kabar" — dan itulah yang kamu
+kerjakan. Perintahnya yang bertabrakan, bukan pekerjaanmu.
+
+Yang benar: ambang itu milik loader. Aku bisa mengirim `penarikanBasi: boolean`
+supaya layar tinggal membacanya. Sama seperti 63.1 — tinggal bilang.
+
+### 63.3 — CSS metrik lama sekarang mati
+
+`.crm-metric-grid`, `.crm-metric-card`, dan `.crm-metric-icon` (`globals.css`
+baris 474-480, plus 1091 dan 1160 di media query) sudah tidak dipakai satu berkas
+TSX pun sejak deret kartu lama dibuang. Baris 1016 — aturan
+`prefers-reduced-motion` — juga masih menyebut `.crm-metric-card`.
+
+Bukan cacat, hanya sisa. Buang kalau sempat; kalau kamu berencana memakai ulang
+bentuk kartu itu di layar lain, biarkan saja.
+
+### 63.4 — Satu komentar ikut terhapus
+
+Waktu `try/catch` jadi `loadStatusSistem().catch(() => null)`, komentar yang
+menjelaskan **kenapa** kegagalannya ditoleransi ikut hilang:
+
+> Dashboard tetap dapat dipakai bila ringkasan operasional sedang gagal dimuat.
+
+Perilakunya identik, jadi ini bukan bug. Tapi `.catch(() => null)` yang telanjang
+terbaca seperti galat yang ditelan, dan pembaca berikutnya bisa "memperbaikinya"
+jadi melempar. Satu baris komentar mencegah itu.
+
+### Tidak ada lagi tugas CRM yang menunggumu
+
+T-1, T-2, dan T-3 semuanya selesai dan sudah di produksi.

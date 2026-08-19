@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { isOutwardBlocked, outwardBlocked } from "@/lib/outward-guard";
 import { postInvoiceJournal, reverseInvoiceJournal } from "@/lib/gl";
 import { INVOICE_TYPES, INVOICE_LINE_KINDS } from "@/lib/constants";
 import { nextDocumentNumber, highestSuffix } from "@/lib/documents";
@@ -331,6 +332,10 @@ export async function generateInvoiceRun(
 }
 
 export async function postInvoiceRun(user: CurrentUser, runId: string): Promise<Result> {
+  // Mode baca-saja. Ini yang paling mahal kalau lolos: profil penagihan sudah
+  // siap untuk 1.709 langganan (~Rp 370 juta sebulan), dan tagihan yang
+  // terbit itu nyata bagi pelanggan yang masih ditagih lewat ALUS.
+  if (isOutwardBlocked()) return outwardBlocked("billing.post-invoice");
   const run = await db.invoiceRun.findUnique({
     where: { id: runId },
     include: { _count: { select: { invoices: true } } },
