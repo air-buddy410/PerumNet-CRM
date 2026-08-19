@@ -54,3 +54,9 @@ docs/template/*-TERISI.xlsx
 data/nik-*.tsv
 data/*-pii-*.tsv
 data/panen-*.tsv
+
+# Panenan dari ALUS dan bandingannya — nama pelanggan sungguhan, per baris.
+# Skrip yang membuatnya (_dump-crm-langganan.ts) memang di-commit; KELUARANNYA
+# tidak pernah. Berkas ini lahir di server dan harus tinggal di sana.
+.alus/
+data/crm-langganan.tsv
