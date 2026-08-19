@@ -58,6 +58,14 @@ services:
       # verifikasi TLS, dan galatnya bicara soal sertifikat — bukan soal
       # variabel yang hilang, jadi mudah salah dikejar.
       MIKROTIK_INSECURE_TLS: ${MIKROTIK_INSECURE_TLS:-}
+      # Mode baca-saja (docs/MODE-BACA-SAJA.md). Penjaganya sudah BAWAAN
+      # memblokir di kode, jadi baris ini TIDAK mengubah apa pun hari ini. Ia
+      # ada supaya hari pelepasan nanti tidak gagal diam-diam: Compose memakai
+      # .env untuk INTERPOLASI, bukan untuk meneruskan variabel ke dalam
+      # kontainer. Tanpa baris ini, menulis OUTWARD_ACTIONS=ALLOWED di .env
+      # server tidak berpengaruh sama sekali — dan tidak ada galat yang memberi
+      # tahu. Persis itu yang pernah terjadi pada MIKROTIK_INSECURE_TLS.
+      OUTWARD_ACTIONS: ${OUTWARD_ACTIONS:-BLOCKED}
       # Fase 87–88b. Sesi portal pelanggan memakai rahasia SENDIRI — bukan
       # SESSION_SECRET staf — dan pembacaan daya ONU meminta community SNMP
       # dari LibreNMS. Tanpa dua baris ini keduanya gagal saat DIPAKAI, bukan
@@ -130,6 +138,14 @@ services:
       # verifikasi TLS, dan galatnya bicara soal sertifikat — bukan soal
       # variabel yang hilang, jadi mudah salah dikejar.
       MIKROTIK_INSECURE_TLS: ${MIKROTIK_INSECURE_TLS:-}
+      # Mode baca-saja (docs/MODE-BACA-SAJA.md). Penjaganya sudah BAWAAN
+      # memblokir di kode, jadi baris ini TIDAK mengubah apa pun hari ini. Ia
+      # ada supaya hari pelepasan nanti tidak gagal diam-diam: Compose memakai
+      # .env untuk INTERPOLASI, bukan untuk meneruskan variabel ke dalam
+      # kontainer. Tanpa baris ini, menulis OUTWARD_ACTIONS=ALLOWED di .env
+      # server tidak berpengaruh sama sekali — dan tidak ada galat yang memberi
+      # tahu. Persis itu yang pernah terjadi pada MIKROTIK_INSECURE_TLS.
+      OUTWARD_ACTIONS: ${OUTWARD_ACTIONS:-BLOCKED}
       # Token API LibreNMS untuk tugas `librenms.sync`. Namanya juga tersimpan
       # di Integration.credentialRef; nilainya HANYA di sini. Tanpa baris ini
       # variabel tidak pernah sampai ke dalam container — Compose memakai .env
@@ -233,6 +249,14 @@ services:
       # verifikasi TLS, dan galatnya bicara soal sertifikat — bukan soal
       # variabel yang hilang, jadi mudah salah dikejar.
       MIKROTIK_INSECURE_TLS: ${MIKROTIK_INSECURE_TLS:-}
+      # Mode baca-saja (docs/MODE-BACA-SAJA.md). Penjaganya sudah BAWAAN
+      # memblokir di kode, jadi baris ini TIDAK mengubah apa pun hari ini. Ia
+      # ada supaya hari pelepasan nanti tidak gagal diam-diam: Compose memakai
+      # .env untuk INTERPOLASI, bukan untuk meneruskan variabel ke dalam
+      # kontainer. Tanpa baris ini, menulis OUTWARD_ACTIONS=ALLOWED di .env
+      # server tidak berpengaruh sama sekali — dan tidak ada galat yang memberi
+      # tahu. Persis itu yang pernah terjadi pada MIKROTIK_INSECURE_TLS.
+      OUTWARD_ACTIONS: ${OUTWARD_ACTIONS:-BLOCKED}
     volumes:
       - uploads:/app/uploads
     entrypoint: []
