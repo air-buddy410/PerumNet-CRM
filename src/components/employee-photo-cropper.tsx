@@ -51,7 +51,6 @@ export type EmployeePhotoCropperProps = {
   cropMinHeight?: number;
   cropValidator?: CropValidator;
   cropShape?: "rectangle" | "circle";
-  capture?: "user";
   title?: string;
   description?: string;
   inputLabel?: string;
@@ -140,7 +139,6 @@ export function EmployeePhotoCropper({
   cropMinHeight = CARD_CROP_MIN_HEIGHT,
   cropValidator = cropRejection,
   cropShape = "rectangle",
-  capture = "user",
   title,
   description,
   inputLabel = "Pilih foto",
@@ -381,7 +379,6 @@ export function EmployeePhotoCropper({
             name={inputName}
             type="file"
             accept={accept}
-            capture={capture}
             required
             className="employee-photo-file-input"
             onChange={handleFileChange}
