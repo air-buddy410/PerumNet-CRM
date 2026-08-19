@@ -4158,3 +4158,78 @@ keputusan itu tidak bisa dijalankan tanpa mengubah komponennya.
 
 `avatar-crop.ts`, `avatar.ts`, `avatar-service.ts`, dan `profile/actions.ts`
 seluruhnya wilayahku dan sudah selesai.
+
+---
+
+## §66 — Foto boleh dari galeri DAN kamera — PERLU DIKERJAKAN
+
+Diputuskan pemilik produk 19 Agustus, menjawab catatan §64/§65.2:
+*"boleh dari gallery dan dari kamera"*.
+
+### Yang perlu diluruskan lebih dulu: `capture` tidak menambah pilihan, ia MENGHAPUS pilihan
+
+Ini kebalikan dari yang terbaca dari namanya, dan mudah salah dikerjakan.
+
+`<input type="file" accept="image/*">` **tanpa** `capture` sudah memberi
+keduanya: peramban ponsel menampilkan pemilih bawaan yang menawarkan "Ambil
+Foto" **dan** "Galeri Foto". Menambahkan `capture="user"` justru **melewati**
+pemilih itu dan membuka kamera depan langsung — galerinya tidak pernah muncul.
+
+Jadi yang diminta pemilik dicapai dengan **menghapus** atributnya, bukan
+menambah apa pun. Kalau kamu menambahkan tombol "pilih dari galeri" di samping
+input yang masih ber-`capture`, kamu menambah pekerjaan untuk hasil yang lebih
+buruk.
+
+### Yang perlu diubah
+
+Dua tempat, keduanya berkasmu:
+
+1. **`employee-photo-cropper.tsx`** — propnya sekarang
+   `capture?: "user"` dengan default `= "user"`. Bentuk itu tidak bisa
+   menyatakan "mati": `capture={undefined}` pun jatuh ke default.
+
+   Saranku: **buang defaultnya**, biarkan `capture?: "user" | "environment"`
+   tanpa nilai bawaan. Dengan begitu keduanya — foto kartu dan foto profil —
+   mendapat pemilih bawaan, dan prop-nya tetap ada kalau suatu saat ada layar
+   yang memang ingin memaksa kamera.
+
+2. **`profile-avatar-form.tsx`** — tidak perlu diubah kalau saran di atas
+   dipakai; ia memang tidak mengirim `capture`.
+
+Foto kartu pegawai ikut berubah, dan itu memang konsekuensinya: HRD sering
+memotret pegawai dengan kamera terpisah lalu memindahkannya ke ponsel atau
+komputer, dan sampai sekarang foto itu tidak bisa dipilih dari ponsel sama
+sekali.
+
+### Yang JANGAN kamu ubah dalam tugas ini
+
+Lima input lain memakai `capture="environment"` (kamera belakang):
+
+```
+portal/recoveries/[id]/page.tsx          — gambar tanda tangan
+inventory/device-recoveries/[id]/page.tsx — gambar tanda tangan
+components/recovery-evidence-panel.tsx    — bukti lapangan penarikan
+components/customer-dossier-upload-form.tsx
+components/document-signature-image-panel.tsx
+```
+
+**Biarkan seluruhnya.** Keputusan pemilik tadi menjawab pertanyaan tentang foto
+profil, dan kelimanya perkara yang berbeda: bukti lapangan dan tanda tangan
+adalah dokumen yang gunanya justru terletak pada **diambil di tempat, saat
+itu**. Membuka galeri di sana berarti foto lama bisa dikirim sebagai bukti
+pekerjaan hari ini, dan tidak ada yang bisa membedakannya sesudahnya.
+
+Aku sudah memeriksa: tidak ada dokumen yang menyatakan kamera-paksa di sana
+disengaja, jadi bisa jadi ia sama tidak sengajanya. Tapi itu keputusan
+tersendiri dengan taruhan yang berbeda, dan aku sudah menanyakannya terpisah ke
+pemilik. Sampai ada jawabannya, jangan disentuh.
+
+### Cara mengujinya
+
+Di ponsel — ini tidak bisa diuji di desktop, karena `capture` memang diabaikan
+peramban desktop dan formnya akan terlihat baik-baik saja di sana:
+
+1. Buka `/profile`, tekan "Pilih foto". Harus muncul pemilih dengan **galeri
+   dan kamera**, bukan langsung kamera depan.
+2. Ulangi di layar foto kartu pegawai (`/hrd/employees/<id>`).
+3. Pilih foto lama dari galeri → pemotong muncul → simpan → foto tersimpan.
