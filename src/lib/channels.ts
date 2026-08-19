@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { CUSTOMER_CHANNELS, MESSAGE_CHANNELS } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/rbac";
+import { isOutwardBlocked, outwardBlocked } from "@/lib/outward-guard";
 
 // ── Kanal Pelanggan Engine (DESIGN-PHASE-8 §9, gap G11/G12) ─────
 // Aturan yang ditegakkan DI SINI, bukan di UI:
@@ -242,6 +243,9 @@ export async function runOutboundQueue(
   sender: MessageSender = defaultSender,
   rateLimit = 20
 ): Promise<Result<{ sent: number; failed: number }>> {
+  // Mode baca-saja — paling atas, SEBELUM antrian disentuh, supaya status
+  // pesan tidak ikut berubah menjadi SENDING/FAILED hanya karena dicoba.
+  if (isOutwardBlocked()) return outwardBlocked("channels.send");
   if (!Number.isInteger(rateLimit) || rateLimit < 1 || rateLimit > 500) {
     return { ok: false, error: "Rate limit harus 1–500 pesan per eksekusi." };
   }
