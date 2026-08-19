@@ -3191,7 +3191,7 @@ strip. Itu pekerjaan backend dulu, dan sebagian menunggu keputusan pemilik.
 
 ---
 
-## §54 — ⬜ BELUM — Garis harus ikut pengelompokan titik
+## §54 — ✅ SELESAI (di-deploy 19 Agu, commit 28eb507) — Garis harus ikut pengelompokan titik
 
 Lanjutan §52, dilaporkan pemilik jaringan 18 Agustus 2026 setelah `minzoom`
 kamu terpasang. Sudah jauh lebih baik, tapi masih ada berkas garis memancar
@@ -3654,7 +3654,7 @@ sudah terpasang dan akan terpakai. Turunkan ke bawah, jangan dibuang.
 
 ---
 
-## §60 — Peta: dasar abu-abu dan gerombolan yang lebih enak dibaca — PERLU DIKERJAKAN
+## §60 — ✅ SELESAI (di-deploy 19 Agu, commit 28eb507) — Peta: dasar abu-abu dan gerombolan yang lebih enak dibaca
 
 Diminta pemilik produk 19 Agustus: **warna peta dasar jadi abu-abu**, dan
 **tampilan pengelompokan koordinat diperbaiki**. Dua-duanya frontend murni —
@@ -3816,3 +3816,73 @@ membuka `/noc/map` menerima daftar lengkap nama pelanggan beserta koordinatnya
 sebelum mengklik apa pun. Memindahkannya ke pemuatan saat diklik memangkas
 muatan sekaligus mempersempit paparan. Aku catat sebagai pekerjaanku; jangan
 menunggu itu untuk mengerjakan §54 atau §60.
+
+---
+
+## §62 — Review §60 & §54: sudah di-deploy, tiga catatan kecil
+
+Kerjamu di `28eb507` sudah **hidup di produksi** (`crm.perumnet.id`, citra
+dibangun ulang 19 Agustus 20:4x). Diperiksa dan lolos:
+
+- `raster-saturation: -1` ada di `style.json` di dalam citra yang berjalan,
+  ubinnya tetap `tile.openstreetmap.org`, atribusi tidak berubah.
+- Kedua lapisan halo ikut terbundel di
+  `.next/static/chunks/app/(app)/noc/map/page-*.js`.
+- `npx tsc --noEmit` bersih, 942 tes lolos, `/api/health` `ok`.
+
+Satu hal yang **aku periksa khusus karena bisa mati diam-diam**: kamu memakai
+`map.on("click", [id1, id2], handler)` dengan larik. Bentuk itu baru ada sejak
+MapLibre v4 — pada v3 ke bawah ia tidak melempar galat, penangannya cuma tidak
+pernah terpanggil, dan klik gerombolan akan berhenti bekerja tanpa jejak.
+Terpasang di sini **5.24.0**, jadi aman. Catat saja kalau kelak versinya
+diturunkan.
+
+Tiga catatan, semuanya kecil dan penilaiannya ada padamu:
+
+### 62.1 — Halo bisa diklik DAN lebih besar dari gerombolannya
+
+Halo infrastruktur berjari-jari sampai 46 px, halo pelanggan sampai 50 px,
+sementara lingkaran gerombolannya 40 dan 44. Halo juga terdaftar di penangan
+klik.
+
+Akibatnya: sebuah ODP yang **tidak** menggerombol tetapi kebetulan berada di
+dalam halo gerombolan tetangganya akan memicu **dua** penangan sekaligus dalam
+satu klik — `expandCluster` (dari halo) dan `showPopup` (dari titik ODP). Peta
+beranjak zoom sementara popup-nya terbuka.
+
+Geometrinya mungkin: `clusterRadius` 48 px, dan halo hampir seluas itu. Aku
+tidak mengukur seberapa sering ia benar-benar terjadi di data kita — silakan
+coba di `/noc/map` pada zoom 12–14 di daerah yang padat.
+
+Kalau terasa mengganggu, dua jalan: kecilkan halo sampai tidak melebihi
+lingkaran gerombolan, atau lepaskan halo dari penangan klik dan biarkan ia
+murni hiasan. Yang kedua mengembalikan masalah "cincin terlihat bisa diklik
+tapi tidak" — makanya ini penilaian, bukan perintah.
+
+### 62.2 — Halo pelanggan digambar di atas titik ODP
+
+Urutan `addLayer` menentukan siapa di atas siapa. Halo pelanggan didaftarkan
+**sesudah** `INFRASTRUCTURE_LAYER_ID`, jadi ia menutupi titik ODP dengan lapis
+biru tipis. Opasitasnya cuma 0,12 jadi hampir tak terasa — tapi kalau kamu
+memang ingin ODP selalu paling atas, memindahkan kedua halo ke atas (didaftarkan
+lebih awal, sebelum semua titik) menyelesaikannya sekaligus.
+
+### 62.3 — Anak tangga opasitas di bawah zoom 15 kini mubazir
+
+`minzoom` ketiga lapisan garis sudah 15, tapi ramp opasitas dan lebarnya masih
+bermula dari zoom 10 dan 12:
+
+```
+topologi      : 10 → 0.42, 12 → 0.68, 14 → 0.92     (semuanya di bawah minzoom)
+rute          : 10 → 0.34, 12 → 0.64, 15 → 0.88
+garis pelanggan: 12 → 0.22, 14 → 0.46, 16 → 0.72
+```
+
+Tidak ada cacat tampilan — di atas zoom 15 nilainya diambil dari titik terakhir
+dan itu benar. Hanya saja angka-angka di bawah 15 sekarang tidak pernah
+terpakai, dan pembaca berikutnya akan mengira garis muncul sejak zoom 10.
+Rapikan kalau sempat; bukan pekerjaan mendesak.
+
+### Yang tersisa untukmu
+
+Tinggal **T-1: dashboard baru (§59)**. Loader-nya sudah siap dipakai.
