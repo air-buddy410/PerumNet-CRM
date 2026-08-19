@@ -4093,3 +4093,68 @@ Aku tidak tahu apakah itu memang diinginkan (swafoto di tempat) atau
 kecelakaan. Kalau bukan disengaja, hapus atributnya di kedua tempat; kalau
 disengaja, biarkan. Aku menandainya saja karena ia mengubah alur unggah di
 ponsel secara diam-diam, dan itu tempat orang paling sering mengunggah foto.
+
+---
+
+## §65 — Review §64: bagus, dan satu salinan yang salahku sendiri
+
+Pemotong foto profilmu **lolos**. `tsc` bersih, 967 tes lulus, jalur kartu tidak
+berubah sama sekali karena seluruh nilai lamanya kamu jadikan default prop —
+itu cara yang benar, dan tepat seperti yang kuminta: parameterkan, jangan
+salin.
+
+Yang kuhargai secara khusus: `employeeId` dibuat opsional dan dirender
+bersyarat, `cropShape="circle"` menambah pratinjau bulat tanpa menyentuh
+geometri, dan berkas yang dikirim tetap **berkas asli** plus koordinat — bukan
+hasil kanvas. Itu yang menjaga EXIF tetap dibuang di server.
+
+### 65.1 — Tiga salinan di `profile-avatar-form.tsx`, dan sebabnya aku
+
+Kamu menyalin `avatarCropRejection`, `avatarAspect`, dan `AVATAR_CROP_MIN_SIDE`
+ke dalam komponen, dengan komentar bahwa `@/lib/avatar` tidak bisa diimpor dari
+klien karena memuat `node:crypto`.
+
+**Alasanmu benar, dan itu salahku.** Aku menaruh geometri potong di modul yang
+sama dengan penerbit token — `avatar.ts` baris 1 mengimpor `node:crypto`.
+Bandingkan dengan `employee-card.ts` yang **nol impor**; itulah sebabnya
+`cropRejection` bisa kamu pakai dari klien sejak awal, dan aku tidak menyamakan
+polanya waktu menulis §64.
+
+Sudah kupisah: **`src/lib/avatar-crop.ts`**, nol impor, memuat `AVATAR_SIZE`,
+`AVATAR_CROP_MIN_SIDE`, `avatarAspect()`, `avatarCropRejection()`, dan tipe
+`AvatarCrop`. `avatar.ts` me-re-export semuanya sehingga kode server tidak
+berubah. Ada tes struktural yang gagal kalau berkas itu kelak mengimpor apa pun.
+
+**Yang perlu kamu lakukan — satu perubahan:** buang ketiga salinan itu, ganti
+dengan
+
+```ts
+import {
+  AVATAR_CROP_MIN_SIDE,
+  avatarAspect,
+  avatarCropRejection,
+  type AvatarCrop,
+} from "@/lib/avatar-crop";
+```
+
+Tidak mendesak — salinanmu identik dengan aslinya hari ini, jadi tidak ada yang
+rusak sekarang. Yang dicegah adalah nanti: kalau aku menaikkan
+`AVATAR_CROP_MIN_SIDE` dari 256, servermu menolak sementara kotak di layar
+tetap memperbolehkan, dan orang menggeser-geser kotak tanpa pernah tahu
+kenapa ditolak.
+
+### 65.2 — `capture` tidak bisa dimatikan lewat prop
+
+`capture?: "user"` dengan default `= "user"` berarti tidak ada nilai yang bisa
+dikirim untuk mematikannya — `capture={undefined}` pun jatuh ke default.
+
+Aku tidak memintamu mengubahnya sekarang, karena pemilik produk belum
+memutuskan apakah kamera-depan-langsung itu memang diinginkan (lihat catatan di
+akhir §64). Tapi kalau nanti diputuskan boleh memilih dari galeri, propnya
+perlu jadi `capture?: "user" | false` atau serupa lebih dulu — sekarang
+keputusan itu tidak bisa dijalankan tanpa mengubah komponennya.
+
+### Yang TIDAK perlu kamu urus
+
+`avatar-crop.ts`, `avatar.ts`, `avatar-service.ts`, dan `profile/actions.ts`
+seluruhnya wilayahku dan sudah selesai.

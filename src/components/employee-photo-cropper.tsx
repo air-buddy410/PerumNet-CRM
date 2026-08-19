@@ -22,7 +22,6 @@ import {
   CARD_CROP_MIN_WIDTH,
   cardPhotoAspect,
   cropRejection,
-  type CardPhotoCrop,
 } from "@/lib/employee-card";
 import { clientFileSizeError } from "@/components/client-file-upload-guard";
 
@@ -33,21 +32,51 @@ type ImageSource = {
   height: number;
 };
 
+export type PhotoCrop = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type CropValidator = (crop: PhotoCrop, source: ImageSource) => string | null;
+
+export type EmployeePhotoCropperProps = {
+  employeeId?: string;
+  action: PhotoUploadAction;
+  currentPhoto?: boolean;
+  inputName?: "photo" | "avatar";
+  cropAspect?: number;
+  cropMinWidth?: number;
+  cropMinHeight?: number;
+  cropValidator?: CropValidator;
+  cropShape?: "rectangle" | "circle";
+  capture?: "user";
+  title?: string;
+  description?: string;
+  inputLabel?: string;
+  helpText?: string;
+  accept?: string;
+  fileSizeError?: string;
+  submitLabel?: string;
+};
+
 type DragState = {
   pointerId: number;
   clientX: number;
   clientY: number;
-  crop: CardPhotoCrop;
+  crop: PhotoCrop;
 };
 
 const ACCEPTED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ACCEPTED_EXTENSIONS = /\.(?:jpe?g|png|webp)$/i;
-const CROP_ASPECT = cardPhotoAspect();
+const DEFAULT_CROP_ASPECT = cardPhotoAspect();
+const DEFAULT_ACCEPT = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
 
-function centeredCrop(source: ImageSource): CardPhotoCrop {
+function centeredCrop(source: ImageSource, cropAspect: number): PhotoCrop {
   const sourceAspect = source.width / source.height;
-  const width = sourceAspect >= CROP_ASPECT ? CROP_ASPECT / sourceAspect : 1;
-  const height = sourceAspect >= CROP_ASPECT ? 1 : sourceAspect / CROP_ASPECT;
+  const width = sourceAspect >= cropAspect ? cropAspect / sourceAspect : 1;
+  const height = sourceAspect >= cropAspect ? 1 : sourceAspect / cropAspect;
 
   return {
     x: (1 - width) / 2,
@@ -57,7 +86,7 @@ function centeredCrop(source: ImageSource): CardPhotoCrop {
   };
 }
 
-function clampCrop(crop: CardPhotoCrop): CardPhotoCrop {
+function clampCrop(crop: PhotoCrop): PhotoCrop {
   const width = Math.min(1, Math.max(0, crop.width));
   const height = Math.min(1, Math.max(0, crop.height));
 
@@ -69,11 +98,16 @@ function clampCrop(crop: CardPhotoCrop): CardPhotoCrop {
   };
 }
 
-function maxCropZoom(base: CardPhotoCrop, source: ImageSource | null) {
+function maxCropZoom(
+  base: PhotoCrop,
+  source: ImageSource | null,
+  minimumWidth: number,
+  minimumHeight: number,
+) {
   if (!source || source.width <= 0 || source.height <= 0) return 1;
 
-  const minimumWidthFraction = CARD_CROP_MIN_WIDTH / source.width;
-  const minimumHeightFraction = CARD_CROP_MIN_HEIGHT / source.height;
+  const minimumWidthFraction = minimumWidth / source.width;
+  const minimumHeightFraction = minimumHeight / source.height;
   if (minimumWidthFraction <= 0 || minimumHeightFraction <= 0) return 1;
 
   return Math.max(
@@ -100,11 +134,21 @@ export function EmployeePhotoCropper({
   employeeId,
   action,
   currentPhoto = false,
-}: {
-  employeeId: string;
-  action: PhotoUploadAction;
-  currentPhoto?: boolean;
-}) {
+  inputName = "photo",
+  cropAspect = DEFAULT_CROP_ASPECT,
+  cropMinWidth = CARD_CROP_MIN_WIDTH,
+  cropMinHeight = CARD_CROP_MIN_HEIGHT,
+  cropValidator = cropRejection,
+  cropShape = "rectangle",
+  capture = "user",
+  title,
+  description,
+  inputLabel = "Pilih foto",
+  helpText,
+  accept = DEFAULT_ACCEPT,
+  fileSizeError = "Ukuran foto maksimal 5 MB.",
+  submitLabel = "Simpan foto",
+}: EmployeePhotoCropperProps) {
   const inputId = useId();
   const instructionId = `${inputId}-instructions`;
   const stageRef = useRef<HTMLDivElement>(null);
@@ -114,8 +158,8 @@ export function EmployeePhotoCropper({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [source, setSource] = useState<ImageSource | null>(null);
-  const [baseCrop, setBaseCrop] = useState<CardPhotoCrop | null>(null);
-  const [crop, setCrop] = useState<CardPhotoCrop | null>(null);
+  const [baseCrop, setBaseCrop] = useState<PhotoCrop | null>(null);
+  const [crop, setCrop] = useState<PhotoCrop | null>(null);
   const [zoom, setZoom] = useState(1);
   const [fileError, setFileError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -127,12 +171,25 @@ export function EmployeePhotoCropper({
   }, [previewUrl]);
 
   const maximumZoom = useMemo(
-    () => maxCropZoom(baseCrop ?? centeredCrop(source ?? { width: 1, height: 1 }), source),
-    [baseCrop, source]
+    () =>
+      maxCropZoom(
+        baseCrop ?? centeredCrop(source ?? { width: 1, height: 1 }, cropAspect),
+        source,
+        cropMinWidth,
+        cropMinHeight,
+      ),
+    [baseCrop, cropAspect, cropMinHeight, cropMinWidth, source],
   );
-  const cropError = crop && source ? cropRejection(crop, source) : null;
+  const cropError = crop && source ? cropValidator(crop, source) : null;
   const validationError = fileError || cropError || "";
   const canSubmit = Boolean(file && source && crop && !validationError);
+  const heading = title ?? (currentPhoto ? "Ganti foto resmi" : "Unggah foto resmi");
+  const resolvedDescription =
+    description ??
+    "Geser kotak ke posisi wajah yang tepat. Rasio kartu dan batas kualitas akan diperiksa sebelum foto disimpan.";
+  const resolvedHelpText =
+    helpText ??
+    `JPG, PNG, atau WebP. Area minimum ${cropMinWidth}×${cropMinHeight} piksel pada foto asli.`;
 
   function resetSelection() {
     selectionRef.current += 1;
@@ -164,7 +221,7 @@ export function EmployeePhotoCropper({
       return;
     }
 
-    const sizeError = clientFileSizeError(nextFile, undefined, "Ukuran foto maksimal 5 MB.");
+    const sizeError = clientFileSizeError(nextFile, undefined, fileSizeError);
     if (sizeError) {
       setFile(null);
       setSource(null);
@@ -188,7 +245,7 @@ export function EmployeePhotoCropper({
       }
 
       const nextSource = { width: image.naturalWidth, height: image.naturalHeight };
-      const nextBaseCrop = centeredCrop(nextSource);
+      const nextBaseCrop = centeredCrop(nextSource, cropAspect);
       setFile(nextFile);
       setPreviewUrl(url);
       setSource(nextSource);
@@ -306,34 +363,32 @@ export function EmployeePhotoCropper({
       className="employee-photo-cropper"
       onSubmit={handleSubmit}
     >
-      <input type="hidden" name="employeeId" value={employeeId} />
+      {employeeId ? <input type="hidden" name="employeeId" value={employeeId} /> : null}
       <div className="employee-photo-cropper-heading">
         <div className="min-w-0">
-          <h3>{currentPhoto ? "Ganti foto resmi" : "Unggah foto resmi"}</h3>
-          <p>
-            Geser kotak ke posisi wajah yang tepat. Rasio kartu dan batas kualitas akan diperiksa sebelum foto disimpan.
-          </p>
+          <h3>{heading}</h3>
+          <p>{resolvedDescription}</p>
         </div>
         <ImagePlus aria-hidden="true" />
       </div>
 
       <div className="employee-photo-cropper-grid">
         <div className="employee-photo-cropper-input">
-          <label className="label" htmlFor={inputId}>Pilih foto</label>
+          <label className="label" htmlFor={inputId}>{inputLabel}</label>
           <input
             ref={inputRef}
             id={inputId}
-            name="photo"
+            name={inputName}
             type="file"
-            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-            capture="user"
+            accept={accept}
+            capture={capture}
             required
             className="employee-photo-file-input"
             onChange={handleFileChange}
             aria-describedby={`${instructionId}${validationError ? ` ${inputId}-error` : ""}`}
           />
           <p id={instructionId} className="employee-photo-cropper-help">
-            JPG, PNG, atau WebP. Area minimum {CARD_CROP_MIN_WIDTH}×{CARD_CROP_MIN_HEIGHT} piksel pada foto asli.
+            {resolvedHelpText}
           </p>
           {file && <p className="employee-photo-selected" title={file.name}>{file.name}</p>}
         </div>
@@ -347,10 +402,10 @@ export function EmployeePhotoCropper({
             >
               <img src={previewUrl} alt="Pratinjau foto yang akan disimpan" />
               <div
-                className={`employee-photo-crop-box ${dragging ? "is-dragging" : ""}`}
+                className={`employee-photo-crop-box ${cropShape === "circle" ? "is-circle" : ""} ${dragging ? "is-dragging" : ""}`}
                 role="button"
                 tabIndex={0}
-                aria-label="Kotak potong foto"
+                aria-label={cropShape === "circle" ? "Lingkaran potong foto profil" : "Kotak potong foto"}
                 aria-describedby={instructionId}
                 title="Geser kotak. Gunakan tombol panah untuk menggeser sedikit."
                 style={{
@@ -442,7 +497,7 @@ export function EmployeePhotoCropper({
           Pilih ulang
         </button>
         <button type="submit" className="btn-primary" disabled={!canSubmit}>
-          Simpan foto
+          {submitLabel}
         </button>
       </div>
     </form>

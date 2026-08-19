@@ -813,18 +813,11 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .crm-profile-status.is-inactive { color: #bd4942; }
 .crm-profile-auth-source svg, .crm-profile-contract-badge svg { width: 14px; height: 14px; color: #04a99f; }
 .crm-profile-avatar-note { margin: 2px 0 0; color: #8a9b98; font-size: 10px; line-height: 1.45; }
-.crm-profile-avatar-controls { display: grid; gap: 5px; min-width: 0; margin-top: 3px; }
-.crm-profile-avatar-controls > form:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
-.crm-profile-avatar-picker { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 36px; padding: 0 10px; color: #007e76; background: #edf8f6; border: 1px solid #cbe6e1; border-radius: 8px; cursor: pointer; font-size: 10px; font-weight: 800; }
-.crm-profile-avatar-picker:hover { background: #e3f4f1; }
-.crm-profile-avatar-picker:focus-within { outline: 3px solid #04a99f33; outline-offset: 2px; }
-.crm-profile-avatar-picker svg, .crm-profile-avatar-controls button svg { flex: 0 0 auto; width: 14px; height: 14px; }
-.crm-profile-avatar-picker span { max-width: min(230px, 52vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crm-profile-avatar-controls .btn-primary, .crm-profile-avatar-controls .btn-secondary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 10px; font-size: 10px; }
+.crm-profile-avatar-controls { display: grid; gap: 12px; min-width: 0; margin-top: 3px; }
+.crm-profile-avatar-remove-form { display: flex; min-width: 0; }
+.crm-profile-avatar-remove-form .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 10px; font-size: 10px; }
+.crm-profile-avatar-remove-form svg { flex: 0 0 auto; width: 14px; height: 14px; }
 .crm-profile-avatar-remove { color: #8b5550; }
-.crm-profile-avatar-help, .crm-profile-avatar-error { margin: 0; overflow-wrap: anywhere; font-size: 10px; line-height: 1.45; }
-.crm-profile-avatar-help { color: #8a9b98; }
-.crm-profile-avatar-error { color: #bd4942; }
 .crm-profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
 .crm-profile-card { min-width: 0; padding: 20px; }
 .crm-profile-card-heading { display: flex; align-items: flex-start; gap: 11px; min-width: 0; margin-bottom: 18px; }
@@ -960,6 +953,8 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
 .employee-photo-cropper-stage { position: relative; width: min(100%, 34rem); overflow: hidden; background: #d8efec; border: 1px solid #c7e1dd; border-radius: 12px; box-shadow: 0 10px 24px #25444312; }
 .employee-photo-cropper-stage > img { display: block; width: 100%; height: 100%; object-fit: fill; }
 .employee-photo-crop-box { position: absolute; z-index: 1; min-width: 18px; min-height: 18px; border: 2px solid #fff; border-radius: 7px; box-shadow: 0 0 0 9999px #071817a6, 0 0 0 1px #08aaa0; cursor: grab; outline: none; touch-action: none; }
+.employee-photo-crop-box.is-circle { border-radius: 50%; }
+.employee-photo-crop-box.is-circle .employee-photo-crop-box-label { top: 50%; border-radius: 999px; transform: translate(-50%, -50%); }
 .employee-photo-crop-box:hover, .employee-photo-crop-box:focus-visible { border-color: #9ff8f1; box-shadow: 0 0 0 9999px #071817a6, 0 0 0 2px #08aaa0; }
 .employee-photo-crop-box.is-dragging { cursor: grabbing; }
 .employee-photo-crop-box-label { position: absolute; top: 7px; left: 50%; display: inline-flex; max-width: calc(100% - 12px); align-items: center; gap: 4px; padding: 4px 7px; color: #fff; background: #071817bd; border-radius: 5px; font-size: 9px; font-weight: 800; line-height: 1.2; transform: translateX(-50%); white-space: nowrap; }
@@ -1189,9 +1184,8 @@ a.system-status-metric:hover { border-color: #b9ded7; box-shadow: 0 11px 24px #2
   .crm-profile-field-wide { grid-column: auto; }
   .crm-profile-contract-badge { margin-left: 0; }
   .crm-profile-password .crm-profile-card-heading { align-items: flex-start; flex-wrap: wrap; }
-  .crm-profile-avatar-controls > form:first-child { align-items: stretch; }
-  .crm-profile-avatar-picker { flex: 1 1 150px; }
-  .crm-profile-avatar-controls .btn-primary, .crm-profile-avatar-controls .btn-secondary { justify-content: center; }
+  .crm-profile-avatar-remove-form { width: 100%; }
+  .crm-profile-avatar-remove-form .btn-secondary { width: 100%; }
   .employee-photo-cropper-heading { align-items: flex-start; }
   .employee-photo-cropper-controls { grid-template-columns: 38px minmax(0, 1fr) 38px; }
   .employee-photo-cropper-reset { grid-column: 1 / -1; justify-content: center; }

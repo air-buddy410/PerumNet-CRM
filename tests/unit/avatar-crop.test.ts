@@ -129,3 +129,15 @@ describe("strategi potong bawaan tidak boleh membuang wajah", () => {
     assert.ok(await persenWajah(dipotong) > 10, "potongan pilihan pengguna harus memuat wajahnya");
   });
 });
+
+// Penjaga struktural: kalau berkas ini mengimpor apa pun, komponen "use client"
+// tidak bisa lagi memakainya dan aturan potongnya akan disalin lagi — persis
+// keadaan yang membuat modul ini dipisah.
+describe("avatar-crop tetap aman untuk klien", () => {
+  test("tidak mengimpor apa pun", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const isi = await readFile("src/lib/avatar-crop.ts", "utf8");
+    const impor = isi.split("\n").filter((b) => /^\s*import[\s{*]/.test(b));
+    assert.deepEqual(impor, [], `avatar-crop.ts harus nol impor, ditemukan: ${impor.join(" | ")}`);
+  });
+});

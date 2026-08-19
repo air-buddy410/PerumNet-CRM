@@ -1,19 +1,46 @@
 "use client";
 
-import { useState, type FormEvent, type ChangeEvent } from "react";
-import { Camera, Trash2, Upload } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import type { AvatarCrop } from "@/lib/avatar";
+import { EmployeePhotoCropper } from "@/components/employee-photo-cropper";
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-type AvatarUploadAction = (formData: FormData) => Promise<void>;
+type AvatarUploadAction = (formData: FormData) => void | Promise<void>;
 type AvatarRemoveAction = () => Promise<void>;
 
-function validateAvatar(file: File | undefined) {
-  if (!file || file.size === 0) return "Pilih berkas foto terlebih dahulu.";
-  if (file.size > MAX_AVATAR_BYTES) return "Ukuran foto maksimal 5 MB.";
-  if (!ACCEPTED_AVATAR_TYPES.has(file.type)) return "Foto harus berformat JPG, PNG, atau WebP.";
-  return "";
+const AVATAR_CROP_MIN_SIDE = 256;
+
+function avatarAspect() {
+  return 1;
+}
+
+/**
+ * Mirror client-side untuk avatarCropRejection.
+ * Server tetap memvalidasi ulang; @/lib/avatar tidak diimpor saat runtime
+ * karena modul tersebut memiliki node:crypto untuk token avatar.
+ */
+function avatarCropRejection(
+  crop: AvatarCrop,
+  source: { width: number; height: number },
+): string | null {
+  const values = [crop.x, crop.y, crop.width, crop.height];
+  if (values.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
+    return "Area potong tidak terbaca. Geser ulang kotaknya.";
+  }
+  if (crop.width <= 0 || crop.height <= 0) return "Area potong kosong. Geser ulang kotaknya.";
+  if (crop.x < 0 || crop.y < 0) return "Area potong keluar dari foto.";
+  if (crop.x + crop.width > 1.0001 || crop.y + crop.height > 1.0001) {
+    return "Area potong keluar dari foto.";
+  }
+  const width = Math.round(crop.width * source.width);
+  const height = Math.round(crop.height * source.height);
+  if (width < AVATAR_CROP_MIN_SIDE || height < AVATAR_CROP_MIN_SIDE) {
+    return (
+      `Area potong terlalu kecil (${width}x${height} piksel). ` +
+      `Perbesar kotaknya, minimal ${AVATAR_CROP_MIN_SIDE}x${AVATAR_CROP_MIN_SIDE} — ` +
+      "kalau lebih kecil, wajahnya pecah saat ditampilkan."
+    );
+  }
+  return null;
 }
 
 export function ProfileAvatarForm({
@@ -25,57 +52,30 @@ export function ProfileAvatarForm({
   uploadAction: AvatarUploadAction;
   removeAction: AvatarRemoveAction;
 }) {
-  const [error, setError] = useState("");
-  const [selectedName, setSelectedName] = useState("");
-
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    const nextError = file ? validateAvatar(file) : "";
-    setError(nextError);
-    setSelectedName(file && !nextError ? file.name : "");
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    const input = event.currentTarget.elements.namedItem("avatar");
-    const fileInput = input instanceof HTMLInputElement ? input : null;
-    const nextError = validateAvatar(fileInput?.files?.[0]);
-    setError(nextError);
-    if (nextError) event.preventDefault();
-  }
-
   return (
     <div className="crm-profile-avatar-controls">
-      <form action={uploadAction} encType="multipart/form-data" onSubmit={handleSubmit}>
-        <label className="crm-profile-avatar-picker">
-          <Camera aria-hidden="true" />
-          <span>{selectedName || "Pilih foto"}</span>
-          <input
-            className="sr-only"
-            type="file"
-            name="avatar"
-            accept="image/jpeg,image/png,image/webp"
-            capture="user"
-            onChange={handleChange}
-            aria-describedby={`profile-avatar-help${error ? " profile-avatar-error" : ""}`}
-          />
-        </label>
-        <button type="submit" className="btn-primary" disabled={!selectedName || Boolean(error)}>
-          <Upload aria-hidden="true" />
-          Simpan foto
-        </button>
-      </form>
-      {currentUrl && (
-        <form action={removeAction}>
+      <EmployeePhotoCropper
+        action={uploadAction}
+        inputName="avatar"
+        cropAspect={avatarAspect()}
+        cropMinWidth={AVATAR_CROP_MIN_SIDE}
+        cropMinHeight={AVATAR_CROP_MIN_SIDE}
+        cropValidator={avatarCropRejection}
+        cropShape="circle"
+        title={currentUrl ? "Ganti foto profil" : "Unggah foto profil"}
+        description="Geser lingkaran ke posisi wajah yang tepat. Foto profil akan dipotong persegi dan ditampilkan bulat di aplikasi."
+        helpText={`JPG, PNG, atau WebP. Area minimum ${AVATAR_CROP_MIN_SIDE}×${AVATAR_CROP_MIN_SIDE} piksel pada foto asli.`}
+        submitLabel="Simpan foto profil"
+      />
+
+      {currentUrl ? (
+        <form action={removeAction} className="crm-profile-avatar-remove-form">
           <button type="submit" className="btn-secondary crm-profile-avatar-remove">
             <Trash2 aria-hidden="true" />
             Hapus foto
           </button>
         </form>
-      )}
-      <p id="profile-avatar-help" className="crm-profile-avatar-help">
-        JPG, PNG, atau WebP, maksimal 5 MB. Foto diproses aman di server dan hanya untuk tampilan aplikasi.
-      </p>
-      {error && <p id="profile-avatar-error" className="crm-profile-avatar-error" role="alert">{error}</p>}
+      ) : null}
     </div>
   );
 }
