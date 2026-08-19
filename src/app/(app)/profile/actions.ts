@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { updateOwnContact, passwordChangeAvailable, passwordChangeTarget } from "@/lib/profile";
 import { changeOwnMailPassword } from "@/lib/mailserver";
 import { setOwnAvatar, removeOwnAvatar } from "@/lib/avatar-service";
+import type { AvatarCrop } from "@/lib/avatar";
 
 const schema = z
   .object({
@@ -155,13 +156,45 @@ export async function updateContactAction(formData: FormData): Promise<void> {
 // adalah milik pemanggil. Parameter yang bisa dikendalikan akan berarti siapa
 // pun bisa mengganti wajah orang lain.
 
+/**
+ * Membaca kotak potong dari form, atau null bila tidak dikirim.
+ *
+ * Bentuknya SENGAJA sama persis dengan foto kartu pegawai
+ * (`hrd/actions.ts`): empat field pecahan 0..1 bernama cropX, cropY,
+ * cropWidth, cropHeight. Dengan begitu komponen pemotong yang sudah ada bisa
+ * dipakai ulang apa adanya di halaman profil, tanpa kontrak kedua yang harus
+ * diingat orang.
+ *
+ * Null bukan kegagalan: form lama yang belum punya pemotong tetap bekerja,
+ * dan servernya jatuh ke potongan tengah.
+ */
+function cropDariForm(formData: FormData): AvatarCrop | null {
+  const ambil = (nama: string): number | null => {
+    const v = formData.get(nama);
+    if (v === null || String(v).trim() === "") return null;
+    const n = Number(String(v));
+    return Number.isFinite(n) ? n : null;
+  };
+  const x = ambil("cropX");
+  const y = ambil("cropY");
+  const width = ambil("cropWidth");
+  const height = ambil("cropHeight");
+  if (x === null || y === null || width === null || height === null) return null;
+  return { x, y, width, height };
+}
+
+/** field: avatar, cropX?, cropY?, cropWidth?, cropHeight? — encType="multipart/form-data" */
 export async function uploadAvatarAction(formData: FormData): Promise<void> {
   const user = await requireUser();
   const file = formData.get("avatar");
   if (!(file instanceof File) || file.size === 0) {
     redirect("/profile?error=" + encodeURIComponent("Pilih berkas foto terlebih dahulu."));
   }
-  const r = await setOwnAvatar({ id: user.id, name: user.name }, file as File);
+  const r = await setOwnAvatar(
+    { id: user.id, name: user.name },
+    file as File,
+    cropDariForm(formData)
+  );
   revalidatePath("/profile");
   redirect(
     "/profile?" +

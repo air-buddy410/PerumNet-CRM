@@ -3969,3 +3969,127 @@ jadi melempar. Satu baris komentar mencegah itu.
 ### Tidak ada lagi tugas CRM yang menunggumu
 
 T-1, T-2, dan T-3 semuanya selesai dan sudah di produksi.
+
+---
+
+## §64 — Foto profil: pemotong seperti foto kartu — PERLU HALAMAN
+
+Dilaporkan pemilik produk 19 Agustus: *"fitur upload photo profile masih bug,
+boleh kok ditambah fitur untuk crop seperti photo id card"*.
+
+**Backendnya sudah selesai dan sudah di produksi.** Yang belum ada UI-nya.
+
+### Bugnya nyata, dan sebabnya bukan di unggahannya
+
+Unggahannya tidak pernah gagal — kuperiksa di produksi: berkasnya tersimpan,
+`/api/avatar/<token>` menjawab HTTP 200 image/webp, nol galat di log. Yang
+salah **hasil potongannya**.
+
+`avatar-service.ts` memotong dengan `position: "attention"` — sharp memilih
+bagian gambar yang paling "ramai". Pada potret tegak, yang paling ramai bukan
+wajah: latar bermotif, kerah, atau pola kaus menang atas kulit wajah yang halus
+dan berkontras rendah.
+
+Diukur dengan gambar uji 600×1200 (wajah di sepertiga atas, motif kontras
+tinggi di sepertiga bawah):
+
+| strategi | wajah ikut | motif ikut |
+|---|---|---|
+| `attention` — yang dipakai sebelumnya | **0,0%** | 32,6% |
+| `centre` | 0,5% | 8,3% |
+| `top` | 12,5% | 0,0% |
+
+**`attention` membuang wajahnya sepenuhnya.** Orang mengunggah potret, lalu
+mendapat foto badannya sendiri. Itu bugnya.
+
+Sudah kuganti ke `centre` — jadi jalur tanpa crop pun tidak lagi mencelakakan.
+Tapi tebakan apa pun tetap tebakan, dan itulah kenapa pemotongnya diminta.
+
+Angka di atas dijaga tes (`tests/unit/avatar-crop.test.ts`), termasuk satu tes
+yang sengaja menegaskan bahwa `attention` memang membuang wajah — supaya
+kalau ada yang mengembalikannya, suite-nya berteriak.
+
+### Kontraknya SAMA PERSIS dengan foto kartu
+
+Ini disengaja supaya kamu tidak perlu mengingat dua kontrak:
+
+```
+field form : cropX, cropY, cropWidth, cropHeight
+nilai      : pecahan 0..1 terhadap gambar yang SUDAH tegak, 8 desimal
+kosong     : tidak apa-apa — server jatuh ke potongan tengah
+encType    : multipart/form-data
+action     : uploadAvatarAction, field berkas tetap `avatar`
+```
+
+Yang tersedia untukmu di `@/lib/avatar`:
+
+```ts
+import {
+  avatarAspect,          // () => 1  — padanan cardPhotoAspect()
+  avatarCropRejection,   // (crop, {width,height}) => string | null
+  AVATAR_CROP_MIN_SIDE,  // 256 piksel sumber, sisi terpendek
+  type AvatarCrop,       // { x, y, width, height }
+} from "@/lib/avatar";
+```
+
+`avatarCropRejection` mengembalikan kalimat siap tampil — pakai untuk
+memvalidasi di klien sebelum kirim, persis seperti `cropRejection` dipakai di
+`employee-photo-cropper.tsx`. Servernya memvalidasi ulang; klien hanya
+mempercepat umpan baliknya.
+
+### Yang perlu kamu kerjakan
+
+`employee-photo-cropper.tsx` sekarang **mengunci** dirinya ke foto kartu — ia
+mengimpor `cardPhotoAspect()`, `CARD_CROP_MIN_WIDTH/HEIGHT`, dan
+`cropRejection` langsung di dalam berkasnya (baris 20-26, 45).
+
+Yang kuminta: **parameterkan**, jangan disalin. Empat hal yang berbeda antara
+kartu dan profil, dan seluruh sisanya sama:
+
+| | kartu | profil |
+|---|---|---|
+| rasio | `cardPhotoAspect()` | `avatarAspect()` → 1 |
+| minimum | 450×627 | 256×256 |
+| validator | `cropRejection` | `avatarCropRejection` |
+| nama field berkas | `photo` | `avatar` |
+
+Salinan kedua akan menyimpang. Yang menyimpang di sini artinya kotak potong
+di layar tidak lagi sama dengan yang dipotong server, dan itu ketahuan justru
+setelah foto tersimpan.
+
+Tiga hal yang tolong dipertahankan dari cropper yang sudah ada:
+
+1. **`.rotate()` sudah diterapkan server SEBELUM koordinatmu dipakai.**
+   Kirim koordinat terhadap gambar yang kamu TAMPILKAN — peramban sudah
+   menampilkannya tegak. Jangan mengoreksi EXIF sendiri; kalau kamu ikut
+   memutar, potongannya meleset 90 derajat pada foto ponsel.
+2. **Penjaga ukuran berkas di klien** (`clientFileSizeError`) tetap dipakai —
+   batas badan Server Action 8 MB, dan melewatinya menghasilkan halaman error,
+   bukan pesan yang enak dibaca.
+3. **Pratinjau lingkaran**, karena avatarnya ditampilkan bulat di seluruh
+   aplikasi. Kotak persegi yang hasilnya dipotong bulat membuat orang
+   menempatkan wajah terlalu ke tepi.
+
+### Yang JANGAN dilakukan
+
+- **Jangan memotong gambar di klien lalu mengirim hasilnya.** Kirim berkas
+  ASLI + koordinat. Pemrosesan di server yang membuang EXIF, dan **foto dari
+  ponsel membawa koordinat GPS rumah orangnya** — memotong di klien lalu
+  mengirim hasil kanvas menghapus jaminan itu tanpa ada yang sadar.
+- **Jangan menyentuh `avatar-service.ts`, `avatar.ts`, atau
+  `profile/actions.ts`** — itu wilayahku dan sudah selesai.
+- **Jangan menyamakan foto profil dengan foto kartu.** §26.1 masih berlaku
+  sepenuhnya: dua foto berbeda, dan foto kartu tidak boleh bisa diganti
+  sendiri oleh yang bersangkutan.
+
+### Catatan: `capture="user"` di kedua tempat
+
+`profile-avatar-form.tsx:57` dan `employee-photo-cropper.tsx:329` sama-sama
+memakai `capture="user"` pada input berkasnya. Di ponsel, atribut itu membuat
+sebagian peramban membuka **kamera depan langsung** alih-alih pemilih berkas —
+jadi orang tidak bisa memilih foto yang sudah ada di galerinya.
+
+Aku tidak tahu apakah itu memang diinginkan (swafoto di tempat) atau
+kecelakaan. Kalau bukan disengaja, hapus atributnya di kedua tempat; kalau
+disengaja, biarkan. Aku menandainya saja karena ia mengubah alur unggah di
+ponsel secara diam-diam, dan itu tempat orang paling sering mengunggah foto.

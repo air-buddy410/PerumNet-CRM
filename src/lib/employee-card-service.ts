@@ -100,7 +100,14 @@ async function potongFotoKartu(
       // Tanpa ini, satu piksel selisih membuat fotonya dikotaki lagi.
       .resize(cardPhotoWidth(), CARD_PHOTO_HEIGHT, {
         fit: "cover",
-        position: crop ? "centre" : "attention",
+        // Jalur TANPA crop juga `centre` sejak Fase 95. `attention` memilih
+        // bagian gambar paling ramai, dan pada potret tegak yang ramai bukan
+        // wajahnya melainkan motif baju atau latar — diukur pada gambar uji,
+        // wajahnya terbuang SEPENUHNYA. Jalur ini jarang terpakai karena
+        // cropper HRD hampir selalu mengirim bidangnya, tapi ia terpakai saat
+        // HRD menekan simpan tanpa menggeser kotaknya, dan foto kartu adalah
+        // foto yang dipindai pelanggan di depan pintu.
+        position: "centre",
       })
       .jpeg({ quality: 88 })
       .toBuffer();

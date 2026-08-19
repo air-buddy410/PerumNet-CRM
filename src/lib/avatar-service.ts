@@ -9,8 +9,16 @@ import {
   AVATAR_SIZE,
   AVATAR_MIME,
   avatarRejection,
+  avatarCropRejection,
   newAvatarToken,
+  type AvatarCrop,
 } from "@/lib/avatar";
+// Geometri murni — mengubah pecahan 0..1 jadi piksel sumber, lalu menjepitnya
+// ke tepi gambar. Tidak ada apa pun yang khas kartu pegawai di dalamnya, jadi
+// dipakai ulang alih-alih disalin: dua salinan aturan penjepitan tepi akan
+// menyimpang, dan yang menyimpang menghasilkan galat pemroses gambar yang
+// tidak bisa dipahami siapa pun.
+import { cropToPixels } from "@/lib/employee-card";
 
 // ── Unggah & hapus foto profil sendiri (Fase 59) ────────────────
 //
@@ -45,7 +53,8 @@ function storedNameFor(): string {
  */
 export async function setOwnAvatar(
   account: { id: string; name: string },
-  file: File
+  file: File,
+  crop?: AvatarCrop | null
 ): Promise<Result> {
   const rejection = avatarRejection({ type: file.type, size: file.size });
   if (rejection) return { ok: false, error: rejection };
@@ -58,9 +67,34 @@ export async function setOwnAvatar(
 
   let diproses: Buffer;
   try {
-    diproses = await sharp(buffer, { failOn: "error" })
-      .rotate() // menghormati orientasi EXIF SEBELUM metadatanya dibuang
-      .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", position: "attention" })
+    // `.rotate()` HARUS dijalankan sebelum apa pun yang memakai koordinat.
+    // Kotak potong dikirim peramban dalam koordinat gambar yang SUDAH tegak;
+    // kalau EXIF-nya belum diterapkan, sumbernya masih miring dan potongannya
+    // mendarat di tempat yang salah — biasanya memotong wajah jadi setengah.
+    const tegak = await sharp(buffer, { failOn: "error" }).rotate().toBuffer();
+    let pipa = sharp(tegak, { failOn: "error" });
+
+    if (crop) {
+      // Dimensi dibaca dari gambar yang SUDAH tegak, bukan dari metadata
+      // berkas asli — pada foto ponsel yang terekam miring keduanya tertukar.
+      const sumber = await sharp(tegak).metadata();
+      const alasan = avatarCropRejection(crop, {
+        width: sumber.width ?? 0,
+        height: sumber.height ?? 0,
+      });
+      if (alasan) return { ok: false, error: alasan };
+      pipa = pipa.extract(
+        cropToPixels(crop, { width: sumber.width ?? 0, height: sumber.height ?? 0 })
+      );
+    }
+
+    diproses = await pipa
+      // `centre`, BUKAN `attention`. Lihat catatan panjang di avatar.ts:
+      // pada potret tegak, `attention` memilih motif baju dan membuang
+      // wajahnya sepenuhnya. Saat crop diberikan, bidangnya sudah persegi
+      // sehingga posisi apa pun tidak lagi berpengaruh — ini soal jalur
+      // TANPA crop, yaitu orang yang menekan simpan tanpa menggeser apa pun.
+      .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", position: "centre" })
       .webp({ quality: 82 })
       .toBuffer();
   } catch {
