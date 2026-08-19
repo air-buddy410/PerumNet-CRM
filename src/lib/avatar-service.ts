@@ -160,8 +160,17 @@ export async function removeOwnAvatar(account: {
   return { ok: true };
 }
 
-/** Isi berkas foto untuk sebuah token, atau null bila tidak ada. */
-export async function avatarBytes(token: string): Promise<Buffer | null> {
+/**
+ * Isi berkas foto untuk sebuah token, atau null bila tidak ada.
+ *
+ * Ikut mengembalikan `versi` — nama berkas tersimpan, acak dan berganti setiap
+ * kali foto diunggah. Dipakai route sebagai ETag: URL-nya tidak pernah
+ * berubah, jadi tanpa penanda versi peramban tidak punya cara tahu isinya
+ * sudah berganti.
+ */
+export async function avatarBytes(
+  token: string
+): Promise<{ bytes: Buffer; versi: string } | null> {
   const bersih = (token ?? "").trim();
   // Token pendek tidak perlu menyentuh database sama sekali.
   if (bersih.length < 16) return null;
@@ -179,7 +188,7 @@ export async function avatarBytes(token: string): Promise<Buffer | null> {
   if (resolved !== path.join(AVATAR_DIR, path.basename(resolved))) return null;
   try {
     const { readFile } = await import("node:fs/promises");
-    return await readFile(resolved);
+    return { bytes: await readFile(resolved), versi: user.avatarAttachmentId };
   } catch {
     return null;
   }

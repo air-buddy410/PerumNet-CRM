@@ -17,20 +17,49 @@ import { AVATAR_MIME } from "@/lib/avatar";
 // boleh berada di balik URL yang bisa ditempel di mana pun.
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const bytes = await avatarBytes(token);
-  if (!bytes) return new NextResponse(null, { status: 404 });
+  const foto = await avatarBytes(token);
 
-  return new NextResponse(new Uint8Array(bytes), {
+  if (!foto) {
+    // `no-store`, dan ini BUKAN kerapian.
+    //
+    // URL foto profil tidak pernah berubah — tokennya sengaja dipertahankan
+    // supaya tautan yang disimpan aplikasi lain tidak mati. Jawaban tanpa
+    // header kesegaran akan disimpan peramban menurut tebakannya sendiri
+    // (heuristic caching), jadi satu 404 — mis. sesaat setelah foto dihapus —
+    // ikut menutupi foto yang diunggah SESUDAHNYA, di URL yang sama persis.
+    // Yang terlihat orang: sudah unggah ulang, masih gambar rusak.
+    return new NextResponse(null, {
+      status: 404,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
+  // ETag = nama berkas tersimpan, acak dan berganti tiap unggahan. Inilah
+  // satu-satunya cara peramban tahu isinya berganti, karena URL-nya tidak.
+  const etag = `"${foto.versi}"`;
+  if (req.headers.get("if-none-match") === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: { ETag: etag, "Cache-Control": "no-cache" },
+    });
+  }
+
+  return new NextResponse(new Uint8Array(foto.bytes), {
     headers: {
       "Content-Type": AVATAR_MIME,
-      // Boleh disimpan peramban sebentar — foto profil jarang berubah, dan
-      // avatar muncul di setiap halaman. Tapi TIDAK lama: mengganti foto harus
-      // terasa, dan akun yang dinonaktifkan harus segera berhenti tampil.
-      "Cache-Control": "public, max-age=300, must-revalidate",
+      ETag: etag,
+      // `no-cache` BUKAN "jangan simpan" — peramban tetap menyimpannya, tapi
+      // wajib bertanya dulu tiap kali. Dengan ETag, pertanyaan itu dijawab 304
+      // tanpa bita apa pun selama fotonya belum diganti.
+      //
+      // Sebelumnya `max-age=300`: selama lima menit peramban menyajikan foto
+      // LAMA tanpa bertanya sama sekali, padahal komentar di sini menjanjikan
+      // "mengganti foto harus terasa". Janjinya sekarang ditepati kodenya.
+      "Cache-Control": "no-cache",
       "Content-Disposition": "inline",
       "X-Content-Type-Options": "nosniff",
     },

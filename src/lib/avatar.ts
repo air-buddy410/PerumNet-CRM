@@ -26,9 +26,26 @@ export function newAvatarToken(): string {
   return crypto.randomBytes(AVATAR_TOKEN_BYTES).toString("base64url");
 }
 
-/** Alamat foto profil, atau null bila belum ada. */
-export function avatarPath(token: string | null): string | null {
-  return token ? `/api/avatar/${token}` : null;
+/**
+ * Alamat foto profil, atau null bila belum ada.
+ *
+ * Menerima DUA hal, dan itu penting: token saja tidak cukup.
+ *
+ * Token sengaja dipertahankan selamanya — termasuk setelah fotonya dihapus —
+ * supaya URL yang sudah disimpan aplikasi PerumNet lain tidak mati. Akibatnya
+ * "punya token" TIDAK berarti "punya foto". Versi lama fungsi ini hanya
+ * memeriksa token, jadi sesudah seseorang menekan "Hapus foto" halaman tetap
+ * merender <img> yang menunjuk ke 404 — dan yang terlihat adalah ikon gambar
+ * rusak, bukan inisial namanya.
+ *
+ * Lebih buruk dari sekadar jelek: URL-nya tidak pernah berubah, jadi 404 yang
+ * terlanjur disimpan peramban ikut menutupi foto yang diunggah SESUDAHNYA.
+ */
+export function avatarPath(
+  token: string | null,
+  adaFoto: boolean
+): string | null {
+  return token && adaFoto ? `/api/avatar/${token}` : null;
 }
 
 /**

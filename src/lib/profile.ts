@@ -125,7 +125,7 @@ export async function profileView(userId: string): Promise<ProfileView | null> {
       level: user.level,
       divisionName: user.division?.name ?? null,
       isActive: user.isActive,
-      avatarUrl: avatarPath(user.avatarToken),
+      avatarUrl: avatarPath(user.avatarToken, Boolean(user.avatarAttachmentId)),
     },
     employee: user.employee
       ? {

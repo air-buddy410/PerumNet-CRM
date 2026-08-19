@@ -29,7 +29,7 @@ export async function birthdaysToday(now: Date = new Date()): Promise<BirthdayTo
       jobTitle: true,
       birthDate: true,
       division: { select: { name: true } },
-      user: { select: { avatarToken: true, isActive: true } },
+      user: { select: { avatarToken: true, avatarAttachmentId: true, isActive: true } },
     },
     orderBy: { fullName: "asc" },
   });
@@ -43,7 +43,7 @@ export async function birthdaysToday(now: Date = new Date()): Promise<BirthdayTo
       divisionName: e.division?.name ?? null,
       // Foto PROFIL, bukan foto resmi kartu pegawai. Yang resmi milik HRD dan
       // tempatnya di kartu, bukan di papan ucapan selamat.
-      avatarUrl: e.user?.isActive ? avatarPath(e.user.avatarToken) : null,
+      avatarUrl: e.user?.isActive ? avatarPath(e.user.avatarToken, Boolean(e.user.avatarAttachmentId)) : null,
       greeting: greetingFor(e.fullName),
     }));
 }

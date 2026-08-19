@@ -127,8 +127,16 @@ describe("foto profil", () => {
   });
 
   test("alamat foto memakai token, bukan id pengguna", () => {
-    assert.equal(avatarPath(null), null);
-    assert.equal(avatarPath("abc"), "/api/avatar/abc");
+    assert.equal(avatarPath(null, true), null);
+    assert.equal(avatarPath("abc", true), "/api/avatar/abc");
+  });
+
+  // Token DIPERTAHANKAN setelah foto dihapus, supaya tautan yang disimpan
+  // aplikasi lain tidak mati. Karena itu "punya token" tidak berarti "punya
+  // foto" — dan kalau alamatnya tetap diterbitkan, halaman merender <img> ke
+  // 404 dan yang tampil ikon gambar rusak, bukan inisial namanya.
+  test("token tanpa berkas TIDAK menghasilkan alamat", () => {
+    assert.equal(avatarPath("token-masih-ada", false), null);
   });
 
   test("token acak, panjang, dan tidak pernah sama", () => {
