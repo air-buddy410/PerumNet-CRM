@@ -15,7 +15,7 @@ Di folder proyek pada server, buat berkas `.env`:
 ```
 POSTGRES_USER=perumnet
 POSTGRES_PASSWORD=<sandi panjang dan acak>
-POSTGRES_DB=perumnet
+POSTGRES_DB=perumnet_crm
 
 SESSION_SECRET=<acak, minimal 32 karakter>
 APP_URL=https://crm.perumnet.id
@@ -114,11 +114,47 @@ database ke seluruh jaringan tempat VPS itu berada.
 
 ## Cadangan
 
-Basis data:
+**Belum ada cadangan terjadwal untuk CRM.** Enterprise punya cron 18:30 dan
+Warehouse 02:30; CRM tidak punya satu pun. Sampai itu dibuat, seluruh cadangan
+di bawah ini dijalankan manusia — dan yang tidak dijalankan tidak ada.
+
+Basis data. **Nama databasenya diambil dari `.env`, jangan diketik ulang:**
 
 ```bash
-docker compose exec -T db pg_dump -U perumnet perumnet | gzip > cadangan-$(date +%F).sql.gz
+cd ~/apps/crm
+set -a; . ./.env; set +a
+docker compose exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" \
+  | gzip > cadangan-$(date +%F).sql.gz
 ```
+
+### Periksa hasilnya. Perintah ini gagal tanpa bersuara.
+
+```bash
+zcat cadangan-$(date +%F).sql.gz | grep -c '^COPY '
+```
+
+Harus **puluhan** (141 pada 19 Agustus 2026, berkasnya ~1,9 MB). Nol berarti
+cadangannya kosong.
+
+Ini bukan kehati-hatian berlebih. Berkas ini sebelumnya menulis
+`pg_dump -U perumnet perumnet`, sementara database produksinya bernama
+`perumnet_crm`. Yang terjadi kalau perintah itu dijalankan:
+
+```
+pg_dump: error: ... FATAL: database "perumnet" does not exist
+```
+
+`pg_dump` gagal, **tetapi `gzip` di sisi kanan pipa tetap berhasil** — ia
+memampatkan nol bita menjadi berkas 30 bita yang sah. Berkas itu muncul di
+direktori dengan nama dan tanggal yang benar, dan **`gzip -t` menyatakannya
+utuh**. Satu-satunya cara mengetahuinya adalah menghitung isinya.
+
+Kalau kamu memakai `set -o pipefail`, kegagalannya terlihat. Kebanyakan orang
+tidak, dan skrip cron biasanya juga tidak.
+
+Kenapa namanya diambil dari `.env` sekarang: `POSTGRES_DB` adalah nilai yang
+sama yang dipakai Compose untuk membuat database itu. Mengetiknya ulang di sini
+berarti dua sumber kebenaran yang bebas menyimpang — dan sudah menyimpang.
 
 Lampiran:
 
