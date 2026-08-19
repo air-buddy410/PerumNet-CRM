@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isOutwardBlocked, outwardBlockedMessage } from "@/lib/outward-guard";
 import { logAudit } from "@/lib/audit";
 import { submitApprovalRequest } from "@/lib/approval";
 import { notifyPermission, notifyUsers } from "@/lib/notify";
@@ -689,6 +690,25 @@ export async function applyDueTerminations(): Promise<{
   applied: number;
   attempted: number;
 }> {
+  // Mode baca-saja — sebelum query, dan `attempted` WAJIB 0.
+  //
+  // Pemanggilnya di scheduler menjalankan `assertNotTotalFailure(applied,
+  // attempted, summary)`: kalau attempted > 0 sementara applied = 0, tugasnya
+  // dinyatakan GAGAL. Menjaga di bawah query akan membuat penjaga yang bekerja
+  // dengan benar tampil sebagai tugas merah setiap jam, dan orang akan
+  // mengejar kerusakan yang tidak ada.
+  //
+  // Ini mengubah status langganan jadi TERMINATED. Tidak ada perintah yang
+  // dikirim keluar, tapi akibatnya tetap mengenai pelanggan: langganan
+  // TERMINATED hilang dari daftar, dari peta, dan dari penyaringan — sementara
+  // ALUS masih melayani orang itu.
+  if (isOutwardBlocked()) {
+    return {
+      summary: outwardBlockedMessage("subscription.terminate"),
+      applied: 0,
+      attempted: 0,
+    };
+  }
   const now = new Date();
   const due = await db.customerTermination.findMany({
     where: { status: "APPROVED", effectiveDate: { lte: now } },

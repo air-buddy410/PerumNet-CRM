@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { isOutwardBlocked, outwardBlockedMessage } from "@/lib/outward-guard";
 import { logAudit } from "@/lib/audit";
 import { notifyUsers, notifyPermission } from "@/lib/notify";
 import { PERMISSIONS } from "@/lib/constants";
@@ -190,6 +191,35 @@ export interface LifecycleSweepResult {
  * sengaja tidak menyentuh baris Employee.
  */
 export async function sweepEmploymentLifecycle(now: Date = new Date()): Promise<LifecycleSweepResult> {
+  // Mode baca-saja — dan ini satu-satunya penjaga di berkas ini.
+  //
+  // Perhatikan APA yang dijaga: penyapu OTOMATIS, bukan `freezeAccount`.
+  // Bedanya penting dan disengaja.
+  //
+  // `freezeAccount` juga dipanggil dari layar (settings/users/actions.ts:323)
+  // ketika HRD sendiri memutuskan membekukan seseorang. Itu tindakan sadar
+  // seorang admin atas akun internal — bukan aksi keluar, dan memblokirnya
+  // hanya akan mematikan pekerjaan HRD tanpa melindungi siapa pun.
+  //
+  // Yang ditahan adalah versi tanpa penekan tombol. Fungsi ini membekukan akun
+  // dan, setelah masa tenggang, MENGARSIPKANNYA — keduanya menaikkan
+  // sessionEpoch, yang langsung mengeluarkan orangnya dari sesi yang sedang
+  // berjalan. CRM masih demo dan tanggal kontraknya datang dari impor; sistem
+  // yang belum dipakai tidak boleh mengunci orang keluar atas dasar data yang
+  // belum pernah diperiksa siapa pun.
+  //
+  // Ia juga satu-satunya tugas di daftar ini yang `enabledByDefault: true`
+  // DAN berbahaya — jadi database baru menyalakannya sendiri. Penjaga ini yang
+  // menutup lubang itu, karena keputusannya tidak lagi tinggal di database.
+  if (isOutwardBlocked()) {
+    return {
+      warned: 0,
+      frozen: 0,
+      archived: 0,
+      attemptedFreeze: 0,
+      summary: outwardBlockedMessage("hrd.account-lifecycle"),
+    };
+  }
   let warned = 0;
   let frozen = 0;
   let archived = 0;

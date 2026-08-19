@@ -69,6 +69,13 @@ domainnya, jadi jalur terjadwal dan jalur manual sama-sama menabraknya:
 | `runOutboundQueue()` | `src/lib/channels.ts` |
 | `runQueuedJobs()` | `src/lib/dunning.ts` |
 | `postInvoiceRun()` | `src/lib/billing.ts` |
+| `suspendSubscription()` | `src/lib/dunning.ts` |
+| `restoreSubscription()` | `src/lib/dunning.ts` |
+| `applyDueTerminations()` | `src/lib/termination.ts` |
+| `sweepEmploymentLifecycle()` | `src/lib/employment-lifecycle.ts` |
+
+Empat baris terakhir ditambahkan **19 Agustus 2026 (susulan)** — lihat
+§"Tiga jalur susulan" di bawah.
 
 Polanya diambil dari `monitoring-noc/src/server/outward-guard.ts`.
 
@@ -97,9 +104,64 @@ depannya.
 - `sendMailSmtp` lewat `account-recovery.ts` — penerimanya `IT_SUPPORT_EMAIL`
   (internal), bukan pelanggan. Memblokirnya mematikan jalur pemulihan akun,
   termasuk bagi orang yang hendak memperbaiki keadaan.
-- `evaluateDunning`, `applyDueTerminations`, `hrd.contract-lifecycle` — masih
-  ditahan **hanya** oleh `isEnabled=false`, jadi masih rentan pada lubang nomor
-  1 di atas. Utang yang diakui, bukan sesuatu yang sudah beres.
+- `freezeAccount()` dipanggil MANUAL dari `settings/users/actions.ts:323` —
+  sengaja tetap jalan. Itu keputusan sadar seorang admin atas akun internal,
+  bukan aksi keluar; memblokirnya hanya mematikan pekerjaan HRD tanpa
+  melindungi siapa pun. Yang dijaga versi otomatisnya — lihat di bawah.
+
+~~`evaluateDunning`, `applyDueTerminations`, `hrd.contract-lifecycle`~~ —
+**lunas 19 Agustus 2026.** Ketiganya kini terjaga di kode.
+
+## Tiga jalur susulan (19 Agustus 2026)
+
+Utang yang diakui di atas sudah dibayar. Tapi ketiganya **tidak sekelas**, dan
+tempat penjaganya berbeda-beda karena itu.
+
+### `evaluateDunning` → dijaga di `suspendSubscription`, bukan di dirinya
+
+Penjaganya sengaja **tidak** dipasang di `evaluateDunning`. Fungsi itu hanya
+perulangan; yang benar-benar bertindak adalah `suspendSubscription`, dan ia
+punya DUA pemanggil: penjadwal `billing.dunning`, dan **tombol isolir manual**
+di `/billing/isolir`. Menjaga di `evaluateDunning` hanya menutup yang pertama —
+dan yang kedua justru lebih mudah ditekan orang.
+
+`restoreSubscription` ikut dijaga meski arahnya memulihkan. Alasannya konkret:
+**88 langganan masuk lewat impor sudah berstatus `ISOLATED`.** Memulihkannya
+dari CRM membuat CRM mengatakan ACTIVE sementara ALUS — yang sungguh memutus
+mereka — tetap mengatakan isolir. Selisih itu lebih berbahaya daripada tidak
+melakukan apa-apa, karena orang lalu memutuskan dari layar yang salah.
+
+### `applyDueTerminations` → `attempted` wajib 0
+
+Aksi baru: `subscription.terminate`. Tidak ada perintah yang dikirim keluar; ia
+mengubah status langganan jadi `TERMINATED`. Akibatnya tetap mengenai
+pelanggan — langganan TERMINATED hilang dari daftar, dari peta, dan dari
+penyaringan, sementara ALUS masih melayani orang itu.
+
+Satu hal yang menentukan bentuk kodenya: pemanggilnya di scheduler menjalankan
+`assertNotTotalFailure(applied, attempted, summary)`. Kalau penjaganya
+mengembalikan `attempted > 0` dengan `applied = 0`, tugas itu dinyatakan
+**GAGAL TOTAL** dan jadi merah tiap jam. Penjaga yang bekerja dengan benar
+tidak boleh terlihat seperti kerusakan — jadi ia mengembalikan `attempted: 0`,
+dan ada tes khusus yang menjaganya tetap begitu.
+
+### `hrd.contract-lifecycle` → yang dijaga OTOMATISNYA, bukan pembekuannya
+
+Aksi baru: `hrd.account-lifecycle`. Ini **satu-satunya aksi di daftar yang
+tidak menyentuh pelanggan** — ia membekukan dan mengarsipkan akun pegawai,
+seluruhnya di dalam CRM. Tidak ada mailcow, tidak ada surel, tidak ada router;
+sudah ditelusuri sampai `archiveAccount`.
+
+Yang membuatnya masuk gerbang yang sama bukan "keluar"-nya, melainkan
+**"otomatis"-nya**. Pembekuan menaikkan `sessionEpoch`, yang langsung
+mengeluarkan orangnya dari sesi berjalan; pengarsipan menonaktifkan akunnya.
+Tanggal kontraknya datang dari impor. Sistem yang masih demo tidak boleh
+mengunci orang keluar atas dasar data yang belum pernah diperiksa siapa pun.
+
+Ia juga satu-satunya tugas yang `enabledByDefault: true` **dan** berbahaya —
+persis kasus lubang nomor 1. Database baru akan menyalakannya sendiri;
+penjaganya yang menutup itu, karena keputusannya tidak lagi tinggal di
+database.
 
 ## Membalikkannya nanti
 

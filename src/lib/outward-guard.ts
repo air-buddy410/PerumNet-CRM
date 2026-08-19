@@ -27,7 +27,9 @@
 export type OutwardAction =
   | "channels.send"
   | "network.access"
-  | "billing.post-invoice";
+  | "billing.post-invoice"
+  | "subscription.terminate"
+  | "hrd.account-lifecycle";
 
 export type OutwardMode = "ALLOWED" | "BLOCKED";
 
@@ -35,6 +37,15 @@ const LABEL: Record<OutwardAction, string> = {
   "channels.send": "Mengirim pesan ke pelanggan",
   "network.access": "Menjalankan perintah isolir/pemulihan ke router",
   "billing.post-invoice": "Menerbitkan tagihan",
+  "subscription.terminate": "Memberlakukan terminasi langganan",
+  // Ini SATU-SATUNYA aksi di daftar ini yang tidak menyentuh pelanggan. Ia
+  // membekukan dan mengarsipkan akun PEGAWAI, seluruhnya di dalam CRM. Yang
+  // membuatnya masuk gerbang yang sama bukan "keluar"-nya, melainkan
+  // "otomatis"-nya: ia bertindak tanpa ada yang menekan tombol. Selama CRM
+  // masih demo, sistem yang belum dipakai tidak boleh mengunci orang keluar
+  // sendiri. Pembekuan MANUAL oleh HRD sengaja tetap jalan — lihat
+  // employment-lifecycle.ts.
+  "hrd.account-lifecycle": "Membekukan & mengarsipkan akun pegawai otomatis",
 };
 
 /** ALLOWED hanya bila OUTWARD_ACTIONS bernilai persis "ALLOWED". */

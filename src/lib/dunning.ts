@@ -201,6 +201,17 @@ export async function suspendSubscription(
     note?: string;
   }
 ): Promise<Result> {
+  // Mode baca-saja — pernyataan PERTAMA, sebelum validasi maupun query.
+  //
+  // Di sinilah gerbangnya, bukan di `evaluateDunning`. Fungsi ini punya DUA
+  // pemanggil: penjadwal `billing.dunning` lewat evaluateDunning, dan tombol
+  // isolir manual di /billing/isolir. Menjaga di evaluateDunning hanya menutup
+  // yang pertama — dan yang kedua justru lebih mudah ditekan orang.
+  //
+  // Isolir manual pun ditahan dengan sengaja: memutus layanan itu tindakan
+  // terhadap PELANGGAN, dan siapa yang menekan tombolnya tidak mengubah
+  // kenyataan bahwa yang menagih mereka hari ini masih ALUS.
+  if (isOutwardBlocked()) return outwardBlocked("network.access");
   if (!isValidCode(SUSPENSION_REASONS, data.reason)) {
     return { ok: false, error: "Alasan isolir tidak dikenal." };
   }
@@ -252,6 +263,14 @@ export async function restoreSubscription(
   suspensionId: string,
   note?: string
 ): Promise<Result> {
+  // Pemulihan ikut ditahan, meski arahnya "memberi layanan kembali".
+  //
+  // Bukan kehati-hatian buta: 88 langganan masuk lewat impor sudah berstatus
+  // ISOLATED. Memulihkannya dari CRM akan membuat CRM mengatakan ACTIVE
+  // sementara ALUS — yang sungguh memutus mereka — tetap mengatakan isolir.
+  // Selisih itu lebih berbahaya daripada tidak melakukan apa-apa, karena
+  // orang lalu mengambil keputusan dari layar yang salah.
+  if (isOutwardBlocked()) return outwardBlocked("network.access");
   const suspension = await db.serviceSuspension.findUnique({
     where: { id: suspensionId },
     include: { subscription: { include: { customer: true } } },

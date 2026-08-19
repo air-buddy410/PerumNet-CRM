@@ -7,8 +7,10 @@ import {
   outwardMode,
 } from "@/lib/outward-guard";
 import { runOutboundQueue } from "@/lib/channels";
-import { runQueuedJobs } from "@/lib/dunning";
+import { runQueuedJobs, suspendSubscription, restoreSubscription } from "@/lib/dunning";
 import { postInvoiceRun } from "@/lib/billing";
+import { applyDueTerminations } from "@/lib/termination";
+import { sweepEmploymentLifecycle } from "@/lib/employment-lifecycle";
 
 const asli = process.env.OUTWARD_ACTIONS;
 beforeEach(() => { delete process.env.OUTWARD_ACTIONS; });
@@ -82,5 +84,86 @@ describe("jalur manual ikut terjaga", () => {
     // membuktikan penjaganya benar-benar yang menahan pada kasus di atas.
     assert.equal(hasil.ok, false);
     if (!hasil.ok) assert.doesNotMatch(hasil.error, /mode baca-saja/);
+  });
+});
+
+// ── Tiga jalur susulan (Fase 94b) ───────────────────────────────
+//
+// Sama seperti di atas, keempat fungsi ini menolak SEBELUM query pertama.
+// Itu yang membuat tesnya bisa berjalan tanpa database sama sekali — dan
+// kalau kelak penjaganya digeser ke bawah query, tes ini yang pertama
+// memberi tahu.
+
+describe("isolir & pemulihan langganan", () => {
+  test("suspendSubscription menolak — termasuk lewat tombol manual", async () => {
+    const hasil = await suspendSubscription(null, {
+      subscriptionId: "sub-tidak-penting",
+      reason: "OVERDUE",
+      triggeredBy: "USER",
+      note: "catatan cukup panjang",
+    });
+    assert.equal(hasil.ok, false);
+    if (!hasil.ok) assert.match(hasil.error, /mode baca-saja/);
+  });
+
+  test("restoreSubscription juga ditolak, meski arahnya memulihkan", async () => {
+    const hasil = await restoreSubscription(null, "suspensi-tidak-penting");
+    assert.equal(hasil.ok, false);
+    if (!hasil.ok) assert.match(hasil.error, /mode baca-saja/);
+  });
+
+  // Membuktikan penjaganya yang menahan, bukan kebetulan alasan lain.
+  // Alasan isolir divalidasi SEBELUM query pertama, jadi kasus ini pun
+  // tidak menyentuh database.
+  test("dengan ALLOWED, yang menolak adalah alasan domain", async () => {
+    process.env.OUTWARD_ACTIONS = "ALLOWED";
+    const hasil = await suspendSubscription(null, {
+      subscriptionId: "sub-tidak-penting",
+      reason: "ALASAN-NGAWUR",
+      triggeredBy: "SYSTEM",
+    });
+    assert.equal(hasil.ok, false);
+    if (!hasil.ok) {
+      assert.doesNotMatch(hasil.error, /mode baca-saja/);
+      assert.match(hasil.error, /Alasan isolir tidak dikenal/);
+    }
+  });
+});
+
+describe("terminasi jatuh tempo", () => {
+  test("applyDueTerminations menolak", async () => {
+    const hasil = await applyDueTerminations();
+    assert.equal(hasil.applied, 0);
+    assert.match(hasil.summary, /mode baca-saja/);
+  });
+
+  // Ini bukan sekadar kelengkapan. Pemanggilnya di scheduler menjalankan
+  // assertNotTotalFailure(applied, attempted, summary): attempted > 0 dengan
+  // applied = 0 berarti GAGAL TOTAL, dan tugasnya jadi merah tiap jam.
+  // Penjaga yang bekerja dengan benar tidak boleh terlihat seperti kerusakan.
+  test("attempted HARUS 0 — kalau tidak, penjaganya tampil sebagai tugas gagal", async () => {
+    const hasil = await applyDueTerminations();
+    assert.equal(hasil.attempted, 0);
+  });
+});
+
+describe("daur hidup akun pegawai", () => {
+  test("sweepEmploymentLifecycle menolak, seluruh hitungannya nol", async () => {
+    const hasil = await sweepEmploymentLifecycle();
+    assert.equal(hasil.frozen, 0);
+    assert.equal(hasil.archived, 0);
+    assert.equal(hasil.warned, 0);
+    assert.equal(hasil.attemptedFreeze, 0);
+    assert.match(hasil.summary, /mode baca-saja/);
+  });
+});
+
+describe("label aksi baru", () => {
+  test("keduanya punya label yang menyebut apa yang ditahan", () => {
+    assert.match(outwardBlockedMessage("subscription.terminate"), /terminasi/i);
+    assert.match(
+      outwardBlockedMessage("hrd.account-lifecycle"),
+      /akun pegawai/i,
+    );
   });
 });
