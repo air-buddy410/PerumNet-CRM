@@ -8,45 +8,34 @@ import { PERMISSIONS, APPROVAL_STATUS, formatDateTime } from "@/lib/constants";
 import { PageHeader, Badge, EmptyState } from "@/components/ui";
 import { isEligibleApprover } from "@/lib/approval";
 import { loadStatusSistem } from "@/lib/system-status-service";
+import { loadRingkasanDashboard } from "@/lib/dashboard-service";
+import { DashboardOverview } from "@/components/dashboard-overview";
 import { SystemStatusSummaryCard } from "@/components/system-status-view";
-import { Activity, ArrowRight, ClipboardCheck, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const user = await requirePermission(PERMISSIONS.DASHBOARD_VIEW);
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const [activeUsers, roleCount, pendingApprovals, auditToday, pendingAll, recentRequests, birthdays] =
-    await Promise.all([
-      db.user.count({ where: { isActive: true } }),
-      db.role.count(),
-      db.approvalRequest.count({ where: { status: APPROVAL_STATUS.PENDING } }),
-      db.auditLog.count({ where: { createdAt: { gte: startOfDay } } }),
-      db.approvalRequest.findMany({
-        where: {
-          status: APPROVAL_STATUS.PENDING,
-          requestedById: { not: user.id },
-        },
-        include: { steps: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      db.approvalRequest.findMany({
-        where: { requestedById: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
-      birthdaysToday(),
-    ]);
-
-  let systemStatus: Awaited<ReturnType<typeof loadStatusSistem>> | null = null;
-  try {
-    systemStatus = await loadStatusSistem();
-  } catch {
-    // Dashboard tetap dapat dipakai bila ringkasan operasional sedang gagal dimuat.
-  }
+  const [summary, pendingAll, recentRequests, birthdays, systemStatus] = await Promise.all([
+    loadRingkasanDashboard(),
+    db.approvalRequest.findMany({
+      where: {
+        status: APPROVAL_STATUS.PENDING,
+        requestedById: { not: user.id },
+      },
+      include: { steps: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.approvalRequest.findMany({
+      where: { requestedById: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+    birthdaysToday(),
+    loadStatusSistem().catch(() => null),
+  ]);
 
   const myPending = pendingAll
     .filter((r) => {
@@ -57,13 +46,6 @@ export default async function DashboardPage() {
     })
     .slice(0, 5);
 
-  const stats = [
-    { label: "User Aktif", value: activeUsers, href: "/settings/users" },
-    { label: "Role", value: roleCount, href: "/settings/roles" },
-    { label: "Approval Pending", value: pendingApprovals, href: "/approvals" },
-    { label: "Aktivitas Audit Hari Ini", value: auditToday, href: "/audit-log" },
-  ];
-
   return (
     <div className="crm-dashboard">
       <PageHeader
@@ -71,19 +53,10 @@ export default async function DashboardPage() {
         subtitle="Ringkasan operasional PerumNet CRM"
       />
 
-      <section className="crm-metric-grid" aria-label="Ringkasan sistem">
-        {stats.map((s) => (
-          <Link key={s.label} href={s.href} className="crm-metric-card">
-            <span className="crm-metric-icon">
-              {s.label === "User Aktif" ? <UsersRound /> : s.label === "Role" ? <ShieldCheck /> : s.label === "Approval Pending" ? <ClipboardCheck /> : <Activity />}
-            </span>
-            <span>
-              <strong>{s.value}</strong>
-              <small>{s.label}</small>
-            </span>
-          </Link>
-        ))}
-      </section>
+      <DashboardOverview
+        summary={summary}
+        canOpenNoc={user.permissions.has(PERMISSIONS.NOC_VIEW)}
+      />
 
       <div className="mt-[15px]">
         <SystemStatusSummaryCard
