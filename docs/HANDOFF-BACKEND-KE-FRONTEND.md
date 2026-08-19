@@ -4164,7 +4164,18 @@ seluruhnya wilayahku dan sudah selesai.
 ## §66 — Foto boleh dari galeri DAN kamera — PERLU DIKERJAKAN
 
 Diputuskan pemilik produk 19 Agustus, menjawab catatan §64/§65.2:
-*"boleh dari gallery dan dari kamera"*.
+*"boleh dari gallery dan dari kamera"* — lalu dipertegas setelah mencobanya di
+ponsel: ***"jangan lewat kamera, langsung lewat file aja atau gallery"***.
+
+**Jadi yang diminta: hapus `capture`, jangan sekadar ubah defaultnya.** Buang
+atributnya dari kedua pemotong foto. Tidak perlu prop `capture` sama sekali —
+kalau kelak ada layar yang butuh memaksa kamera, tambahkan saat itu.
+
+Satu hal yang perlu jujur disebut: setelah atributnya hilang, yang terbuka
+adalah pemilih berkas bawaan sistem, dan **sebagian ponsel tetap menampilkan
+"Kamera" sebagai salah satu pilihan di dalamnya**. Itu di luar kendali HTML —
+yang bisa dikendalikan hanya apakah kameranya dipaksa atau tidak. Yang hilang
+adalah kamera yang langsung terbuka tanpa ditanya; itu yang dikeluhkan.
 
 ### Yang perlu diluruskan lebih dulu: `capture` tidak menambah pilihan, ia MENGHAPUS pilihan
 
