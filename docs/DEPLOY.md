@@ -115,8 +115,14 @@ database ke seluruh jaringan tempat VPS itu berada.
 ## Cadangan
 
 **Belum ada cadangan terjadwal untuk CRM.** Enterprise punya cron 18:30 dan
-Warehouse 02:30; CRM tidak punya satu pun. Sampai itu dibuat, seluruh cadangan
-di bawah ini dijalankan manusia — dan yang tidak dijalankan tidak ada.
+Warehouse 02:30. **CRM sekarang punya: 04:30 WITA** lewat
+`~/deploy/crm/cadangkan-database.sh` (sumbernya di repo ini,
+`deploy/cadangkan-database.sh`), tersimpan di `~/backups/perumnet-crm/`,
+disimpan 14 hari, mencakup basis data **dan** volume lampiran. Dipasang
+19 Agustus 2026 — sampai tanggal itu CRM tidak punya cadangan otomatis sama
+sekali, sementara isinya 1.715 pelanggan dan 8.632 port ODP.
+
+Perintah manual di bawah tetap berguna untuk cadangan sebelum tindakan besar.
 
 Basis data. **Nama databasenya diambil dari `.env`, jangan diketik ulang:**
 
