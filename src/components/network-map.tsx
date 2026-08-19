@@ -23,9 +23,11 @@ const CUSTOMER_SOURCE_ID = "perumnet-customer-points";
 const TOPOLOGY_LINE_LAYER_ID = "perumnet-topology-lines";
 const ROUTE_LAYER_ID = "perumnet-fiber-routes";
 const CUSTOMER_LINK_LAYER_ID = "perumnet-customer-links";
+const INFRASTRUCTURE_CLUSTER_HALO_LAYER_ID = "perumnet-infrastructure-cluster-halo";
 const INFRASTRUCTURE_CLUSTER_LAYER_ID = "perumnet-infrastructure-clusters";
 const INFRASTRUCTURE_CLUSTER_COUNT_LAYER_ID = "perumnet-infrastructure-cluster-count";
 const INFRASTRUCTURE_LAYER_ID = "perumnet-infrastructure-points";
+const CUSTOMER_CLUSTER_HALO_LAYER_ID = "perumnet-customer-cluster-halo";
 const CUSTOMER_CLUSTER_LAYER_ID = "perumnet-customer-clusters";
 const CUSTOMER_CLUSTER_COUNT_LAYER_ID = "perumnet-customer-cluster-count";
 const CUSTOMER_LAYER_ID = "perumnet-customer-points";
@@ -401,7 +403,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "topology-link"],
-    minzoom: 10,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.42, 12, 0.68, 14, 0.92],
@@ -414,7 +416,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "route"],
-    minzoom: 10,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.34, 12, 0.64, 15, 0.88],
@@ -434,12 +436,27 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     type: "line",
     source: TOPOLOGY_SOURCE_ID,
     filter: ["==", ["get", "kind"], "customer-link"],
-    minzoom: 12,
+    minzoom: 15,
     paint: {
       "line-color": ["get", "color"],
       "line-dasharray": [1.5, 1.5],
       "line-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.22, 14, 0.46, 16, 0.72],
       "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.8, 14, 1.2, 17, 1.8],
+    },
+  });
+
+  map.addLayer({
+    id: INFRASTRUCTURE_CLUSTER_HALO_LAYER_ID,
+    type: "circle",
+    source: INFRASTRUCTURE_SOURCE_ID,
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": "#0f766e",
+      "circle-opacity": 0.14,
+      "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 1, 24, 10, 28, 50, 36, 200, 46],
+      "circle-stroke-color": "#0f766e",
+      "circle-stroke-opacity": 0.22,
+      "circle-stroke-width": 1.5,
     },
   });
 
@@ -450,9 +467,9 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     filter: ["has", "point_count"],
     paint: {
       "circle-color": "#0f766e",
-      "circle-radius": ["step", ["get", "point_count"], 18, 10, 22, 50, 28],
+      "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 1, 18, 10, 22, 50, 30, 200, 40],
       "circle-stroke-color": "#ccfbf1",
-      "circle-stroke-width": 2,
+      "circle-stroke-width": 2.5,
     },
   });
 
@@ -463,7 +480,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     filter: ["has", "point_count"],
     layout: {
       "text-field": ["get", "point_count_abbreviated"],
-      "text-size": 12,
+      "text-size": ["interpolate", ["linear"], ["get", "point_count"], 1, 11, 10, 12, 50, 14, 200, 16],
       "text-allow-overlap": true,
     },
     paint: {
@@ -498,15 +515,30 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
   });
 
   map.addLayer({
+    id: CUSTOMER_CLUSTER_HALO_LAYER_ID,
+    type: "circle",
+    source: CUSTOMER_SOURCE_ID,
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": "#0369a1",
+      "circle-opacity": 0.12,
+      "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 1, 24, 10, 29, 50, 38, 200, 50],
+      "circle-stroke-color": "#0369a1",
+      "circle-stroke-opacity": 0.2,
+      "circle-stroke-width": 2,
+    },
+  });
+
+  map.addLayer({
     id: CUSTOMER_CLUSTER_LAYER_ID,
     type: "circle",
     source: CUSTOMER_SOURCE_ID,
     filter: ["has", "point_count"],
     paint: {
       "circle-color": "#0369a1",
-      "circle-radius": ["step", ["get", "point_count"], 18, 10, 22, 50, 28],
+      "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 1, 18, 10, 23, 50, 32, 200, 44],
       "circle-stroke-color": "#bae6fd",
-      "circle-stroke-width": 2,
+      "circle-stroke-width": 3,
     },
   });
 
@@ -517,7 +549,7 @@ function applyMapLayers(map: MapLibreMap, overlay: NetworkOverlay) {
     filter: ["has", "point_count"],
     layout: {
       "text-field": ["get", "point_count_abbreviated"],
-      "text-size": 12,
+      "text-size": ["interpolate", ["linear"], ["get", "point_count"], 1, 11, 10, 12, 50, 14, 200, 16],
       "text-allow-overlap": true,
     },
     paint: {
@@ -821,8 +853,14 @@ export function NetworkMap({
             .catch(() => undefined);
         };
 
-        map.on("click", INFRASTRUCTURE_CLUSTER_LAYER_ID, expandCluster(INFRASTRUCTURE_SOURCE_ID));
-        map.on("click", CUSTOMER_CLUSTER_LAYER_ID, expandCluster(CUSTOMER_SOURCE_ID));
+        const infrastructureClusterLayerIds = [
+          INFRASTRUCTURE_CLUSTER_LAYER_ID,
+          INFRASTRUCTURE_CLUSTER_HALO_LAYER_ID,
+        ];
+        const customerClusterLayerIds = [CUSTOMER_CLUSTER_LAYER_ID, CUSTOMER_CLUSTER_HALO_LAYER_ID];
+
+        map.on("click", infrastructureClusterLayerIds, expandCluster(INFRASTRUCTURE_SOURCE_ID));
+        map.on("click", customerClusterLayerIds, expandCluster(CUSTOMER_SOURCE_ID));
         // URUTAN INI MENENTUKAN SIAPA YANG MENANG. Penangan dijalankan sesuai
         // urutan pendaftaran, dan yang terakhir mengganti isi popup. Jadi garis
         // didaftarkan DULU, titik BELAKANGAN — supaya klik pada ODP menampilkan
@@ -833,10 +871,10 @@ export function NetworkMap({
         map.on("click", CUSTOMER_INHERITED_LAYER_ID, showPopup);
         map.on("click", CUSTOMER_LAYER_ID, showPopup);
         map.on("click", INFRASTRUCTURE_LAYER_ID, showPopup);
-        map.on("mouseenter", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
+        map.on("mouseenter", infrastructureClusterLayerIds, () => {
           map.getCanvas().style.cursor = "pointer";
         });
-        map.on("mouseenter", CUSTOMER_CLUSTER_LAYER_ID, () => {
+        map.on("mouseenter", customerClusterLayerIds, () => {
           map.getCanvas().style.cursor = "pointer";
         });
         map.on("mouseenter", INFRASTRUCTURE_LAYER_ID, () => {
@@ -854,10 +892,10 @@ export function NetworkMap({
         map.on("mouseenter", TOPOLOGY_LINE_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
         });
-        map.on("mouseleave", INFRASTRUCTURE_CLUSTER_LAYER_ID, () => {
+        map.on("mouseleave", infrastructureClusterLayerIds, () => {
           map.getCanvas().style.cursor = "";
         });
-        map.on("mouseleave", CUSTOMER_CLUSTER_LAYER_ID, () => {
+        map.on("mouseleave", customerClusterLayerIds, () => {
           map.getCanvas().style.cursor = "";
         });
         map.on("mouseleave", INFRASTRUCTURE_LAYER_ID, () => {
