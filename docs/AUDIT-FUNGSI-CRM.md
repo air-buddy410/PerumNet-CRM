@@ -172,16 +172,20 @@ Akibatnya sudah saya telusuri sampai ke pemakainya:
 Kabar baiknya: penjaganya **benar** — tidak ada lubang keamanan. Yang kurang
 adalah kosakatanya.
 
-**Belum saya perbaiki.** Menambah status dan transisi adalah perubahan
-*business rule*, dan `AGENTS.md` melarang mengubahnya tanpa persetujuan. Tiga
-pilihan, perlu keputusan:
+### ✅ KEPUTUSAN 19 Agustus 2026: **biarkan**
 
-1. Tambahkan `INACTIVE` dan `PROSPECT` ke daftar + tentukan transisinya.
-2. Petakan keduanya ke status yang sudah ada saat impor (`INACTIVE`→`SUSPENDED`,
-   `PROSPECT`→`DRAFT`) — mengubah data, jadi bukan untuk mode baca-saja.
-3. Biarkan; ke-33 langganan itu memang tidak dioperasikan dari CRM.
+Pemilik produk memutuskan **tidak** mengubah apa pun. Ke-33 langganan itu
+memang tidak dioperasikan dari CRM, dan CRM masih baca-saja — jadi status yang
+beku tidak menghalangi pekerjaan siapa pun hari ini.
 
-Selama CRM baca-saja, ini tidak menggigit. Ia akan menggigit di hari cutover.
+Dua pilihan yang ditolak, dicatat supaya tidak dibahas ulang: menambah
+`INACTIVE`/`PROSPECT` ke `SUBSCRIPTION_STATUSES` beserta transisinya, atau
+memetakan keduanya ke status yang sudah ada saat impor.
+
+**Yang harus diingat:** ini menunda, bukan menutup. Pada hari cutover — saat
+CRM mulai bertindak keluar — ke-33 langganan ini tidak bisa diisolir, tidak
+bisa diterminasi, dan tidak muncul di penyaringan mana pun. Siapa pun yang
+merencanakan cutover harus membuka kembali bagian ini lebih dulu.
 
 ### 4.2 HANDOFF §39 sudah basi — dan menyuruh Luna membangun layar yang tidak perlu
 
@@ -242,6 +246,28 @@ Jujur soal batasnya:
    kelompok: pelanggan, NOC/FTTH, gudang, identitas, sistem.
 2. Keuangan nol **karena disengaja** — jangan "perbaiki".
 3. **33 langganan beku** karena status `INACTIVE`/`PROSPECT` tidak dikenal kode
-   (§4.1) — perlu keputusan.
+   (§4.1). Diputuskan 19 Agustus: **biarkan** — akan menggigit di hari cutover,
+   bukan sekarang.
 4. **Dashboard perlu diganti**; loader-nya sudah siap, layarnya tugas Luna.
 5. §39 HANDOFF basi: ODP tanpa koordinat tinggal **1**, bukan 51.
+
+---
+
+## 7. Susulan — verifikasi lima bagian peta lama (19 Agustus)
+
+Diperiksa terpisah atas permintaan pemilik produk. Hasilnya di HANDOFF §61.
+
+Ringkasnya: **§49, §52.1, §52.2, §57b, dan §58 semuanya SUDAH selesai** —
+judul bagiannya saja yang tidak pernah diperbarui, sehingga selama ini
+terhitung sebagai pekerjaan yang menunggu. Yang benar-benar tersisa hanya
+**§54** (naikkan `minzoom` ketiga lapisan garis ke 15; sekarang masih 10/10/12).
+
+Ini pola yang sama dengan §4.2 dan dengan catatan CRM di `TUGAS-LUNA.md`:
+**daftar pekerjaan yang dibaca dari judul bagian, bukan dari kode, terus
+menghitung pekerjaan yang sudah selesai.** Judulnya kini ditandai ✅/⬜.
+
+Sekalian diukur ulang: `loadNetworkMap({})` di produksi kini **562 ms** dan
+**834,6 KB** — turun jauh dari catatan §52.3 (4,3 MB / 4,8 detik). 77% dari
+sisa muatan itu adalah 1.687 baris pelanggan, dan sebagian besar isinya baru
+dipakai setelah satu titik diklik. Memindahkannya ke pemuatan saat diklik
+adalah pekerjaan backend yang masih terbuka — dicatat di §61.

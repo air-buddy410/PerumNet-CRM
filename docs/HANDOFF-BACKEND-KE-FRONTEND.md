@@ -2908,7 +2908,7 @@ yang bertindak membuka layar aslinya di komputernya.
 
 ---
 
-## §49 — BUG PRODUKSI: peta jaringan, ODP tidak bisa dibuka
+## §49 — ✅ SELESAI (diverifikasi 19 Agu) — BUG PRODUKSI: peta jaringan, ODP tidak bisa dibuka
 
 Dilaporkan 17 Agustus 2026: *"buka detail odp di peta maps nge bug, tidak bisa
 ditampilkan"*. Sudah saya telusuri sampai ke produksi. **Sisi server bersih** —
@@ -3077,7 +3077,7 @@ Kalau kamu butuh `snmpPort` ikut dikirim ke layar dan sekarang belum ada, tulis 
 
 ---
 
-## §52 — Peta: garis berantakan saat zoom out, dan berat
+## §52 — ✅ 52.1 & 52.2 SELESAI (diverifikasi 19 Agu) — Peta: garis berantakan saat zoom out, dan berat
 
 Dilaporkan pemilik jaringan 18 Agustus 2026. Diukur di produksi, bukan dikira.
 
@@ -3191,7 +3191,7 @@ strip. Itu pekerjaan backend dulu, dan sebagian menunggu keputusan pemilik.
 
 ---
 
-## §54 — Garis harus ikut pengelompokan titik
+## §54 — ⬜ BELUM — Garis harus ikut pengelompokan titik
 
 Lanjutan §52, dilaporkan pemilik jaringan 18 Agustus 2026 setelah `minzoom`
 kamu terpasang. Sudah jauh lebih baik, tapi masih ada berkas garis memancar
@@ -3407,7 +3407,7 @@ gangguan.
 
 ---
 
-## §57b — PERBARUAN: pakai gerombolan padam, bukan total padam
+## §57b — ✅ SELESAI (diverifikasi 19 Agu) — PERBARUAN: pakai gerombolan padam, bukan total padam
 
 Menggantikan bagian ambang di §57.1. Aku sudah menambahkan datanya, jadi jangan
 membuat spanduk berdasarkan `linkCounts.OFFLINE` — ada sinyal yang jauh lebih
@@ -3465,7 +3465,7 @@ diganti hanya dasar spanduknya.
 
 ---
 
-## §58 — BUG: tombol Reset filter peta tidak mengosongkan dropdown
+## §58 — ✅ SELESAI (diverifikasi 19 Agu) — BUG: tombol Reset filter peta tidak mengosongkan dropdown
 
 Dilaporkan pemilik jaringan 18 Agustus 2026. Sudah kutelusuri sampai sebabnya.
 
@@ -3764,3 +3764,55 @@ satu baris teks kecil sudah cukup.
 Yang **tidak** berubah: jangan taruh ODP tanpa koordinat di titik tebakan.
 Titik yang mengarang lokasi lebih berbahaya daripada titik yang hilang, karena
 teknisi akan mendatanginya.
+
+---
+
+## §61 — Verifikasi lima bagian peta lama (19 Agustus 2026)
+
+Diperiksa ke kode, bukan dibaca dari judul. **Empat dari lima sudah selesai** —
+judulnya saja yang tidak pernah diperbarui, jadi selama ini terhitung sebagai
+pekerjaan yang menunggu.
+
+| | Keadaan | Bukti di kode |
+|---|---|---|
+| §49.1 kanvas tidak ikut lebar kontainer | ✅ | `network-map.tsx:733-740` — `ResizeObserver` dipasang, `disconnect()` di dua jalur cleanup (694, 890) |
+| §49.2 576 `<a>` di dalam `<svg>` | ✅ | `network-map-svg.tsx:255` — `<g role="link" tabIndex={0} data-odp-href>`; **nol** `<a>` tersisa di berkas itu. Klik & Enter/Space dilayani `handleFallbackClick`/`handleFallbackKeyDown` (`network-map.tsx:651,660`) yang terpasang di 961-962 |
+| §52.1 `minzoom` tiga lapisan garis | ✅ | topologi **10** (404), rute **10** (417), garis pelanggan **12** (437) |
+| §52.2 opasitas nol tetap digambar | ✅ | ramp opasitas kini mulai di zoom **12**, sejajar `minzoom`-nya — tidak ada lagi frame yang menggambar 1.687 garis tak terlihat |
+| §54 garis ikut pengelompokan | ⬜ **BELUM** | §54 meminta ketiganya dinaikkan ke **15**; yang terpasang masih 10/10/12 — nilai dari §52, bukan §54 |
+| §57b spanduk gerombolan padam | ✅ | `noc/map/page.tsx:146` — `showOfflineBanner` dari `padamMenggerombol.length > 0`, persis seperti diminta; spanduknya di 302-310, dibatasi 8 dengan sisa dihitung |
+| §58 Reset filter tidak mengosongkan dropdown | ✅ | `noc/map/page.tsx:148-155,226` — `key={filterFormKey}` dari keenam searchParams (`site`, `router`, `olt`, `occ`, `status`, `link`) |
+
+**Jadi yang tersisa dari daftar lama cuma §54.** Satu angka di tiga tempat.
+
+### §52.3 sudah jauh membaik — diukur ulang hari ini
+
+§52.3 dulu mencatat muatan `/noc/map` **4,3 MB** dan waktu server **4,8 detik**,
+dan itu bagian backend (bagianku), bukan bagian Luna.
+
+Diukur ulang 19 Agustus langsung di produksi lewat `loadNetworkMap({})`:
+
+```
+lama loader   : 562 ms
+total JSON    : 834,6 KB
+
+  customers            640,1 KB   1.687 baris   ← 77% dari seluruh muatan
+  odps                 157,0 KB     576 baris
+  cascades              36,2 KB     501 baris
+  sites                  0,9 KB       6 baris
+  sisanya              < 1 KB
+```
+
+`routerId` per pelanggan sudah dibuang sejak itu, dan hasilnya terasa. Angka
+lama dan baru tidak sepenuhnya sebanding — 4,3 MB itu muatan halaman penuh
+(HTML + JS), 834,6 KB ini datanya saja — tapi arahnya jelas dan waktu
+loader-nya sekarang **di bawah satu detik**.
+
+**Yang masih bisa dikerjakan, dan itu bagianku bukan bagianmu:** satu pelanggan
+= 385 bita, dan sebagian besar isinya (`pppoeUsername`, `lastSeenAt`,
+`routerName`, `serviceNumber`) baru dipakai setelah seseorang **mengklik** satu
+titik. Mengirimkannya untuk 1.687 pelanggan di muka berarti tiap orang yang
+membuka `/noc/map` menerima daftar lengkap nama pelanggan beserta koordinatnya
+sebelum mengklik apa pun. Memindahkannya ke pemuatan saat diklik memangkas
+muatan sekaligus mempersempit paparan. Aku catat sebagai pekerjaanku; jangan
+menunggu itu untuk mengerjakan §54 atau §60.
