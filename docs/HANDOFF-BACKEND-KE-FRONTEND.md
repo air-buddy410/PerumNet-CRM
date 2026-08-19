@@ -3521,3 +3521,246 @@ Pilih OLT mana saja + status koneksi Offline → Terapkan → Reset. Setelah
 Reset, keenam dropdown harus kembali ke "Semua …". Ulangi dengan tombol
 "Lihat semua yang offline": dropdown status koneksi harus berubah jadi
 "Offline" sendiri.
+
+## §59 — Dashboard baru: informatif per divisi, NOC disorot — PERLU HALAMAN
+
+Diminta pemilik produk 19 Agustus. Backend-nya **sudah selesai**; yang belum
+ada layarnya.
+
+### Kenapa dashboard sekarang perlu diganti
+
+Bukan soal selera. `src/app/(app)/dashboard/page.tsx` punya enam blok dan
+**satu** yang bergerak:
+
+| Blok | Nilai hari ini |
+|---|---|
+| User Aktif | 24 — nyaris tak pernah berubah |
+| Role | 17 — tidak pernah berubah |
+| Approval Pending | **0** — `ApprovalRequest` nol baris, jadi selamanya 0 |
+| Aktivitas Audit Hari Ini | berubah ✅ |
+| Panel "Menunggu Keputusan Anda" | **selalu kosong** (sumber sama) |
+| Panel "Pengajuan Saya" | **selalu kosong** (sumber sama) |
+
+Sementara itu 1.603 sesi PPPoE online, 88 pelanggan terisolir, dan 4.034 mutasi
+stok tidak muncul di mana pun. Rinciannya di `docs/AUDIT-FUNGSI-CRM.md`.
+
+### Loader
+
+```ts
+import { loadRingkasanDashboard } from "@/lib/dashboard-service";
+
+const ringkasan = await loadRingkasanDashboard();
+```
+
+Baca-saja, satu perjalanan, aman dipanggil dari server component. Bentuknya:
+
+```ts
+interface RingkasanDashboard {
+  sekarang: Date;
+  noc: SorotanNoc;
+  divisi: RingkasanDivisi[];   // 12 divisi, urut kode
+}
+
+interface RingkasanDivisi {
+  kode: string;                // NOC, NOF, OAC, WH, FIN, MGT, CS, IT, SLS, MKT, PRJ, OPS
+  nama: string;
+  pegawai: number;
+  keadaan: "BERISI" | "SENGAJA-KOSONG" | "BELUM-DIPAKAI";
+  catatan: string;             // WAJIB ditampilkan — lihat di bawah
+  metrik: MetrikDivisi[];
+}
+
+interface MetrikDivisi {
+  label: string;
+  nilai: number;
+  dari?: number;               // ada → tampilkan "1.687 / 8.632", bukan "1.687"
+  href?: string;
+  nada: "netral" | "perhatian" | "bahaya";
+}
+
+interface SorotanNoc {
+  sesiOnline: number; sesiTotal: number; sesiYatim: number;
+  langgananAktif: number; langgananIsolir: number;
+  alarmTerbuka: number; alarmKritis: number;
+  probeDown: number; probeAktif: number;
+  perangkat: number; perangkatTidakAktif: number;
+  odpTotal: number; odpBerkoordinat: number;
+  portTerpakai: number; portKapasitas: number;
+  penarikanTerakhir: Date | null;
+}
+```
+
+### Enam hal yang menentukan bentuk halamannya
+
+**1. `catatan` wajib tampil. Ini bukan tooltip.**
+
+Sebagian besar divisi bernilai nol, dan nol itu punya dua sebab yang
+berlawanan. Finance nol **karena disengaja** — CRM tidak menagih selama
+operasional masih di ALUS. Helpdesk nol karena **belum ada yang memakai**.
+
+Angka yang sama, arti yang berlawanan. Kalau layar menampilkan keduanya sebagai
+"0" polos, orang menyimpulkan CRM rusak — atau lebih buruk, menyalakan
+penagihan untuk "memperbaiki" angkanya. Satu `InvoiceRun` menerbitkan tagihan
+nyata untuk 1.715 langganan.
+
+Jadi `keadaan` harus terbaca **sebelum** angkanya, bukan sesudah:
+
+- `SENGAJA-KOSONG` → beri penanda yang tenang dan jelas (mis. "sengaja
+  dimatikan"), **jangan** merah, **jangan** ikon peringatan. Ini keadaan sehat.
+- `BELUM-DIPAKAI` → redupkan kartunya. Hadir, tapi tidak menuntut perhatian.
+- `BERISI` → tampil penuh.
+
+**2. NOC di kepala, terpisah dari sebelas divisi lain.**
+
+Alasannya bukan divisinya lebih penting: hanya angka NOC yang **berubah tiap
+menit**. Sisanya bergerak dalam hitungan hari. Kalau ditaruh dalam satu deret,
+yang berubah tenggelam di antara yang diam.
+
+Yang paling layak besar: **sesi online / total**, **alarm terbuka**, **probe
+DOWN**, **terisolir**. `penarikanTerakhir` bagus sebagai "diperbarui N menit
+lalu" — kalau ia lebih tua dari ±5 menit, itu sendiri sebuah kabar.
+
+**3. `dari` berarti pecahan, bukan angka kedua.**
+
+`portTerpakai=1687`, `portKapasitas=8632`. Tampilkan sebagai **1.687 / 8.632
+(19,5%)** atau bar. Menampilkan "1.687" sendirian membuatnya terbaca seperti
+kapasitas hampir habis, padahal baru seperlima.
+
+**4. `nada` mewarnai, tidak memutuskan.**
+
+Sudah dihitung di backend. Jangan hitung ulang ambangnya di layar — kalau
+ambangnya berubah, ia berubah di satu tempat.
+
+**5. Divisi tanpa metrik tetap ditampilkan.**
+
+Empat divisi (CS, IT, OPS, PRJ, WH) punya **0 pegawai**; sebagian juga tanpa
+metrik. Tetap tampilkan. Divisi yang hilang dari dashboard membuat orang
+mengira ia tidak ada.
+
+**6. Jangan hapus panel approval — pindahkan.**
+
+`ApprovalRequest` nol *hari ini*, tapi `ApprovalRule` sudah 20 baris: alurnya
+sudah terpasang dan akan terpakai. Turunkan ke bawah, jangan dibuang.
+
+### Yang JANGAN dikerjakan
+
+- **Jangan panggil Prisma dari komponen.** Semua lewat `loadRingkasanDashboard()`.
+- **Jangan tambah metrik dengan query sendiri di layar.** Butuh angka baru?
+  Tulis di `PERMINTAAN-FRONTEND-KE-BACKEND.md`, aku tambahkan ke loader.
+- **Jangan tampilkan nama/nomor layanan pelanggan di dashboard.** Ini layar yang
+  sering terbuka di ruangan bersama; penyamaran PII (Fase 66) ada alasannya.
+- **Jangan bikin tombol yang MELAKUKAN sesuatu** — tidak ada "Jalankan
+  penagihan", "Isolir", "Kirim pesan". CRM masih baca-saja.
+
+---
+
+## §60 — Peta: dasar abu-abu dan gerombolan yang lebih enak dibaca — PERLU DIKERJAKAN
+
+Diminta pemilik produk 19 Agustus: **warna peta dasar jadi abu-abu**, dan
+**tampilan pengelompokan koordinat diperbaiki**. Dua-duanya frontend murni —
+tidak ada backend yang menunggu.
+
+### 60.1 — Abu-abu TANPA mengganti penyedia ubin
+
+⚠️ **Baca §39 sebelum menyentuh ini.** Pemilik produk menetapkan peta memakai
+OpenStreetMap **dan hanya OpenStreetMap** — tanpa logo, merek, atau atribusi
+penyedia lain.
+
+Jalan pintas yang wajar untuk peta abu-abu adalah Carto Positron atau Stadia.
+**Jangan.** Keduanya menuntut atribusinya sendiri muncul di peta, dan itu
+persis yang tidak diinginkan.
+
+Yang benar: ubinnya tetap dari `tile.openstreetmap.org`, warnanya diturunkan di
+sisi render. Lapisan raster MapLibre punya properti untuk itu —
+`public/maps/style.json`:
+
+```json
+{
+  "id": "osm",
+  "type": "raster",
+  "source": "osm",
+  "paint": {
+    "raster-saturation": -1,
+    "raster-contrast": -0.15,
+    "raster-brightness-min": 0.15
+  }
+}
+```
+
+`raster-saturation: -1` membuang seluruh warna → abu-abu murni. Dua yang lain
+untuk menurunkan kontras supaya titik dan garis kita menonjol; angkanya silakan
+dicari yang paling enak dilihat — itu memang penilaian mata, bukan rumus.
+
+Tidak ada host baru, tidak ada permintaan jaringan tambahan, atribusinya tidak
+berubah. Ini juga membuat titik berwarna kita **lebih** terbaca, bukan sekadar
+lebih kalem: sekarang ODP hijau/kuning/merah bersaing dengan jalan oranye dan
+hutan hijau bawaan OSM.
+
+Kalau kelak ingin dua pilihan (terang/abu-abu), taruh sebagai saklar di UI
+dengan satu `style.json` per pilihan — bukan penyedia baru.
+
+### 60.2 — Gerombolan: yang bikin sekarang kurang enak dilihat
+
+Keadaan sekarang di `src/components/network-map.tsx`:
+
+| | Infrastruktur | Pelanggan |
+|---|---|---|
+| Warna | `#0f766e` (teal) | `#0369a1` (biru) |
+| Radius | `["step", ["get","point_count"], 18, 10, 22, 50, 28]` | sama persis |
+| Garis tepi | `#ccfbf1`, 2px | `#bae6fd`, 2px |
+| Angka | putih, 12px | putih, 12px |
+
+Empat hal yang membuatnya kurang enak dibaca — perbaiki yang mana pun menurutmu
+paling berdampak, tidak harus semuanya:
+
+1. **Kedua jenis gerombolan nyaris kembar.** Bentuk sama, ukuran sama, hanya
+   beda rona biru-kehijauan. Di peta abu-abu nanti bedanya makin tipis. Beri
+   pembeda yang bukan sekadar warna — cincin luar, ketebalan tepi, atau bentuk.
+2. **Tiga anak tangga ukuran terlalu kasar.** Gerombolan berisi 11 dan berisi 49
+   digambar sama besar (22px). Dengan 577 ODP dan 1.715 pelanggan, sebagian
+   besar jatuh di tangga tengah — jadi hampir semuanya seukuran, dan ukuran
+   berhenti memberi tahu apa pun. `interpolate` pada `point_count` (atau lebih
+   banyak anak tangga) mengembalikan artinya.
+3. **Angka 12px sempit untuk tiga digit** di lingkaran 18px. Naikkan
+   `text-size` bersama `point_count`, sejalan dengan radiusnya.
+4. **Tidak ada kedalaman.** Lingkaran datar di atas ubin datar. Satu lapisan
+   halo di bawahnya (lingkaran lebih besar, opasitas rendah, warna sama) membuat
+   gerombolan terbaca sebagai *kumpulan*, bukan satu titik gemuk.
+
+### 60.3 — Animasi: yang sudah ada, dan aturannya
+
+Klik gerombolan **sudah** beranimasi — `expandCluster` memanggil
+`getClusterExpansionZoom` lalu `map.easeTo({ duration: 420 })`.
+
+**Pertahankan penjaga `prefers-reduced-motion` yang ada di situ.** Ia sudah
+benar: durasi jadi 0 kalau pengguna memintanya. Animasi baru apa pun yang kamu
+tambahkan harus lewat penjaga yang sama — peta yang bergerak sendiri adalah
+salah satu pemicu tersering keluhan vestibular, dan ini layar yang dipandangi
+berjam-jam di ruang NOC.
+
+Sudah ada juga `@media (prefers-reduced-motion: reduce)` di `globals.css:943`
+yang mematikan transisi komponen peta. Ikuti pola itu, jangan bikin jalur baru.
+
+### 60.4 — Yang BUKAN bagianmu di sini
+
+- **Jangan ubah `clusterRadius: 48` atau `clusterMaxZoom: 14`** tanpa
+  menyebutnya dulu — keduanya menentukan *pengelompokannya*, bukan tampilannya,
+  dan §54 (garis ikut gerombolan) bergantung padanya.
+- **Jangan sentuh sumber data atau `buildOverlay`.**
+- **Jangan kirim koordinat ke layanan geocoding** — aturan §39 tidak berubah.
+- **§52 (minzoom garis), §54 (garis ikut gerombolan), §57b (spanduk padam), dan
+  §58 (bug tombol Reset)** masih berlaku dan belum tentu selesai. Kerjakan §60
+  tanpa membatalkan keempatnya.
+
+### 60.5 — Catatan: §39 sudah basi soal ODP tanpa koordinat
+
+§39 menyuruh menampilkan **"51 ODP tanpa titik sebagai daftar peringatan di
+samping peta"**. Angka itu dari 15 Agustus.
+
+Hari ini: **576 dari 577 ODP sudah berkoordinat.** Yang tanpa titik tinggal
+**satu**. Daftar peringatan untuk satu baris tidak sebanding dengan ruangnya —
+satu baris teks kecil sudah cukup.
+
+Yang **tidak** berubah: jangan taruh ODP tanpa koordinat di titik tebakan.
+Titik yang mengarang lokasi lebih berbahaya daripada titik yang hilang, karena
+teknisi akan mendatanginya.
