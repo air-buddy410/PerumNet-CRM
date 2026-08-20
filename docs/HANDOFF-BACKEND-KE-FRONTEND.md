@@ -4244,3 +4244,81 @@ peramban desktop dan formnya akan terlihat baik-baik saja di sana:
    dan kamera**, bukan langsung kamera depan.
 2. Ulangi di layar foto kartu pegawai (`/hrd/employees/<id>`).
 3. Pilih foto lama dari galeri → pemotong muncul → simpan → foto tersimpan.
+
+---
+
+## §67 — Fase 91 terjawab: `snmpPort` dan loader kredensial batch untuk `/noc/devices`
+
+Dua permintaanmu di `PERMINTAAN-FRONTEND-KE-BACKEND.md` bagian "Fase 91 —
+Kontrak daftar perangkat NOC" sudah selesai keduanya. Yang pertama sebenarnya
+sudah kukerjakan lebih dulu; yang kedua baru sekarang.
+
+### 1. Bedakan perangkat tanpa SNMP dari nol port — ✅ sudah ada
+
+Query halaman sudah memuat relasinya:
+
+```ts
+oltDevice: { select: { snmpPort: true } }
+```
+
+Jadi tiap baris `devices` punya `d.oltDevice?.snmpPort`, bertipe
+`number | null`, dan `d.oltDevice` sendiri `null` untuk perangkat yang memang
+bukan OLT. Bacanya begini — dan ini persis yang sudah terpasang di kolom Port:
+
+- `d.oltDevice === null` → bukan OLT. Angka `_count.ports` berlaku apa adanya.
+- `d.oltDevice.snmpPort === null` → OLT yang **tidak dipantau SNMP**. Angka
+  portnya tidak berlaku; tampilkan "CLI saja", bukan "0 port".
+- `d.oltDevice.snmpPort` berisi angka → dipantau SNMP. Nol port di sini berarti
+  benar-benar nol, dan itu memang layak diselidiki.
+
+Arti `NetworkDevice.ports` tidak kuubah, sesuai permintaanmu. Yang bertambah
+hanya relasinya.
+
+Ini menjawab HSGQ Kecicang (`192.168.100.10`) yang sudah dua kali membuat orang
+menyelidiki "kerusakan" yang tidak ada: perangkat itu memang tidak mendukung
+SNMP, dan jalan bacanya konsol CLI dari dalam portal NOC.
+
+### 2. Kurangi query kredensial per halaman — ✅ loader batch baru
+
+Ada fungsi baru di `src/lib/kredensial-perangkat-service.ts`:
+
+```ts
+loadKredensialBanyak(networkDeviceIds: readonly string[]): Promise<Map<string, KredensialTampil>>
+```
+
+Halamannya sudah kuganti memakainya. Yang berubah untukmu: **tidak ada**.
+Isi `KredensialTampil` sama persis, urutan brankas-dulu-env-belakangan sama
+persis, dan `credentialsByDeviceId.get(d.id)` tetap dipakai seperti sebelumnya.
+Ini murni perbaikan di balik layar.
+
+Yang perlu kamu tahu kalau kelak memakainya sendiri:
+
+- **Tiap id yang diminta selalu hadir di petanya.** Perangkat tanpa kredensial
+  dijawab `{ ada: false, sumber: "BELUM ADA" }`, bukan tidak hadir. Jadi kamu
+  tidak perlu membedakan "belum ada" dari "tidak dijawab" — kalau `get()`
+  mengembalikan `undefined`, itu berarti idnya tidak pernah kamu minta.
+- **Sandi tetap tidak ada di sana**, sama seperti `loadKredensial`. Yang keluar
+  hanya protokol, port, nama pengguna, sumber, dan kapan terakhir terbukti.
+- Id kembar tidak melipatgandakan apa pun; daftar kosong tidak menembak query.
+
+Biayanya sekarang dua query untuk seluruh halaman, bukan dua query per baris.
+Pada halaman 50 baris itu turun dari sekitar seratus perjalanan ke basis data
+menjadi dua.
+
+`loadKredensial` yang lama **tetap ada dan tetap dipakai** oleh
+`/noc/devices/[id]/kredensial` — untuk satu perangkat ia masih yang paling
+murah, karena ia berhenti setelah satu query kalau brankasnya terisi.
+
+### Yang belum terverifikasi, dan sebabnya
+
+Uji integrasinya sudah kutulis di
+`tests/integration/kredensial-perangkat.test.ts` — ia membandingkan jawaban
+batch dengan jawaban satu-per-satu untuk ketiga sumber (BRANKAS, ENV, BELUM
+ADA). **Tapi belum pernah dijalankan.** Aku sedang di Mac mini, dan Postgres
+dev di `localhost:5433` tidak hidup di sini; Docker bahkan tidak terpasang di
+mesin ini. `npx tsc --noEmit` bersih dan 988 dari 989 uji unit lolos (yang satu
+gagal karena database yang sama mati, bukan karena perubahan ini).
+
+Jadi: aman untuk kamu pakai dari sisi kontrak, tapi kalau kamu menjalankan
+halaman `/noc/devices` di mesin yang databasenya hidup dan kolom "Akses CLI"
+tiba-tiba salah, beri tahu aku — itu punyaku, bukan punyamu.

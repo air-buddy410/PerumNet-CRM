@@ -38,51 +38,108 @@ export interface KredensialTampil {
   diperbaruiPada: Date | null;
 }
 
-export async function loadKredensial(networkDeviceId: string): Promise<KredensialTampil> {
-  const k = await db.deviceCredential.findUnique({
-    where: { networkDeviceId },
-    select: {
-      protocol: true, port: true, username: true, lastVerifiedAt: true,
-      updatedAt: true, updatedBy: { select: { name: true } },
-    },
-  });
-  if (k) {
-    return {
-      ada: true,
-      protokol: k.protocol as Protokol,
-      port: k.port,
-      username: k.username,
-      sumber: "BRANKAS",
-      terakhirTerbukti: k.lastVerifiedAt,
-      diperbaruiOleh: k.updatedBy.name,
-      diperbaruiPada: k.updatedAt,
-    };
-  }
-
-  // Cadangan: pola lama env var per perangkat.
-  const olt = await db.oltDevice.findUnique({
-    where: { networkDeviceId },
-    select: { credentialRef: true, telnetPort: true },
-  });
-  const ref = olt?.credentialRef?.trim();
-  const adaEnv = !!ref && ref !== "LIBRENMS_API_TOKEN" && !!process.env[ref];
-  if (adaEnv) {
-    return {
-      ada: true,
-      protokol: "TELNET",
-      port: olt?.telnetPort ?? PORT_BAWAAN.TELNET,
-      username: (process.env[ref!] ?? "").split(":")[0] || null,
-      sumber: "ENV",
-      terakhirTerbukti: null,
-      diperbaruiOleh: null,
-      diperbaruiPada: null,
-    };
-  }
-
+function kosong(): KredensialTampil {
   return {
     ada: false, protokol: null, port: null, username: null,
     sumber: "BELUM ADA", terakhirTerbukti: null, diperbaruiOleh: null, diperbaruiPada: null,
   };
+}
+
+/** Kolom brankas yang boleh dilihat layar. Sandinya sengaja tidak ada di sini. */
+const PILIH_BRANKAS = {
+  protocol: true, port: true, username: true, lastVerifiedAt: true,
+  updatedAt: true, updatedBy: { select: { name: true } },
+} as const;
+
+type BarisBrankas = {
+  protocol: string;
+  port: number;
+  username: string;
+  lastVerifiedAt: Date | null;
+  updatedAt: Date;
+  updatedBy: { name: string };
+};
+
+function dariBrankas(k: BarisBrankas): KredensialTampil {
+  return {
+    ada: true,
+    protokol: k.protocol as Protokol,
+    port: k.port,
+    username: k.username,
+    sumber: "BRANKAS",
+    terakhirTerbukti: k.lastVerifiedAt,
+    diperbaruiOleh: k.updatedBy.name,
+    diperbaruiPada: k.updatedAt,
+  };
+}
+
+/** Cadangan: pola lama env var per perangkat. `null` bila env-nya tidak terisi. */
+function dariEnv(
+  olt: { credentialRef: string | null; telnetPort: number | null } | null
+): KredensialTampil | null {
+  const ref = olt?.credentialRef?.trim();
+  if (!ref || ref === "LIBRENMS_API_TOKEN" || !process.env[ref]) return null;
+  return {
+    ada: true,
+    protokol: "TELNET",
+    port: olt?.telnetPort ?? PORT_BAWAAN.TELNET,
+    username: (process.env[ref] ?? "").split(":")[0] || null,
+    sumber: "ENV",
+    terakhirTerbukti: null,
+    diperbaruiOleh: null,
+    diperbaruiPada: null,
+  };
+}
+
+export async function loadKredensial(networkDeviceId: string): Promise<KredensialTampil> {
+  const k = await db.deviceCredential.findUnique({
+    where: { networkDeviceId },
+    select: PILIH_BRANKAS,
+  });
+  if (k) return dariBrankas(k);
+
+  const olt = await db.oltDevice.findUnique({
+    where: { networkDeviceId },
+    select: { credentialRef: true, telnetPort: true },
+  });
+  return dariEnv(olt) ?? kosong();
+}
+
+/**
+ * Versi banyak-perangkat, untuk layar daftar (permintaan frontend Fase 91).
+ *
+ * `/noc/devices` sebelumnya memanggil `loadKredensial` sekali per baris — satu
+ * query brankas, ditambah satu query cadangan untuk tiap perangkat yang belum
+ * punya kredensial. Yang di sini tetap dua query untuk SELURUH halaman, dengan
+ * urutan brankas-dulu-env-belakangan yang persis sama.
+ *
+ * Setiap id yang diminta selalu hadir di peta hasilnya: perangkat tanpa
+ * kredensial mendapat `ada: false`, bukan tidak hadir. Layar jadi tidak perlu
+ * membedakan "belum ada" dari "tidak dijawab".
+ */
+export async function loadKredensialBanyak(
+  networkDeviceIds: readonly string[]
+): Promise<Map<string, KredensialTampil>> {
+  const hasil = new Map<string, KredensialTampil>();
+  const unik = [...new Set(networkDeviceIds)];
+  if (unik.length === 0) return hasil;
+
+  const brankas = await db.deviceCredential.findMany({
+    where: { networkDeviceId: { in: unik } },
+    select: { networkDeviceId: true, ...PILIH_BRANKAS },
+  });
+  for (const k of brankas) hasil.set(k.networkDeviceId, dariBrankas(k));
+
+  const sisa = unik.filter((id) => !hasil.has(id));
+  if (sisa.length > 0) {
+    const olts = await db.oltDevice.findMany({
+      where: { networkDeviceId: { in: sisa } },
+      select: { networkDeviceId: true, credentialRef: true, telnetPort: true },
+    });
+    const perId = new Map(olts.map((o) => [o.networkDeviceId, o]));
+    for (const id of sisa) hasil.set(id, dariEnv(perId.get(id) ?? null) ?? kosong());
+  }
+  return hasil;
 }
 
 /** Kredensial siap pakai. HANYA untuk pembaca perangkat, bukan untuk layar. */

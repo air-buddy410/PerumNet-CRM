@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { db, tag, makeUser, ensureMasterData, resetTransactionalData } from "./fixtures";
 import {
   loadKredensial,
+  loadKredensialBanyak,
   pakaiKredensial,
   simpanKredensial,
   tandaiTerbukti,
@@ -246,5 +247,70 @@ describe("kredensial perangkat (Fase 91)", () => {
       );
     }
     assert.equal(await db.deviceCredential.count({ where: { networkDeviceId: d.id } }), 0);
+  });
+  // Layar daftar `/noc/devices` memuat kredensial untuk seluruh baris sekaligus.
+  // Yang diuji di sini bukan kecepatannya — itu tidak bisa dibuktikan sebuah
+  // assert — melainkan bahwa jawabannya SAMA PERSIS dengan memanggil satu per
+  // satu. Loader batch yang lebih cepat tapi berbeda jawabannya lebih buruk
+  // daripada N+1 yang benar.
+  test("loader banyak-perangkat menjawab sama dengan satu per satu", async () => {
+    const brankas = await perangkat(tag("bnk-brankas"));
+    const env = await perangkat(tag("bnk-env"));
+    const belum = await perangkat(tag("bnk-belum"));
+
+    await simpanKredensial(
+      brankas.id,
+      { protokol: "SSH", port: 2222, username: "noc", sandi: "sandi-brankas" },
+      userId
+    );
+    const olt = await db.oltDevice.create({
+      data: {
+        networkDeviceId: env.id,
+        vendor: "HSGQ",
+        managementIp: "127.0.0.2",
+        credentialRef: "OLT_UJI_BANYAK",
+        telnetPort: 1023,
+      },
+    });
+    process.env.OLT_UJI_BANYAK = "lama:sandilama";
+
+    try {
+      const ids = [brankas.id, env.id, belum.id];
+      const peta = await loadKredensialBanyak(ids);
+
+      assert.equal(peta.size, 3, "tiap id yang diminta harus hadir, termasuk yang belum punya");
+      for (const id of ids) {
+        assert.deepEqual(
+          peta.get(id),
+          await loadKredensial(id),
+          `jawaban batch untuk ${id} berbeda dari jawaban tunggal`
+        );
+      }
+
+      assert.equal(peta.get(brankas.id)?.sumber, "BRANKAS");
+      assert.equal(peta.get(brankas.id)?.port, 2222);
+      assert.equal(peta.get(env.id)?.sumber, "ENV");
+      assert.equal(peta.get(env.id)?.port, 1023);
+      assert.equal(peta.get(belum.id)?.ada, false);
+      assert.equal(peta.get(belum.id)?.sumber, "BELUM ADA");
+
+      assert.ok(
+        !JSON.stringify([...peta.values()]).includes("sandi-brankas"),
+        "loader daftar pun tidak boleh membawa sandi ke layar"
+      );
+
+      // Id kembar tidak boleh melipatgandakan apa pun, dan daftar kosong tidak
+      // boleh menembak query dengan `in: []`.
+      const kembar = await loadKredensialBanyak([brankas.id, brankas.id]);
+      assert.equal(kembar.size, 1);
+      assert.equal((await loadKredensialBanyak([])).size, 0);
+
+      // Id yang tidak pernah ada dijawab "belum ada", bukan dilewatkan diam-diam.
+      const hantu = await loadKredensialBanyak(["perangkat-yang-tidak-pernah-ada"]);
+      assert.equal(hantu.get("perangkat-yang-tidak-pernah-ada")?.ada, false);
+    } finally {
+      delete process.env.OLT_UJI_BANYAK;
+      await db.oltDevice.delete({ where: { id: olt.id } });
+    }
   });
 });

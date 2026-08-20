@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { PERMISSIONS, NET_DEVICE_TYPES, CRITICALITY, statusLabel } from "@/lib/constants";
 import { loadPortPerangkat, loadRingkasanPort } from "@/lib/network-port";
-import { loadKredensial } from "@/lib/kredensial-perangkat-service";
+import { loadKredensialBanyak, type KredensialTampil } from "@/lib/kredensial-perangkat-service";
 import { PageHeader, Flash, Badge, EmptyState } from "@/components/ui";
 import { formatUiDateTime } from "@/components/ui-formatters";
 import { buildTableHref, parseTableQuery, SortableTableHeader, TableControls, type TableSearchParams, type TableSortOption } from "@/components/table-controls";
@@ -83,14 +83,11 @@ export default async function NetDevicesPage({
       ? loadRingkasanPort(table.query.device)
       : Promise.resolve([]),
   ]);
-  const credentialEntries = await Promise.all(devices.map(async (device) => {
-    try {
-      return [device.id, await loadKredensial(device.id)] as const;
-    } catch {
-      return [device.id, null] as const;
-    }
-  }));
-  const credentialsByDeviceId = new Map(credentialEntries);
+  // §91 — sepasang query untuk seluruh halaman, bukan sepasang per baris.
+  // Sebelumnya tiap perangkat memicu satu query brankas plus satu query
+  // cadangan; pada halaman 50 baris itu seratus perjalanan ke basis data.
+  const credentialsByDeviceId = await loadKredensialBanyak(devices.map((d) => d.id))
+    .catch(() => new Map<string, KredensialTampil>());
   const typeLabel = (v: string) => NET_DEVICE_TYPES.find(([t]) => t === v)?.[1] ?? v;
   const requestedPortFilter = table.query.portKind;
   const portFilter = requestedPortFilter === "ONU" || requestedPortFilter === "OTHER"
